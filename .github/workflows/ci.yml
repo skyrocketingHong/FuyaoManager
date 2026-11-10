@@ -25,3 +25,68 @@ jobs:
       - run: npm run lint
       - run: npm test --workspace site
       - run: npm run build --workspace site
+
+  admin-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: fuyao_test
+          POSTGRES_DB: fuyao_mvp_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fuyao_test -d fuyao_mvp_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FUYAO_ADMIN_TEST_DSN: postgresql://fuyao_test@localhost:5432/fuyao_mvp_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache-dependency-path: admin/backend/go.sum
+      - name: gofmt
+        working-directory: admin/backend
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+        working-directory: admin/backend
+      - run: go build ./...
+        working-directory: admin/backend
+      - name: go test (real PostgreSQL, integration included)
+        working-directory: admin/backend
+        run: go test ./... -v -count=1
+
+  admin-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: admin/frontend/package-lock.json
+      - name: npm ci (isolated admin lockfile)
+        working-directory: admin/frontend
+        run: npm ci
+      - name: OpenAPI type drift check
+        working-directory: admin/frontend
+        run: npm run api:check
+      - name: OpenAPI semantic lint
+        working-directory: admin/frontend
+        run: npm run api:lint
+      - name: svelte-check
+        working-directory: admin/frontend
+        run: npm run check
+      - name: vitest
+        working-directory: admin/frontend
+        run: npm test
+      - name: build
+        working-directory: admin/frontend
+        run: npm run build

@@ -1,0 +1,275 @@
+/* Global styles for the admin console. Design tokens first; components are
+   composed from these variables so light/dark themes swap atomically. */
+
+:root {
+	--bg: #f5f6f8;
+	--surface: #ffffff;
+	--surface-muted: #eef0f3;
+	--text: #1c2026;
+	--text-muted: #5b6470;
+	--border: #d6dae0;
+	--accent: #0f6f6b;
+	--accent-text: #ffffff;
+	--danger: #b3261e;
+	--danger-surface: #fbeae9;
+	--ok: #1c6e3c;
+	--ok-surface: #e8f4ec;
+	--warn-surface: #fdf3e0;
+	--focus: #0b5f5b;
+	--radius: 10px;
+	--shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+
+:root[data-theme='dark'] {
+	--bg: #14161a;
+	--surface: #1d2025;
+	--surface-muted: #262a31;
+	--text: #e7eaee;
+	--text-muted: #9aa3af;
+	--border: #333941;
+	--accent: #3ba999;
+	--accent-text: #08201e;
+	--danger: #f2b8b5;
+	--danger-surface: #3a1f1e;
+	--ok: #8fd4a6;
+	--ok-surface: #1d3325;
+	--warn-surface: #3a2f1a;
+	--focus: #6cc9bd;
+	--shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	padding: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--text);
+	font-family:
+		'PingFang SC',
+		-apple-system,
+		'Songti SC',
+		'Helvetica Neue',
+		Arial,
+		sans-serif;
+	font-size: 15px;
+	line-height: 1.6;
+	min-height: 100vh;
+}
+
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+}
+
+/* Layout primitives */
+
+.shell {
+	max-width: 860px;
+	margin: 0 auto;
+	padding: 24px 20px 64px;
+}
+
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 0;
+	margin-bottom: 24px;
+	border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand {
+	font-weight: 600;
+	font-size: 17px;
+	margin-right: auto;
+}
+
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	box-shadow: var(--shadow);
+	padding: 20px;
+	margin-bottom: 16px;
+}
+
+.card h2 {
+	margin: 0 0 12px;
+	font-size: 17px;
+}
+
+.card-list {
+	display: grid;
+	gap: 12px;
+}
+
+/* Forms */
+
+.field {
+	display: block;
+	margin-bottom: 14px;
+}
+
+.field > span {
+	display: block;
+	font-size: 13px;
+	color: var(--text-muted);
+	margin-bottom: 4px;
+}
+
+.field input,
+.field select,
+.field textarea {
+	width: 100%;
+	padding: 9px 11px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--surface);
+	color: var(--text);
+	font: inherit;
+}
+
+.field textarea {
+	min-height: 96px;
+	resize: vertical;
+}
+
+.field input:disabled,
+.field select:disabled,
+.field textarea:disabled {
+	background: var(--surface-muted);
+	color: var(--text-muted);
+}
+
+.hint {
+	font-size: 12.5px;
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+code.permit {
+	font-family: 'Menlo', 'SF Mono', ui-monospace, monospace;
+	letter-spacing: 0.5px;
+}
+
+/* Buttons */
+
+button {
+	font: inherit;
+	cursor: pointer;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	color: var(--text);
+	padding: 8px 14px;
+}
+
+button:disabled {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+button.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-text);
+	font-weight: 500;
+}
+
+button.link-like {
+	border: none;
+	background: none;
+	color: var(--accent);
+	padding: 4px 6px;
+}
+
+/* Status messages */
+
+.status {
+	border-radius: 8px;
+	padding: 10px 12px;
+	margin: 12px 0;
+	font-size: 14px;
+	border: 1px solid transparent;
+}
+
+.status[data-variant='error'] {
+	background: var(--danger-surface);
+	color: var(--danger);
+	border-color: var(--danger);
+}
+
+.status[data-variant='ok'] {
+	background: var(--ok-surface);
+	color: var(--ok);
+	border-color: var(--ok);
+}
+
+.status[data-variant='warn'] {
+	background: var(--warn-surface);
+	border-color: var(--text-muted);
+}
+
+/* Badges and meta rows */
+
+.badge {
+	display: inline-block;
+	font-size: 12px;
+	padding: 1px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--border);
+	color: var(--text-muted);
+	background: var(--surface-muted);
+}
+
+.meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 18px;
+	color: var(--text-muted);
+	font-size: 13px;
+	margin: 8px 0;
+}
+
+.meta dt::after {
+	content: ':';
+}
+
+.meta dd {
+	margin: 0;
+}
+
+/* Crossfade locale transition */
+
+.crossfade {
+	display: grid;
+}
+
+.crossfade > * {
+	grid-area: 1 / 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}
