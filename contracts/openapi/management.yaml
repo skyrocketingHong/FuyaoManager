@@ -289,6 +289,65 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/auth/exchange:
+    post:
+      operationId: exchangeAuthCode
+      tags: [Session]
+      summary: Redeem a CLI-issued one-time code
+      description: |
+        Exchanges a single-use code printed by the server CLI
+        (`fuyao-admin init-admin` for the first administrator,
+        `fuyao-admin login-code` for every later login) for a freshly
+        minted session. Codes are stored as SHA-256 digests, expire quickly,
+        burn one attempt per presentation, and are consumed in one
+        transaction, so concurrent redemptions of the same code can never
+        both succeed. An initialization code only activates the still-pending
+        first administrator; a login code only opens sessions for active
+        accounts.
+      security:
+        - {}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthCodeExchangeRequest'
+            examples:
+              login:
+                value: { code: 'AB2C-D4EF-GH2J-KL3M' }
+      responses:
+        '200':
+          description: Code redeemed; the response sets the session cookie and returns the signed-in user with the CSRF token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeremonyDone'
+        '400':
+          description: The code is unknown (`invalid_code`) or the body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: |
+            The code was already used (`code_used`), expired
+            (`code_expired`), locked after too many presentations
+            (`code_locked`), does not match the account state
+            (`code_purpose_mismatch`), or initialization is already closed
+            (`bootstrap_closed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Too many redemption attempts from this address (`rate_limited`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/session:
     get:
       operationId: getSession
@@ -314,6 +373,7 @@ paths:
                 authenticated:
                   value:
                     authenticated: true
+                    platformInitialized: true
                     user:
                       {
                         'id': '018f3c1e-6a2c-7b41-9f22-3f0a1c7d5b88',
@@ -322,7 +382,17 @@ paths:
                       }
                     csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
                 anonymous:
-                  value: { 'authenticated': false }
+                  value:
+                    {
+                      'authenticated': false,
+                      'platformInitialized': true
+                    }
+                uninitialized:
+                  value:
+                    {
+                      'authenticated': false,
+                      'platformInitialized': false
+                    }
         default:
           $ref: '#/components/responses/Problem'
 
@@ -364,6 +434,131 @@ paths:
                 $ref: '#/components/schemas/SiteList'
         '401':
           $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createSite
+      tags: [Sites]
+      summary: Create a site
+      description: |
+        Creates a site owned by the caller: database rows (site, settings,
+        owner membership) commit in one transaction, an optional initial
+        theme selection is validated exactly like a theme PUT, and then the
+        per-site content/config directory tree is provisioned. The response
+        reports the provisioning state explicitly — a created site is only
+        `ready` once directory setup succeeded; `failed` keeps the site
+        retryable via the provision endpoint. Slug uniqueness is enforced by
+        the database.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteCreate'
+            examples:
+              minimal:
+                value:
+                  {
+                    'slug': 'personal',
+                    'name': 'My Homepage',
+                    'defaultLocale': 'zh-CN'
+                  }
+              withTheme:
+                value:
+                  {
+                    'slug': 'personal',
+                    'name': 'My Homepage',
+                    'defaultLocale': 'zh-CN',
+                    'visibility': 'private',
+                    'themeId': 'fuyao-homepage',
+                    'themeVersion': '27.1.1',
+                    'themeConfig': { }
+                  }
+      responses:
+        '201':
+          description: Site created; `provisionState` says whether directory provisioning succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          description: Field validation failed (`validation_error`) or the body is invalid.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: The requested theme and version are not registered (`theme_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: A site with this slug already exists (`slug_taken`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: The theme configuration is invalid (`invalid_theme_config`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Theme contracts (`theme_contracts_unavailable`) or site provisioning (`provisioning_unavailable`) are not configured.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/provision:
+    post:
+      operationId: provisionSite
+      tags: [Sites]
+      summary: Retry site directory provisioning
+      description: |
+        Re-runs the on-disk provisioning for a site whose `provisionState` is
+        not `ready`. Idempotent: provisioning never overwrites existing
+        files, and a site that is already ready is returned unchanged.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '200':
+          description: The refreshed site with its current provisioning state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Site provisioning is not configured (`provisioning_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           $ref: '#/components/responses/Problem'
 
@@ -1647,6 +1842,15 @@ components:
             - release_not_found
             - release_not_rollbackable
             - no_live_release
+            - invalid_code
+            - code_used
+            - code_expired
+            - code_locked
+            - code_purpose_mismatch
+            - rate_limited
+            - slug_taken
+            - provisioning_unavailable
+            - passkey_unavailable
             - internal_error
         detail:
           type: string
@@ -1677,14 +1881,27 @@ components:
 
     SessionInfo:
       type: object
-      required: [authenticated]
+      required: [authenticated, platformInitialized]
       properties:
         authenticated:
           type: boolean
+        platformInitialized:
+          type: boolean
+          description: Whether the CLI first-run binding already happened; false tells an anonymous browser to show the initialization guidance.
         user:
           $ref: '#/components/schemas/User'
         csrfToken:
           type: string
+
+    AuthCodeExchangeRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Z2-7]{4}(-[A-Z2-7]{4}){3}$'
+          description: Single-use code printed by `fuyao-admin init-admin` (first administrator) or `fuyao-admin login-code` (every login).
+      additionalProperties: false
 
     EnrollmentPermitRequest:
       type: object
@@ -1696,6 +1913,39 @@ components:
           description: Single-use permit code printed by `fuyao-admin bootstrap-admin`.
       additionalProperties: false
 
+    SiteCreate:
+      type: object
+      required: [slug, name]
+      properties:
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 1000
+        defaultLocale:
+          type: string
+          enum: [zh-CN, en-US]
+          default: zh-CN
+        visibility:
+          type: string
+          enum: [public, private]
+          default: private
+        themeId:
+          type: string
+          description: Optional initial theme selection; requires themeVersion.
+        themeVersion:
+          type: string
+          pattern: '^\d+\.\d+\.\d+$'
+        themeConfig:
+          type: object
+          description: Optional theme configuration validated against the theme's config schema.
+      additionalProperties: false
+
     Site:
       type: object
       required:
@@ -1705,6 +1955,8 @@ components:
           name,
           description,
           defaultLocale,
+          visibility,
+          provisionState,
           role,
           settingsRevision,
           createdAt,
@@ -1717,6 +1969,20 @@ components:
         slug:
           type: string
           pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+        visibility:
+          type: string
+          enum: [public, private]
+        provisionState:
+          type: string
+          enum: [provisioning, ready, failed]
+        provisionFailure:
+          type: object
+          description: Present only when provisionState is failed; names the stage that broke.
+          properties:
+            stage:
+              type: string
+            message:
+              type: string
         name:
           type: string
         description:

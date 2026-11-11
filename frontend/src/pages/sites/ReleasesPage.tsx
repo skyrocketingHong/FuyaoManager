@@ -13,7 +13,6 @@ import {
 	Typography,
 	message
 } from 'antd';
-import SiteNav from '../../components/sites/SiteNav';
 import Trans from '../../components/i18n/Trans';
 import {
 	canEditSite,
@@ -208,7 +207,6 @@ export default function ReleasesPage() {
 	return (
 		<>
 			{contextHolder}
-			<SiteNav active="releases" />
 			<Card
 				title={<Trans text={t('releases.title')} />}
 				extra={
@@ -231,7 +229,12 @@ export default function ReleasesPage() {
 				style={{ marginTop: 16 }}
 			>
 				{errorKey !== null ? (
-					<Alert type="error" showIcon message={t(errorKey ?? 'error.generic')} style={{ marginBottom: 16 }} />
+					<Alert
+						type="error"
+						showIcon
+						message={t(errorKey ?? 'error.generic')}
+						style={{ marginBottom: 16 }}
+					/>
 				) : null}
 				{releases === null ? (
 					<p role="status">
@@ -247,13 +250,28 @@ export default function ReleasesPage() {
 								style={{ marginBottom: 16 }}
 							/>
 						) : (
-							<Alert type="info" showIcon message={t('error.noLiveRelease')} style={{ marginBottom: 16 }} />
+							<Alert
+								type="info"
+								showIcon
+								message={t('error.noLiveRelease')}
+								style={{ marginBottom: 16 }}
+							/>
 						)}
 						{!editable ? (
-							<Alert type="info" showIcon message={t('releases.roleNotice')} style={{ marginBottom: 16 }} />
+							<Alert
+								type="info"
+								showIcon
+								message={t('releases.roleNotice')}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						{editable && succeeded.length === 0 ? (
-							<Alert type="info" showIcon message={t('releases.noSucceededBuild')} style={{ marginBottom: 16 }} />
+							<Alert
+								type="info"
+								showIcon
+								message={t('releases.noSucceededBuild')}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						{editable && succeeded.length > 0 ? (
 							<Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
@@ -288,7 +306,9 @@ export default function ReleasesPage() {
 									title: t('builds.status'),
 									dataIndex: 'status',
 									render: (status: string) => (
-										<Tag color={status === 'live' ? 'green' : status === 'failed' ? 'red' : 'default'}>
+										<Tag
+											color={status === 'live' ? 'green' : status === 'failed' ? 'red' : 'default'}
+										>
 											{t(`releases.status.${status}` as never)}
 										</Tag>
 									)

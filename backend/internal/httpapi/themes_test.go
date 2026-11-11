@@ -72,10 +72,7 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("themeowner")
-	site, err := env.store.Sites.Create(ctx, "theme-site", "Theme Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	site := createSite(ctx, t, env, "theme-site", "Theme Site", "", "zh-CN", owner.ID)
 	viewer, viewerToken, viewerCSRF := env.createUserSession("themeviewer")
 	if _, err := env.pool.Exec(ctx,
 		`INSERT INTO site_memberships (site_id, user_id, role) VALUES ($1, $2, 'viewer')`,
@@ -345,10 +342,7 @@ func TestConcurrentSelectionCreation(t *testing.T) {
 	ctx := context.Background()
 
 	owner, _, _ := env.createUserSession("racesel")
-	site, err := env.store.Sites.Create(ctx, "race-site", "Race", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	site := createSite(ctx, t, env, "race-site", "Race", "", "zh-CN", owner.ID)
 	theme, created, err := themeregistry.Register(ctx, env.store.Themes,
 		filepath.Join(repoRoot(t), "contracts", "theme"), filepath.Join(repoRoot(t), "site"))
 	if err != nil || !created {
@@ -401,10 +395,7 @@ func TestThemeSelectionWithoutContracts(t *testing.T) {
 
 	registerFirstTheme(t, env)
 	owner, token, csrf := env.createUserSession("nocontract")
-	site, err := env.store.Sites.Create(ctx, "nocontract-site", "Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	site := createSite(ctx, t, env, "nocontract-site", "Site", "", "zh-CN", owner.ID)
 
 	// A second handler over the same store without the contract validator.
 	listener, err := net.Listen("tcp", "127.0.0.1:0")

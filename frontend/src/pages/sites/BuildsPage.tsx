@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Card, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd';
-import SiteNav from '../../components/sites/SiteNav';
+import {
+	Alert,
+	Button,
+	Card,
+	Popconfirm,
+	Space,
+	Spin,
+	Table,
+	Tag,
+	Typography,
+	message
+} from 'antd';
 import Trans from '../../components/i18n/Trans';
 import {
 	canEditSite,
@@ -120,7 +130,6 @@ export default function BuildsPage() {
 	return (
 		<>
 			{contextHolder}
-			<SiteNav active="builds" />
 			<Card
 				title={<Trans text={t('builds.title')} />}
 				extra={
@@ -137,7 +146,12 @@ export default function BuildsPage() {
 				style={{ marginTop: 16 }}
 			>
 				{errorKey !== null ? (
-					<Alert type="error" showIcon message={t(errorKey ?? 'error.generic')} style={{ marginBottom: 16 }} />
+					<Alert
+						type="error"
+						showIcon
+						message={t(errorKey ?? 'error.generic')}
+						style={{ marginBottom: 16 }}
+					/>
 				) : null}
 				{builds === null ? (
 					<p role="status">
@@ -197,7 +211,10 @@ export default function BuildsPage() {
 								render: (_, record) =>
 									record.inputDigests ? (
 										<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-											{String((record.inputDigests as Record<string, string>).contentDigest ?? '').slice(7, 19)}…
+											{String(
+												(record.inputDigests as Record<string, string>).contentDigest ?? ''
+											).slice(7, 19)}
+											…
 										</Typography.Text>
 									) : null
 							},

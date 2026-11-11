@@ -191,10 +191,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	// defaultLocale en-US distinguishes the DB-saved value from the store's
 	// built-in zh-CN fallback: the bundle assertion below proves the setting
 	// is genuinely consumed by the locale initialization path.
-	site, err := env.store.Sites.Create(ctx, "build-site", "Build Site 标记名", "站点描述", "en-US", owner.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	site := createSite(ctx, t, env, "build-site", "Build Site 标记名", "站点描述", "en-US", owner.ID)
 	_, outsiderToken, outsiderCSRF := env.createUserSession("buildoutsider")
 	viewer, viewerToken, viewerCSRF := env.createUserSession("buildviewer")
 	if _, err := env.pool.Exec(ctx,
@@ -595,10 +592,7 @@ func TestBuildCapabilityBlock(t *testing.T) {
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("capowner")
-	site, err := env.store.Sites.Create(ctx, "cap-site", "Cap Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	site := createSite(ctx, t, env, "cap-site", "Cap Site", "", "zh-CN", owner.ID)
 	// A fake theme root whose manifest lacks every capability: register it
 	// through the operator path so the catalog row is contract-valid.
 	fakeRoot := t.TempDir()
@@ -646,10 +640,7 @@ func TestBuildRecoveryOnRestart(t *testing.T) {
 	env, runner, _, _ := setupBuilds(t)
 	ctx := context.Background()
 	owner, ownerToken, _ := env.createUserSession("recowner")
-	site, err := env.store.Sites.Create(ctx, "rec-site", "Rec Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	site := createSite(ctx, t, env, "rec-site", "Rec Site", "", "zh-CN", owner.ID)
 	registerFirstTheme(t, env)
 	var rowID uuid.UUID
 	if err := env.pool.QueryRow(ctx, `SELECT id FROM themes WHERE theme_id='fuyao-homepage'`).Scan(&rowID); err != nil {

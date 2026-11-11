@@ -29,6 +29,8 @@ const SITE_B = '22222222-2222-2222-2222-222222222222';
 const site = (id: string, name: string): Site => ({
 	siteId: id,
 	slug: name.toLowerCase(),
+	visibility: 'private',
+	provisionState: 'ready',
 	name,
 	description: '',
 	defaultLocale: 'zh-CN',

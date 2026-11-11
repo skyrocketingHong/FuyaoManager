@@ -8,14 +8,12 @@ import type { components } from './schema';
 
 export type User = components['schemas']['User'];
 export type Site = components['schemas']['Site'];
+export type SiteCreate = components['schemas']['SiteCreate'];
 export type SiteSettings = components['schemas']['SiteSettings'];
 export type SiteSettingsPatch = components['schemas']['SiteSettingsPatch'];
 export type SessionInfo = components['schemas']['SessionInfo'];
 export type CeremonyDone = components['schemas']['CeremonyDone'];
-export type CreationOptions = components['schemas']['PublicKeyCredentialCreationOptions'];
-export type RequestOptions = components['schemas']['PublicKeyCredentialRequestOptions'];
-export type CreationOptionsEnvelope = components['schemas']['CreationOptionsEnvelope'];
-export type AssertionOptionsEnvelope = components['schemas']['AssertionOptionsEnvelope'];
+export type AuthCodeExchangeRequest = components['schemas']['AuthCodeExchangeRequest'];
 export type Theme = components['schemas']['Theme'];
 export type SiteThemeSelection = components['schemas']['SiteThemeSelection'];
 export type SiteThemeSelectionPut = components['schemas']['SiteThemeSelectionPut'];
@@ -38,32 +36,12 @@ export async function fetchSession(): Promise<SessionInfo> {
 	return data;
 }
 
-export async function loginOptions(): Promise<RequestOptions> {
-	const { data } = await api<AssertionOptionsEnvelope>('POST', '/api/v1/auth/login/options', {
-		body: {}
-	});
-	return data.publicKey;
-}
-
-export async function loginVerify(responseJSON: unknown): Promise<CeremonyDone> {
-	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/login/verify', {
-		body: responseJSON
-	});
-	setCsrfToken(data.csrfToken);
-	return data;
-}
-
-export async function registerOptions(permit: string): Promise<CreationOptions> {
-	const { data } = await api<CreationOptionsEnvelope>('POST', '/api/v1/auth/register/options', {
-		body: { permit }
-	});
-	return data.publicKey;
-}
-
-export async function registerVerify(responseJSON: unknown): Promise<CeremonyDone> {
-	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/register/verify', {
-		body: responseJSON
-	});
+/**
+ * Redeems a CLI-issued one-time code (initialization or per-login) for a
+ * fresh session; the CSRF token arrives with the signed-in user.
+ */
+export async function exchangeAuthCode(code: string): Promise<CeremonyDone> {
+	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/exchange', { body: { code } });
 	setCsrfToken(data.csrfToken);
 	return data;
 }
@@ -76,6 +54,16 @@ export async function logout(): Promise<void> {
 export async function listSites(): Promise<Site[]> {
 	const { data } = await api<{ sites: Site[] }>('GET', '/api/v1/sites');
 	return data.sites;
+}
+
+export async function createSite(body: SiteCreate): Promise<Site> {
+	const { data } = await api<Site>('POST', '/api/v1/sites', { body });
+	return data;
+}
+
+export async function provisionSite(siteId: string): Promise<Site> {
+	const { data } = await api<Site>('POST', `/api/v1/sites/${siteId}/provision`, { body: {} });
+	return data;
 }
 
 export async function getSite(siteId: string): Promise<Site> {
@@ -162,10 +150,7 @@ export async function createPreviewLink(siteId: string, buildId: string): Promis
 
 // --- releases ---
 
-export async function createRelease(
-	siteId: string,
-	body: ReleaseCreate
-): Promise<Release> {
+export async function createRelease(siteId: string, body: ReleaseCreate): Promise<Release> {
 	const { data } = await api<Release>('POST', `/api/v1/sites/${siteId}/releases`, { body });
 	return data;
 }

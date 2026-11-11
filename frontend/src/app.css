@@ -1,23 +1,106 @@
-/* Layout shell around antd; antd provides the component styling. */
+/* App shell layout around antd; antd provides the component styling.
+   Spacing/radius/weight tokens follow the desktop-shell conventions:
+   space steps 4/8/10/12/16, radii 4/8/12, weights 400/600. */
 
-.shell {
+.shell-aside {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	position: sticky;
+	top: 0;
+}
+
+.shell-aside .brand-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 16px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.shell-aside .site-context {
+	padding: 8px 12px 12px;
+}
+
+.shell-aside .site-context .site-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.shell-aside .site-context .site-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: rgba(255, 255, 255, 0.65);
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+
+.shell-aside nav {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0 8px 12px;
+}
+
+.shell-aside .group-title {
+	padding: 12px 8px 4px;
+	font-size: 12px;
+	letter-spacing: 0.02em;
+	opacity: 0.55;
+	white-space: nowrap;
+}
+
+.shell-main {
 	min-height: 100vh;
 	display: flex;
 	flex-direction: column;
 }
 
-.shell main {
-	width: 100%;
-	max-width: 960px;
-	margin: 0 auto;
-	padding: 24px 16px 64px;
-	flex: 1;
+.shell-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 0 16px;
+	height: 48px;
+	line-height: 48px;
+	position: sticky;
+	top: 0;
+	z-index: 10;
 }
 
-.brand {
+.shell-header .page-title {
+	font-size: 16px;
 	font-weight: 600;
-	margin-right: 12px;
-	white-space: nowrap;
+	overflow-wrap: anywhere;
+}
+
+.shell-content {
+	flex: 1;
+	width: 100%;
+	max-width: 1080px;
+	margin: 0 auto;
+	padding: 16px 16px 64px;
+	box-sizing: border-box;
+}
+
+.auth-screen {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 16px;
+	box-sizing: border-box;
+}
+
+.auth-card {
+	width: 100%;
+	max-width: 480px;
+}
+
+.code-hint {
+	font-family: 'Menlo', 'SFMono-Regular', Consolas, monospace;
+	overflow-wrap: anywhere;
 }
 
 /* Locale-switch text fade: a quick opacity ease-in on the re-keyed text

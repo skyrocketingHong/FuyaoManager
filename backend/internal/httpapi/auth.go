@@ -23,10 +23,14 @@ type ceremonyDone struct {
 
 // sessionResponse is the GET /api/v1/session body. An authenticated caller
 // receives the session's stable CSRF token, identical across reads and tabs.
+// platformInitialized tells an anonymous browser whether the CLI first-run
+// binding already happened, so the login page can show the exact
+// initialization guidance instead of a dead login form.
 type sessionResponse struct {
-	Authenticated bool     `json:"authenticated"`
-	User          *userDTO `json:"user,omitempty"`
-	CSRFToken     string   `json:"csrfToken,omitempty"`
+	Authenticated       bool     `json:"authenticated"`
+	User                *userDTO `json:"user,omitempty"`
+	CSRFToken           string   `json:"csrfToken,omitempty"`
+	PlatformInitialized bool     `json:"platformInitialized"`
 }
 
 // consumeAuthState resolves and atomically consumes the ceremony cookie.
@@ -258,19 +262,25 @@ func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.Use
 // handleSession reports the current session. The CSRF token is stable for
 // the lifetime of the session, so concurrent tabs all stay writable.
 func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
+	initialized, err := a.store.Users.HasActiveUser(r.Context())
+	if err != nil {
+		a.logger.Error("check platform initialization", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the session.")
+		return
+	}
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
-		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false})
+		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized})
 		return
 	}
 	auth, err := a.store.Sessions.GetAndTouch(r.Context(), sha256Sum64(cookie.Value))
 	if err != nil {
 		a.clearSessionCookie(w)
-		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false})
+		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized})
 		return
 	}
 	dto := toUserDTO(auth.User)
-	writeJSON(w, http.StatusOK, sessionResponse{Authenticated: true, User: &dto, CSRFToken: auth.Session.CSRFToken})
+	writeJSON(w, http.StatusOK, sessionResponse{Authenticated: true, User: &dto, CSRFToken: auth.Session.CSRFToken, PlatformInitialized: initialized})
 }
 
 // handleLogout revokes the session server-side and clears the cookie.

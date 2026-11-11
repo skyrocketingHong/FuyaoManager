@@ -3,7 +3,9 @@
 package model
 
 import (
+	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,12 +72,60 @@ type Session struct {
 	RevokedAt *time.Time
 }
 
+// Site visibility values. A private site is only reachable from the server
+// host and the private network; a public site gets a public entry.
+const (
+	SiteVisibilityPublic  = "public"
+	SiteVisibilityPrivate = "private"
+)
+
+// Site provisioning states. A site is only "ready" once the platform
+// provisioned its on-disk content/config tree; "provisioning"/"failed" keep
+// the row queryable while directory setup is pending or broken.
+const (
+	SiteProvisioning    = "provisioning"
+	SiteReady           = "ready"
+	SiteProvisionFailed = "failed"
+)
+
 // Site is a managed site entry.
 type Site struct {
-	ID        uuid.UUID
-	Slug      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID               uuid.UUID
+	Slug             string
+	Visibility       string
+	ProvisionState   string
+	ProvisionFailure json.RawMessage
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+// ProvisionFailure records why a site's directory provisioning broke, with the
+// exact stage that failed so the UI can offer an informed retry.
+type ProvisionFailure struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
+
+// Value and Scan let ProvisionFailure round-trip through the jsonb column.
+func (f ProvisionFailure) Value() (driver.Value, error) {
+	if f.Stage == "" {
+		return nil, nil
+	}
+	return json.Marshal(f)
+}
+
+func (f *ProvisionFailure) Scan(src any) error {
+	switch v := src.(type) {
+	case nil:
+		*f = ProvisionFailure{}
+		return nil
+	case []byte:
+		return json.Unmarshal(v, f)
+	case string:
+		return json.Unmarshal([]byte(v), f)
+	default:
+		return fmt.Errorf("ProvisionFailure: unsupported scan source %T", src)
+	}
 }
 
 // SiteSettings holds the editable settings of a site. Revision drives

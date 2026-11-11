@@ -35,6 +35,7 @@ type Store struct {
 	Sessions   *SessionStore
 	AuthStates *AuthStateStore
 	Permits    *PermitStore
+	AuthCodes  *AuthCodeStore
 	Sites      *SiteStore
 	Themes     *ThemeStore
 	Builds     *BuildStore
@@ -50,6 +51,7 @@ func New(pool *pgxpool.Pool) *Store {
 		Sessions:   &SessionStore{pool: pool},
 		AuthStates: &AuthStateStore{pool: pool},
 		Permits:    &PermitStore{pool: pool},
+		AuthCodes:  &AuthCodeStore{pool: pool},
 		Sites:      &SiteStore{pool: pool},
 		Themes:     &ThemeStore{pool: pool},
 		Builds:     &BuildStore{pool: pool},

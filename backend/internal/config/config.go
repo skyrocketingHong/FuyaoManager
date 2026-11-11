@@ -15,36 +15,45 @@ import (
 const (
 	EnvDatabaseURL       = "FUYAO_ADMIN_DATABASE_URL"
 	EnvAddr              = "FUYAO_ADMIN_ADDR"
+	EnvTrustedHosts      = "FUYAO_ADMIN_TRUSTED_HOSTS"
 	EnvRPID              = "FUYAO_ADMIN_RP_ID"
 	EnvRPName            = "FUYAO_ADMIN_RP_DISPLAY_NAME"
 	EnvRPOrigins         = "FUYAO_ADMIN_RP_ORIGINS"
 	EnvSessionTTL        = "FUYAO_ADMIN_SESSION_TTL"
 	EnvChallengeTTL      = "FUYAO_ADMIN_CHALLENGE_TTL"
 	EnvPermitTTL         = "FUYAO_ADMIN_PERMIT_TTL"
+	EnvAuthCodeTTL       = "FUYAO_ADMIN_AUTH_CODE_TTL"
 	EnvThemeContractsDir = "FUYAO_ADMIN_THEME_CONTRACTS"
 	EnvPreviewAddr       = "FUYAO_ADMIN_PREVIEW_ADDR"
 	EnvRepoRoot          = "FUYAO_ADMIN_REPO_ROOT"
+	EnvSitesRoot         = "FUYAO_ADMIN_SITES_ROOT"
+	EnvAdminUIDir        = "FUYAO_ADMIN_UI_DIR"
 	EnvBuildMode         = "FUYAO_ADMIN_BUILD_MODE"
 	EnvRequireCaps       = "FUYAO_ADMIN_REQUIRE_CAPABILITIES"
 	EnvRequireURLs       = "FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS"
 )
 
 // Config is the fully validated runtime configuration. CookieSecure is
-// derived from the origin schemes: plain-HTTP origins are only permitted on
-// loopback hosts, and cookies are marked Secure unless every origin is a
-// loopback HTTP origin.
+// derived from the origin schemes: plain-HTTP origins are permitted on
+// loopback hosts and on hosts explicitly listed in TrustedHosts (the private
+// deployment topology), and cookies are marked Secure unless every origin is
+// a loopback HTTP origin.
 type Config struct {
 	DatabaseURL       string
 	Addr              string
+	TrustedHosts      []string
 	RPID              string
 	RPDisplayName     string
 	RPOrigins         []string
 	SessionTTL        time.Duration
 	ChallengeTTL      time.Duration
 	PermitTTL         time.Duration
+	AuthCodeTTL       time.Duration
 	CookieSecure      bool
 	ThemeContractsDir string
 	RepoRoot          string
+	SitesRoot         string
+	AdminUIDir        string
 	BuildMode         string
 	RequireCaps       []string
 	RequireURLs       []string
@@ -55,10 +64,13 @@ func Load() (Config, error) {
 	cfg := Config{
 		DatabaseURL:       os.Getenv(EnvDatabaseURL),
 		Addr:              envDefault(EnvAddr, "127.0.0.1:8787"),
+		TrustedHosts:      csvEnv(EnvTrustedHosts, ""),
 		RPID:              envDefault(EnvRPID, "localhost"),
 		RPDisplayName:     envDefault(EnvRPName, "Fuyao Admin"),
 		ThemeContractsDir: envDefault(EnvThemeContractsDir, ""),
 		RepoRoot:          envDefault(EnvRepoRoot, ""),
+		SitesRoot:         envDefault(EnvSitesRoot, ""),
+		AdminUIDir:        envDefault(EnvAdminUIDir, ""),
 		BuildMode:         envDefault(EnvBuildMode, "ci"),
 		RequireCaps:       csvEnv(EnvRequireCaps, "blog"),
 		RequireURLs:       csvEnv(EnvRequireURLs, "posts,blog-rss,sitemap"),
@@ -82,6 +94,7 @@ func Load() (Config, error) {
 	setTTL(EnvSessionTTL, &cfg.SessionTTL, 12*time.Hour)
 	setTTL(EnvChallengeTTL, &cfg.ChallengeTTL, 5*time.Minute)
 	setTTL(EnvPermitTTL, &cfg.PermitTTL, 10*time.Minute)
+	setTTL(EnvAuthCodeTTL, &cfg.AuthCodeTTL, 10*time.Minute)
 	if ttlErr != nil {
 		return Config{}, ttlErr
 	}
@@ -96,7 +109,7 @@ func (c *Config) validate() error {
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("%s is required", EnvDatabaseURL)
 	}
-	if err := validateLoopbackAddr(c.Addr); err != nil {
+	if err := c.validateAddr(c.Addr); err != nil {
 		return err
 	}
 	if c.RPID == "" {
@@ -119,8 +132,11 @@ func (c *Config) validate() error {
 			anyHTTPS = true
 			allHTTPLoopback = false
 		case "http":
+			if !isLoopbackHost(host) && !c.isTrustedHost(host) {
+				return fmt.Errorf("plain-HTTP origin %q is only allowed on a loopback host or a host listed in %s", raw, EnvTrustedHosts)
+			}
 			if !isLoopbackHost(host) {
-				return fmt.Errorf("plain-HTTP origin %q is only allowed on a loopback host", raw)
+				allHTTPLoopback = false
 			}
 		default:
 			return fmt.Errorf("origin %q must use the http or https scheme", raw)
@@ -139,15 +155,31 @@ func (c *Config) validate() error {
 	return nil
 }
 
-func validateLoopbackAddr(addr string) error {
+// validateAddr accepts loopback listen addresses anywhere and non-loopback
+// hosts only when they are explicitly trusted. A trusted non-loopback host is
+// the private-network deployment topology (Tailscale address); it must never
+// be guessed from request headers.
+func (c *Config) validateAddr(addr string) error {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return fmt.Errorf("%s %q is not a valid host:port address", EnvAddr, addr)
 	}
-	if !isLoopbackHost(host) {
-		return fmt.Errorf("%s %q must be a loopback address; non-loopback binding is not supported", EnvAddr, addr)
+	if isLoopbackHost(host) {
+		return nil
 	}
-	return nil
+	if c.isTrustedHost(host) {
+		return nil
+	}
+	return fmt.Errorf("%s %q must be a loopback address or a host listed in %s; non-loopback binding is otherwise not supported", EnvAddr, addr, EnvTrustedHosts)
+}
+
+func (c *Config) isTrustedHost(host string) bool {
+	for _, trusted := range c.TrustedHosts {
+		if trusted == host {
+			return true
+		}
+	}
+	return false
 }
 
 func isLoopbackHost(host string) bool {
@@ -183,11 +215,14 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 }
 
 // csvEnv reads a comma-separated list setting with a fallback; empty entries
-// are dropped.
+// are dropped. An empty fallback yields a nil list.
 func csvEnv(key, fallback string) []string {
 	raw := strings.TrimSpace(os.Getenv(key))
 	if raw == "" {
 		raw = fallback
+	}
+	if raw == "" {
+		return nil
 	}
 	var out []string
 	for _, part := range strings.Split(raw, ",") {

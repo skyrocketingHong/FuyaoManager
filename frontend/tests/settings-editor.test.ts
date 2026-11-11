@@ -27,6 +27,8 @@ import { SettingsEditor } from '../src/lib/sites/settings-editor';
 const site = (overrides: Partial<Site> = {}): Site => ({
 	siteId: '11111111-1111-1111-1111-111111111111',
 	slug: 'blog',
+	visibility: 'private',
+	provisionState: 'ready',
 	name: 'Baseline Name',
 	description: 'Baseline description',
 	defaultLocale: 'zh-CN',
@@ -200,6 +202,8 @@ describe('settings editor', () => {
 		const siteB = site({
 			siteId: '22222222-2222-2222-2222-222222222222',
 			slug: 'b',
+			visibility: 'private',
+			provisionState: 'ready',
 			name: 'Site B',
 			description: 'Site B description'
 		});

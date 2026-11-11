@@ -149,7 +149,9 @@ export class SettingsEditor {
 			// visibly unsaved.
 			this.baseline = result.settings;
 			this.etag = result.etag;
-			const next: Partial<SettingsEditorState> = { phase: { kind: 'saved', revision: result.settings.revision } };
+			const next: Partial<SettingsEditorState> = {
+				phase: { kind: 'saved', revision: result.settings.revision }
+			};
 			if (this.state.name === submitted.name) next.name = result.settings.name;
 			if (this.state.description === submitted.description) {
 				next.description = result.settings.description;

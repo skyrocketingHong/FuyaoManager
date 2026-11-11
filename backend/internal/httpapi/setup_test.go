@@ -19,11 +19,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
@@ -43,11 +45,12 @@ func repoRoot(t *testing.T) string {
 // real migrations, the real handler stack, and a loopback HTTP server that
 // the synthetic authenticator targets as http://localhost:<port>.
 type testEnv struct {
-	t            *testing.T
-	base         string
-	pool         *pgxpool.Pool
-	store        *store.Store
-	mutateConfig func(*Config)
+	t             *testing.T
+	base          string
+	pool          *pgxpool.Pool
+	store         *store.Store
+	provisionRoot string
+	mutateConfig  func(*Config)
 }
 
 // testDatabaseName is the only database the integration tests may touch.
@@ -142,6 +145,11 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	if err != nil {
 		t.Fatalf("load theme contracts: %v", err)
 	}
+	provisionRoot := filepath.Join(t.TempDir(), "sites")
+	provisioner, err := siteprovision.New(provisionRoot)
+	if err != nil {
+		t.Fatalf("init site provisioner: %v", err)
+	}
 	cfg := Config{
 		RPID:           "localhost",
 		RPOrigins:      []string{origin},
@@ -149,6 +157,7 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 		SessionTTL:     time.Hour,
 		ChallengeTTL:   5 * time.Minute,
 		ThemeContracts: contracts,
+		Provisioner:    provisioner,
 	}
 	if applyEnv != nil && applyEnv.mutateConfig != nil {
 		applyEnv.mutateConfig(&cfg)
@@ -159,7 +168,7 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- server.Serve(listener) }()
 
-	env := &testEnv{t: t, base: origin, pool: pool, store: st}
+	env := &testEnv{t: t, base: origin, pool: pool, store: st, provisionRoot: provisionRoot}
 	t.Cleanup(func() {
 		_ = server.Close()
 		if _, err := pool.Exec(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE`, schema)); err != nil {
@@ -357,8 +366,9 @@ type ceremonyDoneResp struct {
 }
 
 type sessionResp struct {
-	Authenticated bool   `json:"authenticated"`
-	CSRFToken     string `json:"csrfToken"`
+	Authenticated       bool   `json:"authenticated"`
+	CSRFToken           string `json:"csrfToken"`
+	PlatformInitialized bool   `json:"platformInitialized"`
 }
 
 type siteListResp struct {
@@ -375,4 +385,14 @@ func decodeJSONBody(t *testing.T, raw []byte, dst any) {
 	if err := json.Unmarshal(raw, dst); err != nil {
 		t.Fatalf("decode response %q: %v", raw, err)
 	}
+}
+
+// createSite wraps SiteStore.Create for tests that only need the basics.
+func createSite(ctx context.Context, t *testing.T, env *testEnv, slug, name, description, locale string, owner uuid.UUID) store.SiteRecord {
+	t.Helper()
+	rec, err := env.store.Sites.Create(ctx, store.NewSiteParams{Slug: slug, Name: name, Description: description, DefaultLocale: locale}, owner)
+	if err != nil {
+		t.Fatalf("create site: %v", err)
+	}
+	return rec
 }

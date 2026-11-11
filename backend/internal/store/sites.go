@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
@@ -13,7 +14,8 @@ import (
 
 // SiteStore persists sites, their settings, and memberships. Settings updates
 // compare the expected revision inside the transaction that bumps it, which
-// backs the strong-ETag / If-Match contract.
+// backs the strong-ETag / If-Match contract. The lifecycle columns track the
+// directory provisioning that turns a database row into a usable site.
 type SiteStore struct {
 	pool *pgxpool.Pool
 }
@@ -25,8 +27,19 @@ type SiteRecord struct {
 	Role     string
 }
 
-const siteJoinColumns = `si.id, si.slug, si.created_at, si.updated_at,
+const siteJoinColumns = `si.id, si.slug, si.visibility, si.provision_state, si.provision_failure, si.created_at, si.updated_at,
 	ss.site_id, ss.name, ss.description, ss.default_locale, ss.revision, ss.updated_at`
+
+// NewSiteParams carries the fields of a site creation request. Visibility
+// defaults to private; provisionState starts as provisioning until the
+// platform finishes the on-disk setup.
+type NewSiteParams struct {
+	Slug          string
+	Name          string
+	Description   string
+	DefaultLocale string
+	Visibility    string
+}
 
 func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 	var rec SiteRecord
@@ -34,11 +47,13 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 	site := &rec.Site
 	var err error
 	if role != nil {
-		err = row.Scan(&site.ID, &site.Slug, &site.CreatedAt, &site.UpdatedAt,
+		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
+			&site.CreatedAt, &site.UpdatedAt,
 			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt,
 			role)
 	} else {
-		err = row.Scan(&site.ID, &site.Slug, &site.CreatedAt, &site.UpdatedAt,
+		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
+			&site.CreatedAt, &site.UpdatedAt,
 			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -54,9 +69,13 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 }
 
 // Create inserts a site with initial settings and the owner membership in one
-// transaction.
-func (s *SiteStore) Create(ctx context.Context, slug, name, description, defaultLocale string, owner uuid.UUID) (SiteRecord, error) {
+// transaction. The row starts in the provisioning state.
+func (s *SiteStore) Create(ctx context.Context, params NewSiteParams, owner uuid.UUID) (SiteRecord, error) {
 	id := newUUID()
+	visibility := params.Visibility
+	if visibility == "" {
+		visibility = model.SiteVisibilityPrivate
+	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return SiteRecord{}, err
@@ -64,12 +83,12 @@ func (s *SiteStore) Create(ctx context.Context, slug, name, description, default
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO sites (id, slug) VALUES ($1, $2)`, id, slug); err != nil {
+		`INSERT INTO sites (id, slug, visibility) VALUES ($1, $2, $3)`, id, params.Slug, visibility); err != nil {
 		return SiteRecord{}, err
 	}
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO site_settings (site_id, name, description, default_locale) VALUES ($1, $2, $3, $4)`,
-		id, name, description, defaultLocale); err != nil {
+		id, params.Name, params.Description, params.DefaultLocale); err != nil {
 		return SiteRecord{}, err
 	}
 	if _, err := tx.Exec(ctx,
@@ -81,6 +100,30 @@ func (s *SiteStore) Create(ctx context.Context, slug, name, description, default
 		return SiteRecord{}, err
 	}
 	return s.GetForUser(ctx, id, owner)
+}
+
+// MarkProvisioned transitions the provisioning state. An empty failure marks
+// the site ready; a non-empty failure records the exact stage that broke (and
+// never downgrades an already-ready site).
+func (s *SiteStore) MarkProvisioned(ctx context.Context, siteID uuid.UUID, failure model.ProvisionFailure) error {
+	var tag pgconn.CommandTag
+	var err error
+	if failure.Stage == "" {
+		tag, err = s.pool.Exec(ctx,
+			`UPDATE sites SET provision_state = 'ready', provision_failure = NULL, updated_at = now()
+			 WHERE id = $1`, siteID)
+	} else {
+		tag, err = s.pool.Exec(ctx,
+			`UPDATE sites SET provision_state = 'failed', provision_failure = $2, updated_at = now()
+			 WHERE id = $1 AND provision_state <> 'ready'`, siteID, failure)
+	}
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // ListForUser returns every site the user is a member of, newest first.
@@ -99,7 +142,8 @@ func (s *SiteStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]SiteRe
 	var out []SiteRecord
 	for rows.Next() {
 		var rec SiteRecord
-		if err := rows.Scan(&rec.Site.ID, &rec.Site.Slug, &rec.Site.CreatedAt, &rec.Site.UpdatedAt,
+		if err := rows.Scan(&rec.Site.ID, &rec.Site.Slug, &rec.Site.Visibility, &rec.Site.ProvisionState,
+			&rec.Site.ProvisionFailure, &rec.Site.CreatedAt, &rec.Site.UpdatedAt,
 			&rec.Settings.SiteID, &rec.Settings.Name, &rec.Settings.Description,
 			&rec.Settings.DefaultLocale, &rec.Settings.Revision, &rec.Settings.UpdatedAt,
 			&rec.Role); err != nil {

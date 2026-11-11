@@ -128,10 +128,7 @@ func TestPublishRetryAfterInjectedFailure(t *testing.T) {
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("retryowner")
-	site, err := env.store.Sites.Create(ctx, "retry-site", "Retry Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	site := createSite(ctx, t, env, "retry-site", "Retry Site", "", "zh-CN", owner.ID)
 	themeRowID, digest, themeID, version := fakeThemeFixture(t, env)
 	buildID := insertFakeSucceededBuild(t, env, site.Site.ID, owner.ID, themeRowID, themeID, version, digest, "retry")
 
@@ -220,10 +217,7 @@ func TestPublishConcurrentSameBuildAndCleanup(t *testing.T) {
 	ctx := context.Background()
 
 	owner, _, _ := env.createUserSession("concowner")
-	site, err := env.store.Sites.Create(ctx, "conc-site", "Conc Site", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	site := createSite(ctx, t, env, "conc-site", "Conc Site", "", "zh-CN", owner.ID)
 	themeRowID, digest, themeID, version := fakeThemeFixture(t, env)
 	buildA := insertFakeSucceededBuild(t, env, site.Site.ID, owner.ID, themeRowID, themeID, version, digest, "A")
 	buildB := insertFakeSucceededBuild(t, env, site.Site.ID, owner.ID, themeRowID, themeID, version, digest, "B")

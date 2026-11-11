@@ -135,10 +135,7 @@ func TestBootstrapRegisterLoginAndSettingsLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load alice: %v", err)
 	}
-	rec, err := env.store.Sites.Create(ctx, "blog", "Blog", "Initial", "zh-CN", alice.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	rec := createSite(ctx, t, env, "blog", "Blog", "Initial", "zh-CN", alice.ID)
 	sitePath := "/api/v1/sites/" + rec.Site.ID.String()
 	settingsPath := sitePath + "/settings"
 
@@ -202,10 +199,7 @@ func TestIfMatchPreconditions(t *testing.T) {
 
 	user, token, csrf := env.createUserSession("owner1")
 	owner := env.clientFor(token, csrf)
-	rec, err := env.store.Sites.Create(ctx, "site1", "Site One", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	rec := createSite(ctx, t, env, "site1", "Site One", "", "zh-CN", user.ID)
 	settingsPath := "/api/v1/sites/" + rec.Site.ID.String() + "/settings"
 
 	// Missing If-Match is rejected with 428.
@@ -256,10 +250,7 @@ func TestCSRFAndOriginEnforcement(t *testing.T) {
 	ctx := context.Background()
 	user, token, csrf := env.createUserSession("owner2")
 	owner := env.clientFor(token, csrf)
-	rec, err := env.store.Sites.Create(ctx, "site2", "Site Two", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	rec := createSite(ctx, t, env, "site2", "Site Two", "", "zh-CN", user.ID)
 	settingsPath := "/api/v1/sites/" + rec.Site.ID.String() + "/settings"
 	_, hdr, _ := owner.do("GET", settingsPath, nil, nil)
 	etag := hdr.Get("ETag")
@@ -309,14 +300,8 @@ func TestMembershipIsolationAndRoles(t *testing.T) {
 	bob, bobToken, bobCSRF := env.createUserSession("bob")
 	carol, carolToken, carolCSRF := env.createUserSession("carol")
 
-	siteA, err := env.store.Sites.Create(ctx, "alpha", "Alpha", "", "zh-CN", alice.ID)
-	if err != nil {
-		t.Fatalf("create alpha: %v", err)
-	}
-	siteB, err := env.store.Sites.Create(ctx, "beta", "Beta", "", "zh-CN", bob.ID)
-	if err != nil {
-		t.Fatalf("create beta: %v", err)
-	}
+	siteA := createSite(ctx, t, env, "alpha", "Alpha", "", "zh-CN", alice.ID)
+	siteB := createSite(ctx, t, env, "beta", "Beta", "", "zh-CN", bob.ID)
 	// bob views alpha; carol edits alpha.
 	if _, err := env.pool.Exec(ctx, `INSERT INTO site_memberships (site_id, user_id, role) VALUES ($1, $2, 'viewer')`, siteA.Site.ID, bob.ID); err != nil {
 		t.Fatalf("add bob viewer: %v", err)
@@ -500,10 +485,7 @@ func TestSettingsValidation(t *testing.T) {
 	ctx := context.Background()
 	user, token, csrf := env.createUserSession("valid")
 	owner := env.clientFor(token, csrf)
-	rec, err := env.store.Sites.Create(ctx, "site3", "Site Three", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	rec := createSite(ctx, t, env, "site3", "Site Three", "", "zh-CN", user.ID)
 	settingsPath := "/api/v1/sites/" + rec.Site.ID.String() + "/settings"
 	_, hdr, _ := owner.do("GET", settingsPath, nil, nil)
 	etag := hdr.Get("ETag")

@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Form, Input, Radio, Space, Tag, Typography } from 'antd';
-import SiteNav from '../../components/sites/SiteNav';
 import Trans from '../../components/i18n/Trans';
 import { ThemeSelection } from '../../lib/themes/theme-selection';
 import { t } from '../../lib/i18n';
@@ -31,17 +30,26 @@ export default function ThemePage() {
 
 	return (
 		<>
-			<SiteNav active="theme" />
 			<Card title={<Trans text={t('themes.title')} />} style={{ marginTop: 16 }}>
 				{phase.kind === 'loading' ? (
 					<p role="status">{t('common.loading')}</p>
 				) : (
 					<>
 						{phase.kind === 'saved' ? (
-							<Alert type="success" showIcon message={<Trans text={t('common.saved')} />} style={{ marginBottom: 16 }} />
+							<Alert
+								type="success"
+								showIcon
+								message={<Trans text={t('common.saved')} />}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						{phase.kind === 'error' ? (
-							<Alert type="error" showIcon message={t(phase.key as never)} style={{ marginBottom: 16 }} />
+							<Alert
+								type="error"
+								showIcon
+								message={t(phase.key as never)}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						{phase.kind === 'conflict' ? (
 							<Alert

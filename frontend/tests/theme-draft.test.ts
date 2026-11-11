@@ -24,6 +24,8 @@ import { ThemeSelection } from '../src/lib/themes/theme-selection';
 const site = (): Site => ({
 	siteId: '11111111-1111-1111-1111-111111111111',
 	slug: 'blog',
+	visibility: 'private',
+	provisionState: 'ready',
 	name: 'Site',
 	description: '',
 	defaultLocale: 'zh-CN',
@@ -47,10 +49,16 @@ const theme: Theme = {
 	updatedAt: '2026-01-01T00:00:00Z'
 };
 
-const selection = (selected: boolean, revision: number, config: unknown = {}): SiteThemeSelection => ({
+const selection = (
+	selected: boolean,
+	revision: number,
+	config: unknown = {}
+): SiteThemeSelection => ({
 	siteId: site().siteId,
 	selected,
-	theme: selected ? { themeId: 'fuyao-homepage', version: '27.1.1', manifestDigest: 'a'.repeat(64) } : null,
+	theme: selected
+		? { themeId: 'fuyao-homepage', version: '27.1.1', manifestDigest: 'a'.repeat(64) }
+		: null,
 	themeConfig: selected ? (config as Record<string, never>) : null,
 	revision,
 	updatedAt: '2026-01-01T00:00:00Z'

@@ -29,6 +29,8 @@ import zh from '../src/lib/i18n/locales/zh-CN.json';
 const baseSite: Site = {
 	siteId: '11111111-1111-1111-1111-111111111111',
 	slug: 'blog',
+	visibility: 'private',
+	provisionState: 'ready',
 	name: 'Baseline Name',
 	description: 'Baseline description',
 	defaultLocale: 'zh-CN',
@@ -152,11 +154,7 @@ describe('SettingsPage reactive derivations', () => {
 		});
 		await settled();
 
-		expect(updateSettings).toHaveBeenCalledWith(
-			baseSite.siteId,
-			{ name: 'Edited Name' },
-			'"e-r3"'
-		);
+		expect(updateSettings).toHaveBeenCalledWith(baseSite.siteId, { name: 'Edited Name' }, '"e-r3"');
 		const savedNotice = (zh['settings.savedAt'] as string).replace('{revision}', '4');
 		await waitFor(() => {
 			expect(screen.getByText(savedNotice)).toBeDefined();

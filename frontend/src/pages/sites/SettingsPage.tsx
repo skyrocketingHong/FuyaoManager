@@ -2,7 +2,6 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Form, Input, Select, Space } from 'antd';
-import SiteNav from '../../components/sites/SiteNav';
 import Trans from '../../components/i18n/Trans';
 import { SettingsEditor } from '../../lib/sites/settings-editor';
 import { t } from '../../lib/i18n';
@@ -34,7 +33,6 @@ export default function SettingsPage() {
 
 	return (
 		<>
-			<SiteNav active="settings" />
 			<Card title={<Trans text={t('settings.title')} />} style={{ marginTop: 16 }}>
 				{phase.kind === 'loading' ? (
 					<p role="status">{t('common.loading')}</p>
@@ -63,7 +61,12 @@ export default function SettingsPage() {
 						) : null}
 						{phase.kind === 'error' ? (
 							// The form stays below, editable, so the user can adjust and retry.
-							<Alert type="error" showIcon message={t(phase.key as never)} style={{ marginBottom: 16 }} />
+							<Alert
+								type="error"
+								showIcon
+								message={t(phase.key as never)}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						{phase.kind === 'conflict' ? (
 							<Alert
@@ -88,7 +91,12 @@ export default function SettingsPage() {
 							/>
 						) : null}
 						{!editable ? (
-							<Alert type="info" showIcon message={t('settings.viewerNotice')} style={{ marginBottom: 16 }} />
+							<Alert
+								type="info"
+								showIcon
+								message={t('settings.viewerNotice')}
+								style={{ marginBottom: 16 }}
+							/>
 						) : null}
 						<Form labelCol={{ span: 4 }}>
 							<Form.Item label={t('settings.name')} htmlFor="settings-name">

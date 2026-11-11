@@ -25,7 +25,13 @@ vi.mock('../src/lib/api/management', async (importOriginal) => {
 	};
 });
 
-import { getSite, listBuilds, listReleases, getCurrentRelease, createRelease } from '../src/lib/api/management';
+import {
+	getSite,
+	listBuilds,
+	listReleases,
+	getCurrentRelease,
+	createRelease
+} from '../src/lib/api/management';
 import ReleasesPage from '../src/pages/sites/ReleasesPage';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 
@@ -34,6 +40,8 @@ const SITE = '11111111-1111-1111-1111-111111111111';
 const site = (): Site => ({
 	siteId: SITE,
 	slug: 'blog',
+	visibility: 'private',
+	provisionState: 'ready',
 	name: 'Site',
 	description: '',
 	defaultLocale: 'zh-CN',
@@ -167,9 +175,7 @@ describe('ReleasesPage publish feedback and candidate binding', () => {
 	it('surfaces a persisted publish failure and refreshes the history', async () => {
 		const b1 = succeededBuild('b1-failing-1');
 		primeState([b1], []);
-		vi.mocked(getCurrentRelease).mockRejectedValue(
-			new ApiError(404, 'no_live_release', '', null)
-		);
+		vi.mocked(getCurrentRelease).mockRejectedValue(new ApiError(404, 'no_live_release', '', null));
 		const failedRecord = {
 			...releaseRow('rel-f', b1.id, 'failed'),
 			failure: {
@@ -203,9 +209,7 @@ describe('ReleasesPage publish feedback and candidate binding', () => {
 	it('answers a 409 build conflict with the mapped warning', async () => {
 		const b1 = succeededBuild('b1-conflict-1');
 		primeState([b1], []);
-		vi.mocked(getCurrentRelease).mockRejectedValue(
-			new ApiError(404, 'no_live_release', '', null)
-		);
+		vi.mocked(getCurrentRelease).mockRejectedValue(new ApiError(404, 'no_live_release', '', null));
 		vi.mocked(createRelease).mockRejectedValue(
 			new ApiError(409, 'release_build_conflict', '', null)
 		);

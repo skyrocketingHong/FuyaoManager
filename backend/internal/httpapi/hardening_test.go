@@ -148,14 +148,8 @@ func TestFullETagBinding(t *testing.T) {
 	user, token, csrf := env.createUserSession("owner-etag")
 	owner := env.clientFor(token, csrf)
 
-	siteA, err := env.store.Sites.Create(ctx, "etag-a", "A", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create A: %v", err)
-	}
-	siteB, err := env.store.Sites.Create(ctx, "etag-b", "B", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create B: %v", err)
-	}
+	siteA := createSite(ctx, t, env, "etag-a", "A", "", "zh-CN", user.ID)
+	siteB := createSite(ctx, t, env, "etag-b", "B", "", "zh-CN", user.ID)
 	pathA := "/api/v1/sites/" + siteA.Site.ID.String() + "/settings"
 	pathB := "/api/v1/sites/" + siteB.Site.ID.String() + "/settings"
 
@@ -212,10 +206,7 @@ func TestStableCSRFAcrossClients(t *testing.T) {
 	tabA := env.clientFor(token, csrf)
 	tabB := env.clientFor(token, csrf)
 
-	rec, err := env.store.Sites.Create(ctx, "tabs", "Tabs", "", "zh-CN", user.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	rec := createSite(ctx, t, env, "tabs", "Tabs", "", "zh-CN", user.ID)
 	settingsPath := "/api/v1/sites/" + rec.Site.ID.String() + "/settings"
 
 	for i := 0; i < 2; i++ {

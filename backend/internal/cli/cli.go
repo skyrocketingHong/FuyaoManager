@@ -1,5 +1,6 @@
 // Package cli implements the fuyao-admin commands: migrate, serve,
-// bootstrap-admin, create-site, validate-theme, and register-theme.
+// init-admin, login-code, revoke-sessions, bootstrap-admin, create-site,
+// validate-theme, and register-theme.
 package cli
 
 import (
@@ -16,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
@@ -23,6 +25,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
@@ -43,6 +46,12 @@ func Main(args []string) int {
 		err = runMigrate(ctx)
 	case "serve":
 		err = runServe(ctx)
+	case "init-admin":
+		err = runInitAdmin(ctx, args[1:])
+	case "login-code":
+		err = runLoginCode(ctx, args[1:])
+	case "revoke-sessions":
+		err = runRevokeSessions(ctx, args[1:])
 	case "bootstrap-admin":
 		err = runBootstrapAdmin(ctx, args[1:])
 	case "create-site":
@@ -71,9 +80,17 @@ func usage(f *os.File) {
 
 Commands:
   migrate                 Apply pending SQL migrations and exit.
-  serve                   Run the management API (loopback only).
+  serve                   Run the management API (loopback or a trusted host).
+  init-admin              Register the first administrator and print a
+                          single-use initialization code for the admin
+                          console (CLI-authorized first-run binding).
+  login-code              Print a single-use login code for an active
+                          administrator (one code per login).
+  revoke-sessions         Revoke every live session of an administrator.
   bootstrap-admin         Register the first administrator and print a
-                          single-use passkey enrollment permit.
+                          single-use passkey enrollment permit (legacy
+                          passkey path; requires an https or localhost
+                          WebAuthn origin).
   create-site             Create a site owned by an active administrator.
   validate-theme          Validate a theme root (theme.json) against the
                           theme contracts, optionally with a theme config.
@@ -132,14 +149,23 @@ func runServe(ctx context.Context) error {
 		return fmt.Errorf("database schema is at migration %d while %d is required; run `fuyao-admin migrate` first", current, latest)
 	}
 
-	webAuthn, err := wa.New(wa.Params{
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	// WebAuthn requires a domain-string RP ID; an IP-literal deployment (the
+	// plain-HTTP private topology) cannot satisfy it. Passkeys are the legacy
+	// compatibility path, never a dependency of one-time-code login, so the
+	// server starts and the passkey endpoints answer 503 instead of the whole
+	// service failing to boot.
+	var webAuthn *webauthnlib.WebAuthn
+	webAuthn, err = wa.New(wa.Params{
 		RPID:          cfg.RPID,
 		RPDisplayName: cfg.RPDisplayName,
 		RPOrigins:     cfg.RPOrigins,
 		ChallengeTTL:  cfg.ChallengeTTL,
 	})
 	if err != nil {
-		return fmt.Errorf("initialize WebAuthn: %w", err)
+		logger.Warn("passkey authentication unavailable; one-time-code login remains active", "error", err)
+		webAuthn = nil
 	}
 
 	// The theme-contract validator is optional: without it the server still
@@ -154,7 +180,6 @@ func runServe(ctx context.Context) error {
 		themeContracts = set
 	}
 
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	st := store.New(pool)
 
 	// Build-preview executor and the private preview origin. The runner
@@ -170,6 +195,14 @@ func runServe(ctx context.Context) error {
 	}
 	siteWork := filepath.Join(repoRoot, "site")
 	buildsRoot := filepath.Join(siteWork, ".fuyao", "admin-builds")
+	sitesRoot := cfg.SitesRoot
+	if sitesRoot == "" {
+		sitesRoot = filepath.Join(siteWork, ".fuyao", "admin-sites")
+	}
+	provisioner, err := siteprovision.New(sitesRoot)
+	if err != nil {
+		return fmt.Errorf("prepare sites root: %w", err)
+	}
 	runner := buildrunner.NewRunner(buildrunner.Config{
 		BuildStore:   st.Builds,
 		ThemeStore:   st.Themes,
@@ -229,7 +262,15 @@ func runServe(ctx context.Context) error {
 		Previews:         previews,
 		Publisher:        publisher,
 		PublishedOrigins: publishedOrigins,
+		Provisioner:      provisioner,
 	}, logger)
+
+	if cfg.AdminUIDir != "" {
+		if _, err := os.Stat(filepath.Join(cfg.AdminUIDir, "index.html")); err != nil {
+			return fmt.Errorf("admin UI directory %s has no index.html: %w", cfg.AdminUIDir, err)
+		}
+		handler = httpapi.WithUI(handler, cfg.AdminUIDir)
+	}
 
 	server := &http.Server{
 		Addr:              cfg.Addr,
@@ -262,6 +303,92 @@ func runServe(ctx context.Context) error {
 var (
 	slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 )
+
+// runInitAdmin registers the first administrator and prints a single-use
+// initialization code. This is the CLI-authorized first-run binding: the
+// first anonymous browser visitor can never claim administrator identity.
+func runInitAdmin(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("init-admin", flag.ContinueOnError)
+	username := fs.String("username", "", "administrator username (lowercase letters, digits, '.', '_', '-')")
+	displayName := fs.String("display-name", "", "display name")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *username == "" {
+		return errors.New("--username is required")
+	}
+
+	pool, cfg, err := openPool(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	code, expiresAt, err := store.New(pool).InitAdmin(ctx, *username, *displayName, cfg.AuthCodeTTL)
+	if err != nil {
+		return err
+	}
+	// The code is a secret: printed once to the terminal, never logged.
+	fmt.Printf("administrator %q registered (pending initialization)\n", *username)
+	fmt.Printf("initialization code: %s\n", code)
+	fmt.Printf("code expires:        %s\n", expiresAt.Local().Format(time.RFC3339))
+	fmt.Println("Open the admin console in a browser and enter this code once to activate the account and sign in.")
+	return nil
+}
+
+// runLoginCode prints a single-use login code for an active administrator.
+// Each login needs a fresh code; codes are never reused.
+func runLoginCode(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("login-code", flag.ContinueOnError)
+	username := fs.String("username", "", "administrator username")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *username == "" {
+		return errors.New("--username is required")
+	}
+
+	pool, cfg, err := openPool(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	code, expiresAt, err := store.New(pool).IssueLoginCode(ctx, *username, cfg.AuthCodeTTL)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("login code for %q: %s\n", *username, code)
+	fmt.Printf("code expires:       %s\n", expiresAt.Local().Format(time.RFC3339))
+	fmt.Println("Enter this code in the admin console to sign in. It can be used once.")
+	return nil
+}
+
+// runRevokeSessions revokes every live session of an administrator, for
+// example after a suspected leak or before handing over a machine.
+func runRevokeSessions(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("revoke-sessions", flag.ContinueOnError)
+	username := fs.String("username", "", "administrator username")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if *username == "" {
+		return errors.New("--username is required")
+	}
+
+	pool, _, err := openPool(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	revoked, err := store.New(pool).RevokeUserSessions(ctx, *username)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("revoked %d session(s) of %q\n", revoked, *username)
+	return nil
+}
 
 func runBootstrapAdmin(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("bootstrap-admin", flag.ContinueOnError)
@@ -342,7 +469,12 @@ func runCreateSite(ctx context.Context, args []string) error {
 		return fmt.Errorf("owner %q has not completed passkey enrollment", ownerName)
 	}
 
-	rec, err := st.Sites.Create(ctx, *slug, *name, *description, *locale, ownerUser.ID)
+	rec, err := st.Sites.Create(ctx, store.NewSiteParams{
+		Slug:          *slug,
+		Name:          *name,
+		Description:   *description,
+		DefaultLocale: *locale,
+	}, ownerUser.ID)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
-/** Maps backend problem codes and browser ceremony errors to message keys. */
+/** Maps backend problem codes and browser errors to message keys. */
 import type { MessageKey } from './index';
 import { ApiError } from '../api/client';
-import { CeremonyAborted } from '../api/passkey';
 
 const codeToKey: Record<string, MessageKey> = {
 	invalid_permit: 'error.invalidPermit',
@@ -10,6 +9,14 @@ const codeToKey: Record<string, MessageKey> = {
 	bootstrap_closed: 'error.bootstrapClosed',
 	challenge_invalid: 'error.challengeInvalid',
 	credential_rejected: 'error.credentialRejected',
+	invalid_code: 'error.invalidCode',
+	code_used: 'error.codeUsed',
+	code_expired: 'error.codeExpired',
+	code_locked: 'error.codeLocked',
+	code_purpose_mismatch: 'error.codePurposeMismatch',
+	rate_limited: 'error.rateLimited',
+	slug_taken: 'error.slugTaken',
+	provisioning_unavailable: 'error.provisioningUnavailable',
 	unauthenticated: 'error.unauthenticated',
 	forbidden: 'error.forbidden',
 	csrf_token_invalid: 'error.csrf',
@@ -34,7 +41,6 @@ const codeToKey: Record<string, MessageKey> = {
 
 /** Returns the message key describing the error, or null for unknown errors. */
 export function apiErrorKey(err: unknown): MessageKey | null {
-	if (err instanceof CeremonyAborted) return 'error.aborted';
 	if (err instanceof ApiError) {
 		if (err.code === 'precondition_failed') {
 			return err.code === 'precondition_failed' && err.status === 412 ? 'error.conflict' : null;

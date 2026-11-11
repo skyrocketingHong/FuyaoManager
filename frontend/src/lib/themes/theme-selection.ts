@@ -49,7 +49,11 @@ interface SelectionView {
 	configText: string;
 }
 
-function viewOf(selected: boolean, theme: { themeId: string; version: string } | null, config: unknown): SelectionView {
+function viewOf(
+	selected: boolean,
+	theme: { themeId: string; version: string } | null,
+	config: unknown
+): SelectionView {
 	if (!selected || theme === null) {
 		return { selected: false, themeKey: null, configText: '{}' };
 	}
@@ -175,11 +179,7 @@ export class ThemeSelection {
 				this.etag
 			);
 			this.etag = etag;
-			const view = viewOf(
-				selection.selected,
-				selection.theme,
-				selection.themeConfig
-			);
+			const view = viewOf(selection.selected, selection.theme, selection.themeConfig);
 			// Adopt the server response only where the user has not kept
 			// typing: text edited during the flight stays as an unsaved
 			// draft (same semantics as the settings editor).
@@ -215,11 +215,7 @@ export class ThemeSelection {
 		try {
 			const { selection, etag } = await getSiteTheme(siteId);
 			this.etag = etag;
-			const view = viewOf(
-				selection.selected,
-				selection.theme,
-				selection.themeConfig
-			);
+			const view = viewOf(selection.selected, selection.theme, selection.themeConfig);
 			const next: Partial<ThemeSelectionState> = {
 				phase: { kind: 'conflict', synced: true }
 			};

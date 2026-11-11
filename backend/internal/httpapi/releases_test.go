@@ -129,10 +129,7 @@ func TestPublishRollbackClosedLoop(t *testing.T) {
 	owner, ownerToken, ownerCSRF := env.createUserSession("pubowner")
 	viewer, viewerToken, viewerCSRF := env.createUserSession("pubviewer")
 	_, outsiderToken, outsiderCSRF := env.createUserSession("puboutsider")
-	site, err := env.store.Sites.Create(ctx, "pub-site", "发布站甲", "描述", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatalf("create site: %v", err)
-	}
+	site := createSite(ctx, t, env, "pub-site", "发布站甲", "描述", "zh-CN", owner.ID)
 	if _, err := env.pool.Exec(ctx,
 		`INSERT INTO site_memberships (site_id, user_id, role) VALUES ($1, $2, 'viewer')`,
 		site.Site.ID, viewer.ID); err != nil {
@@ -281,10 +278,7 @@ func TestPublishRequiredArtifactsFailure(t *testing.T) {
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("pubfailowner")
-	site, err := env.store.Sites.Create(ctx, "pubfail-site", "发布站丙", "", "zh-CN", owner.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	site := createSite(ctx, t, env, "pubfail-site", "发布站丙", "", "zh-CN", owner.ID)
 	registerFirstTheme(t, env)
 	ownerClient := env.clientFor(ownerToken, ownerCSRF)
 	selectThemeForSite(t, ownerClient, site.Site.ID, "fuyao-homepage", themeVersionFromCatalog(t, env))

@@ -37,6 +37,12 @@ type Config struct {
 	Previews         PreviewIssuer
 	Publisher        Publisher
 	PublishedOrigins PublishedOrigins
+	Provisioner      SiteProvisioner
+}
+
+// SiteProvisioner provisions the per-site on-disk tree at site creation.
+type SiteProvisioner interface {
+	Provision(site model.Site, settings model.SiteSettings) error
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
@@ -51,6 +57,8 @@ type API struct {
 	previews         PreviewIssuer
 	publisher        Publisher
 	publishedOrigins PublishedOrigins
+	provisioner      SiteProvisioner
+	exchangeLimiter  *exchangeLimiter
 }
 
 // routeSpec is one registered management route with the OpenAPI operation it
@@ -70,18 +78,25 @@ type routeSpec struct {
 func (a *API) routes() []routeSpec {
 	return []routeSpec{
 		// WebAuthn ceremonies (no prior session; protected by permit,
-		// challenge, and Origin checks).
-		{http.MethodPost, "/api/v1/auth/register/options", "startPasskeyEnrollment", a.handleRegisterOptions},
-		{http.MethodPost, "/api/v1/auth/register/verify", "verifyPasskeyEnrollment", a.handleRegisterVerify},
-		{http.MethodPost, "/api/v1/auth/login/options", "startPasskeyLogin", a.handleLoginOptions},
-		{http.MethodPost, "/api/v1/auth/login/verify", "verifyPasskeyLogin", a.handleLoginVerify},
+		// challenge, and Origin checks). On IP-literal deployments the RP ID
+		// cannot be a domain string, so the relying party is unavailable and
+		// these routes answer 503; one-time-code login is unaffected.
+		{http.MethodPost, "/api/v1/auth/register/options", "startPasskeyEnrollment", a.passkeyRoute(a.handleRegisterOptions)},
+		{http.MethodPost, "/api/v1/auth/register/verify", "verifyPasskeyEnrollment", a.passkeyRoute(a.handleRegisterVerify)},
+		{http.MethodPost, "/api/v1/auth/login/options", "startPasskeyLogin", a.passkeyRoute(a.handleLoginOptions)},
+		{http.MethodPost, "/api/v1/auth/login/verify", "verifyPasskeyLogin", a.passkeyRoute(a.handleLoginVerify)},
+
+		// One-time CLI-issued code redemption (initialization and per-login).
+		{http.MethodPost, "/api/v1/auth/exchange", "exchangeAuthCode", a.handleExchangeCode},
 
 		{http.MethodGet, "/api/v1/session", "getSession", a.handleSession},
 		{http.MethodPost, "/api/v1/auth/logout", "logout", a.requireAuth(a.withCSRF(a.handleLogout))},
 
 		// Sites.
 		{http.MethodGet, "/api/v1/sites", "listSites", a.requireAuth(a.handleListSites)},
+		{http.MethodPost, "/api/v1/sites", "createSite", a.requireAuth(a.withCSRF(a.handleCreateSite))},
 		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireAuth(a.handleGetSite)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireAuth(a.withCSRF(a.handleProvisionSite))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireAuth(a.handleGetSettings)},
 		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireAuth(a.withCSRF(a.handlePatchSettings))},
 
@@ -125,6 +140,8 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		previews:         cfg.Previews,
 		publisher:        cfg.Publisher,
 		publishedOrigins: cfg.PublishedOrigins,
+		provisioner:      cfg.Provisioner,
+		exchangeLimiter:  newExchangeLimiter(),
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
 	for _, o := range cfg.RPOrigins {
@@ -143,6 +160,18 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 	h = api.recoverer(h)
 	h = api.securityHeaders(h)
 	return h
+}
+
+// passkeyRoute gates the legacy passkey ceremonies on the WebAuthn relying
+// party being configured (domain-string RP ID).
+func (a *API) passkeyRoute(h http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if a.wa == nil {
+			writeProblem(w, http.StatusServiceUnavailable, "passkey_unavailable", "Passkey authentication requires a domain-string relying-party ID; this deployment uses one-time-code login.")
+			return
+		}
+		h(w, r)
+	}
 }
 
 // securityHeaders stamps every management API response — success, auth

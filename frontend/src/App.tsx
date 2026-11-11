@@ -6,7 +6,6 @@ import { initLocale } from './lib/i18n';
 import { initTheme } from './lib/theme';
 import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
 import LoginPage from './pages/LoginPage';
-import BootstrapPage from './pages/BootstrapPage';
 import SitesPage from './pages/SitesPage';
 import SiteDetailPage from './pages/sites/SiteDetailPage';
 import SettingsPage from './pages/sites/SettingsPage';
@@ -23,24 +22,25 @@ export default function App() {
 		void loadSession();
 	}, []);
 
-	return (
-		<AppShell>
-			{session.status === 'loading' ? (
-				<p role="status">…</p>
-			) : (
-				<Routes>
-					<Route path="/" element={<Navigate to="/sites" replace />} />
-					<Route path="/login" element={<LoginPage />} />
-					<Route path="/bootstrap" element={<BootstrapPage />} />
-					<Route path="/sites" element={<SitesPage />} />
-					<Route path="/sites/:siteId" element={<SiteDetailPage />} />
-					<Route path="/sites/:siteId/settings" element={<SettingsPage />} />
-					<Route path="/sites/:siteId/theme" element={<ThemePage />} />
-					<Route path="/sites/:siteId/builds" element={<BuildsPage />} />
-					<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
-					<Route path="*" element={<Navigate to="/sites" replace />} />
-				</Routes>
-			)}
-		</AppShell>
+	if (session.status === 'loading') {
+		return <p role="status">…</p>;
+	}
+
+	const routes = (
+		<Routes>
+			<Route path="/" element={<Navigate to="/sites" replace />} />
+			<Route path="/login" element={<LoginPage />} />
+			<Route path="/sites" element={<SitesPage />} />
+			<Route path="/sites/:siteId" element={<SiteDetailPage />} />
+			<Route path="/sites/:siteId/settings" element={<SettingsPage />} />
+			<Route path="/sites/:siteId/theme" element={<ThemePage />} />
+			<Route path="/sites/:siteId/builds" element={<BuildsPage />} />
+			<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
+			<Route path="*" element={<Navigate to="/sites" replace />} />
+		</Routes>
 	);
+
+	// The login screen stands alone; every authenticated page lives in the
+	// app shell.
+	return session.status === 'authenticated' ? <AppShell>{routes}</AppShell> : routes;
 }

@@ -105,6 +105,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a CLI-issued one-time code
+         * @description Exchanges a single-use code printed by the server CLI
+         *     (`fuyao-admin init-admin` for the first administrator,
+         *     `fuyao-admin login-code` for every later login) for a freshly
+         *     minted session. Codes are stored as SHA-256 digests, expire quickly,
+         *     burn one attempt per presentation, and are consumed in one
+         *     transaction, so concurrent redemptions of the same code can never
+         *     both succeed. An initialization code only activates the still-pending
+         *     first administrator; a login code only opens sessions for active
+         *     accounts.
+         */
+        post: operations["exchangeAuthCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/session": {
         parameters: {
             query?: never;
@@ -163,7 +191,40 @@ export interface paths {
          */
         get: operations["listSites"];
         put?: never;
-        post?: never;
+        /**
+         * Create a site
+         * @description Creates a site owned by the caller: database rows (site, settings,
+         *     owner membership) commit in one transaction, an optional initial
+         *     theme selection is validated exactly like a theme PUT, and then the
+         *     per-site content/config directory tree is provisioned. The response
+         *     reports the provisioning state explicitly — a created site is only
+         *     `ready` once directory setup succeeded; `failed` keeps the site
+         *     retryable via the provision endpoint. Slug uniqueness is enforced by
+         *     the database.
+         */
+        post: operations["createSite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/provision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry site directory provisioning
+         * @description Re-runs the on-disk provisioning for a site whose `provisionState` is
+         *     not `ready`. Idempotent: provisioning never overwrites existing
+         *     files, and a site that is already ready is returned unchanged.
+         */
+        post: operations["provisionSite"];
         delete?: never;
         options?: never;
         head?: never;
@@ -668,7 +729,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "internal_error";
             detail?: string;
         };
         User: {
@@ -684,17 +745,52 @@ export interface components {
         };
         SessionInfo: {
             authenticated: boolean;
+            /** @description Whether the CLI first-run binding already happened; false tells an anonymous browser to show the initialization guidance. */
+            platformInitialized: boolean;
             user?: components["schemas"]["User"];
             csrfToken?: string;
+        };
+        AuthCodeExchangeRequest: {
+            /** @description Single-use code printed by `fuyao-admin init-admin` (first administrator) or `fuyao-admin login-code` (every login). */
+            code: string;
         };
         EnrollmentPermitRequest: {
             /** @description Single-use permit code printed by `fuyao-admin bootstrap-admin`. */
             permit: string;
         };
+        SiteCreate: {
+            slug: string;
+            name: string;
+            description?: string;
+            /**
+             * @default zh-CN
+             * @enum {string}
+             */
+            defaultLocale: "zh-CN" | "en-US";
+            /**
+             * @default private
+             * @enum {string}
+             */
+            visibility: "public" | "private";
+            /** @description Optional initial theme selection; requires themeVersion. */
+            themeId?: string;
+            themeVersion?: string;
+            /** @description Optional theme configuration validated against the theme's config schema. */
+            themeConfig?: Record<string, never>;
+        };
         Site: {
             /** Format: uuid */
             siteId: string;
             slug: string;
+            /** @enum {string} */
+            visibility: "public" | "private";
+            /** @enum {string} */
+            provisionState: "provisioning" | "ready" | "failed";
+            /** @description Present only when provisionState is failed; names the stage that broke. */
+            provisionFailure?: {
+                stage?: string;
+                message?: string;
+            };
             name: string;
             description: string;
             /** @enum {string} */
@@ -1194,6 +1290,64 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    exchangeAuthCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthCodeExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Code redeemed; the response sets the session cookie and returns the signed-in user with the CSRF token. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CeremonyDone"];
+                };
+            };
+            /** @description The code is unknown (`invalid_code`) or the body is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /**
+             * @description The code was already used (`code_used`), expired
+             *     (`code_expired`), locked after too many presentations
+             *     (`code_locked`), does not match the account state
+             *     (`code_purpose_mismatch`), or initialization is already closed
+             *     (`bootstrap_closed`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many redemption attempts from this address (`rate_limited`). */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getSession: {
         parameters: {
             query?: never;
@@ -1258,6 +1412,121 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createSite: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteCreate"];
+            };
+        };
+        responses: {
+            /** @description Site created; `provisionState` says whether directory provisioning succeeded. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
+                };
+            };
+            /** @description Field validation failed (`validation_error`) or the body is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description The requested theme and version are not registered (`theme_not_found`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A site with this slug already exists (`slug_taken`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The theme configuration is invalid (`invalid_theme_config`). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Theme contracts (`theme_contracts_unavailable`) or site provisioning (`provisioning_unavailable`) are not configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    provisionSite: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The refreshed site with its current provisioning state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Site provisioning is not configured (`provisioning_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };

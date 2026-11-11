@@ -18,7 +18,12 @@ function Root() {
 			locale={locale === 'zh-CN' ? zhCN : enUS}
 			theme={{
 				algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-				token: { colorPrimary: '#006f6b' }
+				token: {
+					colorPrimary: '#006f6b',
+					borderRadius: 8,
+					borderRadiusSM: 4,
+					borderRadiusLG: 12
+				}
 			}}
 		>
 			<AntApp>

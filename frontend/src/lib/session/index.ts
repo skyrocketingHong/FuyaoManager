@@ -1,18 +1,21 @@
 /**
  * App-wide session state backed by GET /api/v1/session, exposed as an
- * external store for React binding.
+ * external store for React binding. `platformInitialized` tells an anonymous
+ * browser whether the CLI first-run binding already happened, driving the
+ * initialization guidance on the login screen.
  */
 import { setCsrfToken } from '../api/client';
-import { fetchSession, logout as apiLogout, type User } from '../api/management';
+import { exchangeAuthCode, fetchSession, logout as apiLogout, type User } from '../api/management';
 
 export type SessionStatus = 'loading' | 'authenticated' | 'anonymous';
 
 interface SessionState {
 	status: SessionStatus;
 	user: User | null;
+	platformInitialized: boolean;
 }
 
-let state: SessionState = { status: 'loading', user: null };
+let state: SessionState = { status: 'loading', user: null, platformInitialized: true };
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -31,16 +34,28 @@ export function sessionSnapshot(): SessionState {
 export async function loadSession(): Promise<void> {
 	try {
 		const info = await fetchSession();
-		state = { status: info.authenticated ? 'authenticated' : 'anonymous', user: info.user ?? null };
+		state = {
+			status: info.authenticated ? 'authenticated' : 'anonymous',
+			user: info.user ?? null,
+			platformInitialized: info.platformInitialized
+		};
 	} catch {
-		state = { status: 'anonymous', user: null };
+		state = { status: 'anonymous', user: null, platformInitialized: true };
 		setCsrfToken(null);
 	}
 	emit();
 }
 
+/** Redeems a CLI one-time code and applies the resulting session. */
+export async function signInWithCode(code: string): Promise<User> {
+	const done = await exchangeAuthCode(code);
+	state = { status: 'authenticated', user: done.user, platformInitialized: true };
+	emit();
+	return done.user;
+}
+
 export function markSignedIn(user: User): void {
-	state = { status: 'authenticated', user };
+	state = { ...state, status: 'authenticated', user };
 	emit();
 }
 
@@ -48,7 +63,7 @@ export async function signOut(): Promise<void> {
 	try {
 		await apiLogout();
 	} finally {
-		state = { status: 'anonymous', user: null };
+		state = { ...state, status: 'anonymous', user: null };
 		setCsrfToken(null);
 		emit();
 	}
