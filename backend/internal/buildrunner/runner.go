@@ -467,7 +467,7 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	}
 	snapshotWork := filepath.Join(themeCopy, ".fuyao", "build-inputs", "current")
 	snapshotDir := filepath.Join(taskDir, "snapshot")
-	if err := sealTree(snapshotWork, snapshotDir); err != nil {
+	if err := SealTree(snapshotWork, snapshotDir); err != nil {
 		return fail("snapshot", "Failed to seal the build snapshot into its task directory.")
 	}
 
@@ -496,7 +496,7 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 
 	buildOut := filepath.Join(themeCopy, "build")
 	artifacts := filepath.Join(taskDir, "artifacts")
-	if err := sealTree(buildOut, artifacts); err != nil {
+	if err := SealTree(buildOut, artifacts); err != nil {
 		return fail("harvest", "No build output was produced to harvest.")
 	}
 

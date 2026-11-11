@@ -27,26 +27,30 @@ const (
 
 // Config carries the HTTP-facing runtime configuration.
 type Config struct {
-	RPID           string
-	RPOrigins      []string
-	CookieSecure   bool
-	SessionTTL     time.Duration
-	ChallengeTTL   time.Duration
-	ThemeContracts ThemeConfigValidator
-	BuildEnqueuer  BuildEnqueuer
-	Previews       PreviewIssuer
+	RPID             string
+	RPOrigins        []string
+	CookieSecure     bool
+	SessionTTL       time.Duration
+	ChallengeTTL     time.Duration
+	ThemeContracts   ThemeConfigValidator
+	BuildEnqueuer    BuildEnqueuer
+	Previews         PreviewIssuer
+	Publisher        Publisher
+	PublishedOrigins PublishedOrigins
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
 type API struct {
-	store          *store.Store
-	wa             *webauthnlib.WebAuthn
-	cfg            Config
-	logger         *slog.Logger
-	origins        map[string]struct{}
-	themeContracts ThemeConfigValidator
-	buildEnqueuer  BuildEnqueuer
-	previews       PreviewIssuer
+	store            *store.Store
+	wa               *webauthnlib.WebAuthn
+	cfg              Config
+	logger           *slog.Logger
+	origins          map[string]struct{}
+	themeContracts   ThemeConfigValidator
+	buildEnqueuer    BuildEnqueuer
+	previews         PreviewIssuer
+	publisher        Publisher
+	publishedOrigins PublishedOrigins
 }
 
 // routeSpec is one registered management route with the OpenAPI operation it
@@ -94,6 +98,14 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireAuth(a.handleListBuilds)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireAuth(a.handleGetBuild)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-links", "createPreviewLink", a.requireAuth(a.withCSRF(a.handleCreatePreviewLink))},
+
+		// Releases: publish freezes a succeeded build's artifacts into a
+		// release directory and atomically switches the site's live version;
+		// rollback re-points at an existing release without rebuilding.
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireAuth(a.withCSRF(a.handleCreateRelease))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireAuth(a.handleListReleases)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireAuth(a.handleGetCurrentRelease)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireAuth(a.withCSRF(a.handleRollbackRelease))},
 	}
 }
 
@@ -103,13 +115,15 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		logger = slog.Default()
 	}
 	api := &API{
-		store:          st,
-		wa:             wa,
-		cfg:            cfg,
-		logger:         logger,
-		themeContracts: cfg.ThemeContracts,
-		buildEnqueuer:  cfg.BuildEnqueuer,
-		previews:       cfg.Previews,
+		store:            st,
+		wa:               wa,
+		cfg:              cfg,
+		logger:           logger,
+		themeContracts:   cfg.ThemeContracts,
+		buildEnqueuer:    cfg.BuildEnqueuer,
+		previews:         cfg.Previews,
+		publisher:        cfg.Publisher,
+		publishedOrigins: cfg.PublishedOrigins,
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
 	for _, o := range cfg.RPOrigins {

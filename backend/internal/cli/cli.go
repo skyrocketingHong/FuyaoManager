@@ -22,6 +22,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/config"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
@@ -192,15 +193,42 @@ func runServe(ctx context.Context) error {
 	})
 	defer previews.Close()
 
+	// The publish pipeline seals succeeded builds into per-site release
+	// directories and atomically switches the live release; published origins
+	// are per-site loopback listeners serving the current release. Publishing
+	// requires the theme contracts (release.json validation), mirroring the
+	// theme-selection save behavior.
+	var publisher httpapi.Publisher
+	var publishedOrigins httpapi.PublishedOrigins
+	if set, ok := themeContracts.(*themecontract.Set); ok {
+		releasesRoot := filepath.Join(siteWork, ".fuyao", "admin-releases")
+		manager := publish.NewManager(publish.Config{
+			Pool:         pool,
+			Releases:     st.Releases,
+			Builds:       st.Builds,
+			Themes:       st.Themes,
+			ReleasesRoot: releasesRoot,
+			Contracts:    set,
+			Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
+			Logger:       logger,
+		})
+		publisher = manager
+		origins := publish.NewServer(st.Releases, releasesRoot)
+		publishedOrigins = origins
+		defer origins.Close()
+	}
+
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
-		RPID:           cfg.RPID,
-		RPOrigins:      cfg.RPOrigins,
-		CookieSecure:   cfg.CookieSecure,
-		SessionTTL:     cfg.SessionTTL,
-		ChallengeTTL:   cfg.ChallengeTTL,
-		ThemeContracts: themeContracts,
-		BuildEnqueuer:  runner,
-		Previews:       previews,
+		RPID:             cfg.RPID,
+		RPOrigins:        cfg.RPOrigins,
+		CookieSecure:     cfg.CookieSecure,
+		SessionTTL:       cfg.SessionTTL,
+		ChallengeTTL:     cfg.ChallengeTTL,
+		ThemeContracts:   themeContracts,
+		BuildEnqueuer:    runner,
+		Previews:         previews,
+		Publisher:        publisher,
+		PublishedOrigins: publishedOrigins,
 	}, logger)
 
 	server := &http.Server{

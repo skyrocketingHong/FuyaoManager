@@ -384,6 +384,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the site's release history
+         * @description Returns the site's releases, newest first: live, superseded, and
+         *     failed attempts with their failure records. Any site member may read;
+         *     non-members get 404.
+         */
+        get: operations["listReleases"];
+        put?: never;
+        /**
+         * Publish a succeeded build as the site's live release
+         * @description Promotes a succeeded build to the site's live release. The pipeline
+         *     re-checks the trusted site requirements (capabilities and URL
+         *     conventions), verifies the theme's declared `requiredArtifacts` exist
+         *     in the build output, generates `release.json` and validates it against
+         *     the theme release contract, seals the artifacts into an immutable
+         *     per-site release directory, and switches the site's current release
+         *     atomically under the per-site publish lock. A failed publish is
+         *     persisted as a release record with its failure (precise missing
+         *     capabilities, URL conventions, or artifacts) and returns 422 — the
+         *     previous release stays live and serving.
+         *
+         *     One release per build: republishing an already-released build is
+         *     rejected. Only `owner` and `editor` members may publish.
+         */
+        post: operations["createRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current live release
+         * @description Returns the site's live release plus the published origin URL — a
+         *     loopback-only origin serving the current release with production URL
+         *     semantics. Publishing or rolling back switches the served content
+         *     without changing the URL. Any site member may read; 404
+         *     `no_live_release` before the first publish.
+         */
+        get: operations["getCurrentRelease"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/releases/{releaseId}/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Roll the site back to an existing release
+         * @description Atomically re-points the site at an existing release: artifacts are
+         *     reused exactly as sealed (no rebuild) and nothing outside the pointer
+         *     — settings, theme selections, builds, unpublished edits — is touched.
+         *     The target must exist on this site, not be a failed attempt, and its
+         *     release directory must still be present. Rolling back to the
+         *     currently-live release is 409. Only `owner` and `editor` members may
+         *     roll back.
+         */
+        post: operations["rollbackRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -462,16 +550,87 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        /** @description Publish request body. */
+        ReleaseCreate: {
+            /**
+             * Format: uuid
+             * @description The succeeded build whose artifacts become the release.
+             */
+            buildId: string;
+            /** @description Why the release is produced (mirrored into release.json); omitted defaults to [manual]. */
+            reasons?: ("manual" | "posts" | "albums" | "data" | "favicon" | "static")[];
+        };
+        /** @description Persisted failure record of a publish attempt. */
+        ReleaseFailure: {
+            /** @description The stage the publish died in (capability-check, artifacts, workspace, release-metadata, persist). */
+            stage: string;
+            /** @description Client-safe message; never contains server paths. */
+            message: string;
+            /** @description Required capabilities the theme does not declare (capability-check stage only). */
+            missingCapabilities?: string[];
+            /** @description Required URL conventions the theme does not declare (capability-check stage only). */
+            missingUrlConventions?: string[];
+            /** @description Theme-declared requiredArtifacts missing from the build output (artifacts stage only). */
+            missingArtifacts?: string[];
+        };
+        /**
+         * @description A persisted release record. One release per build; the live one is
+         *     what the published origin serves. The theme identity and input
+         *     digests identify the exact content/theme/configuration triple, which
+         *     is what rollback restores. Filesystem locations are never exposed.
+         */
+        Release: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            siteId: string;
+            /**
+             * Format: uuid
+             * @description The succeeded build whose sealed artifacts back this release.
+             */
+            buildId: string;
+            theme: {
+                themeId: string;
+                version: string;
+                manifestDigest: string;
+            };
+            /** @description The three input digests the release was built from (content, site config, theme config); present on live/superseded records, null on attempts that failed before the release metadata was generated. */
+            inputDigests: Record<string, never> | null;
+            routes: {
+                /** @description The SPA fallback file mirrored from the theme manifest (null when the theme declares none). */
+                spaFallback: string | null;
+                urlConventions: string[];
+            };
+            reasons: ("manual" | "posts" | "albums" | "data" | "favicon" | "static")[];
+            /** @enum {string} */
+            status: "live" | "superseded" | "failed";
+            /** @description Present (non-null) only for `failed` attempts; null otherwise. */
+            failure?: components["schemas"]["ReleaseFailure"] | null;
+            /** Format: uuid */
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When the release last became live.
+             */
+            activatedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description When a newer publish or rollback replaced this release.
+             */
+            supersededAt?: string | null;
+        };
         /** @description RFC 9457 error document with a stable machine-readable code. */
         Problem: {
             type: string;
             title: string;
             status: number;
             /**
-             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, invalid_id, internal_error.
+             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "no_theme_selected" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "internal_error";
             detail?: string;
         };
         User: {
@@ -779,6 +938,8 @@ export interface components {
         SiteId: string;
         /** @description Build task UUID. */
         BuildId: string;
+        /** @description Release record UUID. */
+        ReleaseId: string;
         /** @description CSRF token bound to the session. */
         CSRFTokenHeader: string;
         /**
@@ -1528,6 +1689,203 @@ export interface operations {
                 };
             };
             /** @description The preview server is not configured on this server (`preview_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listReleases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release history, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        releases: components["schemas"]["Release"][];
+                    };
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseCreate"];
+            };
+        };
+        responses: {
+            /** @description Published and live; a Location header points at the release resource. */
+            201: {
+                headers: {
+                    /** @description Absolute path of the created release resource. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["RequestBodyTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            /**
+             * @description The build cannot back a release (`build_not_publishable`: missing,
+             *     not succeeded, foreign site, or already released) or the publish
+             *     failed its checks — in the latter case the body is the persisted
+             *     failed release record carrying the precise missing items.
+             */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description The publish pipeline or theme contracts are not configured (`publish_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getCurrentRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current release and its published origin. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        release: components["schemas"]["Release"];
+                        /** @description Loopback origin serving the current release, or an empty string when the published-origin service is not configured. */
+                        originUrl: string;
+                    };
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            /** @description No membership or no live release yet (`not_found` or `no_live_release`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    rollbackRelease: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description Release record UUID. */
+                releaseId: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The release is live again; the previously-live release is superseded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description The siteId or releaseId path segment is not a UUID (`invalid_site_id` or `invalid_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Release not found on this site for this caller (`release_not_found`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The target cannot become live — already live, a failed attempt, or artifacts missing (`release_not_rollbackable`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The publish pipeline is not configured (`publish_unavailable`). */
             503: {
                 headers: {
                     [name: string]: unknown;

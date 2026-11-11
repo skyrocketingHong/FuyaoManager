@@ -238,10 +238,11 @@ func writeSourceManifest(taskDir string, manifest sourceManifest) error {
 	return os.WriteFile(filepath.Join(taskDir, "source-manifest.json"), append(data, '\n'), 0o600)
 }
 
-// sealTree copies a produced tree into the per-task directory and freezes
-// the copy read-only. The producing tree lives inside the task's private
-// working copy, so the shared registered source is never the producer.
-func sealTree(src, dst string) error {
+// SealTree copies a produced tree into a destination directory and freezes
+// the copy read-only. The copy is verified against the source before
+// freezing. Exported for the publish pipeline, which seals succeeded-build
+// artifacts into immutable release directories the same way.
+func SealTree(src, dst string) error {
 	if err := copyTree(src, dst); err != nil {
 		return err
 	}

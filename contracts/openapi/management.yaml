@@ -53,6 +53,8 @@ tags:
     description: Theme catalog and per-site theme selection.
   - name: Builds
     description: Build-preview tasks and private preview links.
+  - name: Releases
+    description: Publishing, release history, and rollback.
 
 security:
   - sessionCookie: []
@@ -941,6 +943,211 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/releases:
+    post:
+      operationId: createRelease
+      tags: [Releases]
+      summary: Publish a succeeded build as the site's live release
+      description: |
+        Promotes a succeeded build to the site's live release. The pipeline
+        re-checks the trusted site requirements (capabilities and URL
+        conventions), verifies the theme's declared `requiredArtifacts` exist
+        in the build output, generates `release.json` and validates it against
+        the theme release contract, seals the artifacts into an immutable
+        per-site release directory, and switches the site's current release
+        atomically under the per-site publish lock. A failed publish is
+        persisted as a release record with its failure (precise missing
+        capabilities, URL conventions, or artifacts) and returns 422 — the
+        previous release stays live and serving.
+
+        One release per build: republishing an already-released build is
+        rejected. Only `owner` and `editor` members may publish.
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseCreate'
+            examples:
+              manualPublish:
+                value: { 'buildId': '0192ab3c-4d5e-6f70-8192-ab3c4d5e6f72', 'reasons': ['manual'] }
+      responses:
+        '201':
+          description: Published and live; a Location header points at the release resource.
+          headers:
+            Location:
+              description: Absolute path of the created release resource.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Release'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/RequestBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: |
+            The build cannot back a release (`build_not_publishable`: missing,
+            not succeeded, foreign site, or already released) or the publish
+            failed its checks — in the latter case the body is the persisted
+            failed release record carrying the precise missing items.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Release'
+        '503':
+          description: The publish pipeline or theme contracts are not configured (`publish_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    get:
+      operationId: listReleases
+      tags: [Releases]
+      summary: List the site's release history
+      description: |
+        Returns the site's releases, newest first: live, superseded, and
+        failed attempts with their failure records. Any site member may read;
+        non-members get 404.
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Release history, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [releases]
+                properties:
+                  releases:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Release'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/release:
+    get:
+      operationId: getCurrentRelease
+      tags: [Releases]
+      summary: Read the current live release
+      description: |
+        Returns the site's live release plus the published origin URL — a
+        loopback-only origin serving the current release with production URL
+        semantics. Publishing or rolling back switches the served content
+        without changing the URL. Any site member may read; 404
+        `no_live_release` before the first publish.
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Current release and its published origin.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [release, originUrl]
+                properties:
+                  release:
+                    $ref: '#/components/schemas/Release'
+                  originUrl:
+                    type: string
+                    description: Loopback origin serving the current release, or an empty string when the published-origin service is not configured.
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: No membership or no live release yet (`not_found` or `no_live_release`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/releases/{releaseId}/rollback:
+    post:
+      operationId: rollbackRelease
+      tags: [Releases]
+      summary: Roll the site back to an existing release
+      description: |
+        Atomically re-points the site at an existing release: artifacts are
+        reused exactly as sealed (no rebuild) and nothing outside the pointer
+        — settings, theme selections, builds, unpublished edits — is touched.
+        The target must exist on this site, not be a failed attempt, and its
+        release directory must still be present. Rolling back to the
+        currently-live release is 409. Only `owner` and `editor` members may
+        roll back.
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/ReleaseId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '200':
+          description: The release is live again; the previously-live release is superseded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Release'
+        '400':
+          description: The siteId or releaseId path segment is not a UUID (`invalid_site_id` or `invalid_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Release not found on this site for this caller (`release_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The target cannot become live — already live, a failed attempt, or artifacts missing (`release_not_rollbackable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: The publish pipeline is not configured (`publish_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -973,6 +1180,14 @@ components:
       in: path
       required: true
       description: Build task UUID.
+      schema:
+        type: string
+        format: uuid
+    ReleaseId:
+      name: releaseId
+      in: path
+      required: true
+      description: Release record UUID.
       schema:
         type: string
         format: uuid
@@ -1161,6 +1376,112 @@ components:
           description: Entry URL carrying a one-time token exchanged for an HttpOnly cookie on the preview origin.
         expiresAt: { type: string, format: date-time }
 
+    ReleaseCreate:
+      type: object
+      description: Publish request body.
+      required: [buildId]
+      properties:
+        buildId:
+          type: string
+          format: uuid
+          description: The succeeded build whose artifacts become the release.
+        reasons:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            enum: [manual, posts, albums, data, favicon, static]
+          description: Why the release is produced (mirrored into release.json); omitted defaults to [manual].
+      additionalProperties: false
+
+    ReleaseFailure:
+      type: object
+      description: Persisted failure record of a publish attempt.
+      required: [stage, message]
+      properties:
+        stage:
+          type: string
+          description: The stage the publish died in (capability-check, artifacts, workspace, release-metadata, persist).
+        message:
+          type: string
+          description: Client-safe message; never contains server paths.
+        missingCapabilities:
+          type: array
+          items: { type: string }
+          description: Required capabilities the theme does not declare (capability-check stage only).
+        missingUrlConventions:
+          type: array
+          items: { type: string }
+          description: Required URL conventions the theme does not declare (capability-check stage only).
+        missingArtifacts:
+          type: array
+          items: { type: string }
+          description: Theme-declared requiredArtifacts missing from the build output (artifacts stage only).
+
+    Release:
+      type: object
+      description: |
+        A persisted release record. One release per build; the live one is
+        what the published origin serves. The theme identity and input
+        digests identify the exact content/theme/configuration triple, which
+        is what rollback restores. Filesystem locations are never exposed.
+      required:
+        [id, siteId, buildId, status, theme, inputDigests, routes, reasons, createdBy, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        buildId:
+          type: string
+          format: uuid
+          description: The succeeded build whose sealed artifacts back this release.
+        theme:
+          type: object
+          required: [themeId, version, manifestDigest]
+          properties:
+            themeId: { type: string }
+            version: { type: string }
+            manifestDigest: { type: string }
+        inputDigests:
+          type: object
+          nullable: true
+          description: The three input digests the release was built from (content, site config, theme config); present on live/superseded records, null on attempts that failed before the release metadata was generated.
+        routes:
+          type: object
+          required: [spaFallback, urlConventions]
+          properties:
+            spaFallback:
+              type: string
+              nullable: true
+              description: The SPA fallback file mirrored from the theme manifest (null when the theme declares none).
+            urlConventions:
+              type: array
+              items: { type: string }
+        reasons:
+          type: array
+          items:
+            enum: [manual, posts, albums, data, favicon, static]
+        status:
+          type: string
+          enum: [live, superseded, failed]
+        failure:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ReleaseFailure'
+          description: Present (non-null) only for `failed` attempts; null otherwise.
+        createdBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        activatedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the release last became live.
+        supersededAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When a newer publish or rollback replaced this release.
+
     Problem:
       type: object
       description: RFC 9457 error document with a stable machine-readable code.
@@ -1174,7 +1495,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, invalid_id, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -1198,12 +1519,17 @@ components:
             - theme_not_found
             - invalid_theme_config
             - theme_contracts_unavailable
+            - no_theme_selected
             - invalid_id
             - preview_unavailable
             - build_runner_unavailable
             - build_not_succeeded
             - build_not_found
-            - no_theme_selected
+            - publish_unavailable
+            - build_not_publishable
+            - release_not_found
+            - release_not_rollbackable
+            - no_live_release
             - internal_error
         detail:
           type: string

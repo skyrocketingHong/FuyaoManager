@@ -121,6 +121,15 @@ func setupBuilds(t *testing.T) (*testEnv, *buildrunner.Runner, *buildrunner.Prev
 // setupBuildsAt is setupBuilds with an explicit BuildsRoot.
 func setupBuildsAt(t *testing.T, buildsRoot string) (*testEnv, *buildrunner.Runner, *buildrunner.PreviewServer, string) {
 	t.Helper()
+	return setupBuildsWith(t, buildsRoot, nil)
+}
+
+// setupBuildsWith is setupBuildsAt plus extra HTTP config mutation (used by
+// the release tests to wire the publish pipeline into the same world). The
+// callback receives the setup-time env (pool set) because the manager must be
+// constructed before the handler while stores are still being assembled.
+func setupBuildsWith(t *testing.T, buildsRoot string, extra func(*Config, *testEnv)) (*testEnv, *buildrunner.Runner, *buildrunner.PreviewServer, string) {
+	t.Helper()
 	enq := &lateEnqueuer{}
 	prev := &latePreviews{}
 	env := setupApply(t, func(ctx context.Context, env *testEnv) {
@@ -130,6 +139,9 @@ func setupBuildsAt(t *testing.T, buildsRoot string) (*testEnv, *buildrunner.Runn
 		env.mutateConfig = func(cfg *Config) {
 			cfg.BuildEnqueuer = enq
 			cfg.Previews = prev
+			if extra != nil {
+				extra(cfg, env)
+			}
 		}
 	})
 	runner := buildrunner.NewRunner(buildrunner.Config{
