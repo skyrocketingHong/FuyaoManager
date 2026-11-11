@@ -52,7 +52,10 @@ func (r *Runner) runCommand(ctx context.Context, build model.Build, stage, dir s
 
 func scrubbedEnv() []string {
 	var out []string
-	for _, name := range []string{"PATH", "HOME", "TMPDIR", "LANG"} {
+	// NODE_OPTIONS passes through for heap tuning on memory-constrained
+	// hosts (e.g. --max-old-space-size); it cannot carry secrets or
+	// arbitrary code into the build.
+	for _, name := range []string{"PATH", "HOME", "TMPDIR", "LANG", "NODE_OPTIONS"} {
 		if v, ok := os.LookupEnv(name); ok {
 			out = append(out, name+"="+v)
 		}
