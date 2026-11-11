@@ -63,6 +63,19 @@ func (s *ReleaseStore) AcquirePublishLock(ctx context.Context, tx pgx.Tx, siteID
 	return err
 }
 
+// BuildHasActiveReleaseWithinTx reports, under the caller's publish lock,
+// whether the build already backs a release row that is live or superseded.
+// Failed attempts do not count: their history stays, but the build may be
+// retried.
+func (s *ReleaseStore) BuildHasActiveReleaseWithinTx(ctx context.Context, tx pgx.Tx, siteID, buildID uuid.UUID) (bool, error) {
+	var exists bool
+	err := tx.QueryRow(ctx,
+		`SELECT EXISTS (
+			SELECT 1 FROM site_releases WHERE site_id = $1 AND build_id = $2 AND status <> 'failed'
+		)`, siteID, buildID).Scan(&exists)
+	return exists, err
+}
+
 // ActivateWithinTx inserts the release row as live, supersedes the site's
 // previous live release, and switches sites.current_release_id — all inside
 // the caller's locked transaction. baseReleaseID reports what was live before

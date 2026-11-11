@@ -139,9 +139,13 @@ func (a *API) handleCreateRelease(w http.ResponseWriter, r *http.Request, auth s
 	case errors.Is(err, publish.ErrBuildNotPublishable):
 		writeProblem(w, http.StatusUnprocessableEntity, "build_not_publishable", "Only a succeeded build of this site can be published.")
 		return
+	case errors.Is(err, publish.ErrBuildAlreadyReleased):
+		writeProblem(w, http.StatusConflict, "release_build_conflict", "This build already backs a release; roll back to it instead of republishing.")
+		return
 	case err != nil:
-		// Publish failures carry a client-safe record; surface it as the
-		// release row it was persisted to.
+		// Publish failures carry a client-safe record persisted for
+		// history; surface it as that release row. A failure that could not
+		// be persisted returns no row and answers with a plain problem.
 		if release.ID != uuid.Nil && release.Failure != nil {
 			w.Header().Set("Location", "/api/v1/sites/"+siteID.String()+"/releases/"+release.ID.String())
 			writeJSON(w, http.StatusUnprocessableEntity, toReleaseDTO(release))
@@ -153,6 +157,30 @@ func (a *API) handleCreateRelease(w http.ResponseWriter, r *http.Request, auth s
 	}
 	w.Header().Set("Location", "/api/v1/sites/"+siteID.String()+"/releases/"+release.ID.String())
 	writeJSON(w, http.StatusCreated, toReleaseDTO(release))
+}
+
+// handleGetRelease returns one release record (live, superseded, or failed
+// attempt) by id; any site member may read.
+func (a *API) handleGetRelease(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	siteID, ok := parseSiteID(w, r)
+	if !ok {
+		return
+	}
+	releaseID, ok := parseUUIDPath(w, r, "releaseId")
+	if !ok {
+		return
+	}
+	release, err := a.store.Releases.GetForUser(r.Context(), releaseID, siteID, auth.User.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, http.StatusNotFound, "release_not_found", "The release does not exist on this site.")
+		return
+	}
+	if err != nil {
+		a.logger.Error("get release", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the release.")
+		return
+	}
+	writeJSON(w, http.StatusOK, toReleaseDTO(release))
 }
 
 // handleListReleases returns the caller's site releases, newest first.

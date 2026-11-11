@@ -410,12 +410,37 @@ export interface paths {
          *     atomically under the per-site publish lock. A failed publish is
          *     persisted as a release record with its failure (precise missing
          *     capabilities, URL conventions, or artifacts) and returns 422 — the
-         *     previous release stays live and serving.
+         *     previous release stays live and serving. Failed attempts stay in the
+         *     history and the same build may be retried after the fault clears.
          *
-         *     One release per build: republishing an already-released build is
-         *     rejected. Only `owner` and `editor` members may publish.
+         *     One active release per build: republishing a build that already backs
+         *     a live or superseded release is 409 `release_build_conflict` (roll
+         *     back to it instead). Only `owner` and `editor` members may publish.
          */
         post: operations["createRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/releases/{releaseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one release record
+         * @description Returns one release record — live, superseded, or a failed attempt
+         *     with its persisted failure detail. This is the resource the
+         *     `Location` header of a publish response points at. Any site member
+         *     may read; non-members and foreign ids get 404 (`release_not_found`).
+         */
+        get: operations["getRelease"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -525,13 +550,16 @@ export interface components {
             /** @description Present (non-null) only for `failed` tasks; null while queued, running, or succeeded. */
             failure?: components["schemas"]["BuildFailure"] | null;
             /**
-             * @description The three input digests recorded by the theme preparation flow
-             *     (content, site config, theme config) as an object with
+             * @description The three input digests recorded by the theme preparation flow:
              *     `contentDigest`, `siteConfigDigest`, and `themeConfigDigest`
-             *     SHA-256 string fields. Present only for `succeeded` tasks; null
-             *     otherwise.
+             *     SHA-256 strings. Present only for `succeeded` tasks; null while
+             *     queued, running, or failed.
              */
-            inputDigests?: Record<string, never> | null;
+            inputDigests?: {
+                contentDigest: string;
+                siteConfigDigest: string;
+                themeConfigDigest: string;
+            } | null;
             /** @description Aggregate SHA-256 over the task's private source copy (every copied file's path and digest, sorted) once the copy is materialized; broader than the manifest digest, which covers theme.json only. */
             sourceDigest?: string | null;
             /** @description Number of source files the task's private copy recorded. */
@@ -594,8 +622,18 @@ export interface components {
                 version: string;
                 manifestDigest: string;
             };
-            /** @description The three input digests the release was built from (content, site config, theme config); present on live/superseded records, null on attempts that failed before the release metadata was generated. */
-            inputDigests: Record<string, never> | null;
+            /**
+             * @description The three input digests the release was built from
+             *     (`contentDigest`, `siteConfigDigest`, `themeConfigDigest`
+             *     SHA-256 strings). A release always backs a succeeded build, so
+             *     the object carries all three fields; null only as a defensive
+             *     state when no digest could be carried.
+             */
+            inputDigests: {
+                contentDigest: string;
+                siteConfigDigest: string;
+                themeConfigDigest: string;
+            } | null;
             routes: {
                 /** @description The SPA fallback file mirrored from the theme manifest (null when the theme declares none). */
                 spaFallback: string | null;
@@ -627,10 +665,10 @@ export interface components {
             title: string;
             status: number;
             /**
-             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
+             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "internal_error";
             detail?: string;
         };
         User: {
@@ -1763,15 +1801,61 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description The build already backs a live or superseded release (`release_build_conflict`); roll back to it instead of republishing. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             413: components["responses"]["RequestBodyTooLarge"];
             415: components["responses"]["UnsupportedMediaType"];
             /**
-             * @description The build cannot back a release (`build_not_publishable`: missing,
-             *     not succeeded, foreign site, or already released) or the publish
-             *     failed its checks — in the latter case the body is the persisted
-             *     failed release record carrying the precise missing items.
+             * @description Either the build cannot back a release (`build_not_publishable`:
+             *     missing, not succeeded, or foreign site — an `application/problem+json`
+             *     body), or the publish attempt failed its checks and was persisted —
+             *     in that case the body is `application/json` carrying the failed
+             *     release record with the precise missing items.
              */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            /** @description The publish pipeline or theme contracts are not configured (`publish_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description Release record UUID. */
+                releaseId: components["parameters"]["ReleaseId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The release record. */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1779,8 +1863,18 @@ export interface operations {
                     "application/json": components["schemas"]["Release"];
                 };
             };
-            /** @description The publish pipeline or theme contracts are not configured (`publish_unavailable`). */
-            503: {
+            /** @description The siteId or releaseId path segment is not a UUID (`invalid_site_id` or `invalid_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Release not found on this site for this caller (`release_not_found`). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,13 +24,24 @@ import (
 // roots live in temp directories outside the repository.
 func setupPublish(t *testing.T) (*testEnv, string, string) {
 	t.Helper()
+	return setupPublishWithContract(t, nil)
+}
+
+// setupPublishWithContract is setupPublish with an injectable release
+// contract (nil loads the real one); the retry regression uses a flaky
+// wrapper to inject exactly one publish failure.
+func setupPublishWithContract(t *testing.T, contract publish.ReleaseContract) (*testEnv, string, string) {
+	t.Helper()
 	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
 	releasesRoot := filepath.Join(t.TempDir(), "admin-releases")
 	var server *publish.Server
 	env, _, _, _ := setupBuildsWith(t, buildsRoot, func(cfg *Config, env *testEnv) {
-		set, err := themecontract.Load(filepath.Join(repoRoot(t), "contracts", "theme"))
-		if err != nil {
-			t.Fatalf("load theme contracts: %v", err)
+		if contract == nil {
+			set, err := themecontract.Load(filepath.Join(repoRoot(t), "contracts", "theme"))
+			if err != nil {
+				t.Fatalf("load theme contracts: %v", err)
+			}
+			contract = set
 		}
 		// The handler gets its own store aggregation from the same pool;
 		// stores are stateless wrappers, so sharing the pool is enough.
@@ -41,7 +52,7 @@ func setupPublish(t *testing.T) (*testEnv, string, string) {
 			Builds:       st.Builds,
 			Themes:       st.Themes,
 			ReleasesRoot: releasesRoot,
-			Contracts:    set,
+			Contracts:    contract,
 			Requirements: buildrunner.SiteRequirements{Capabilities: []string{"blog"}, URLConventions: []string{"posts", "blog-rss", "sitemap"}},
 		})
 		server = publish.NewServer(st.Releases, releasesRoot)

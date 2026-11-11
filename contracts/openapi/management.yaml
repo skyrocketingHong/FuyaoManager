@@ -336,7 +336,7 @@ paths:
         session cookie, the CSRF token header, and an allowed Origin.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/CSRFTokenHeader'
       responses:
@@ -436,7 +436,7 @@ paths:
         locales, and over-length values are rejected with 400.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/CSRFTokenHeader'
@@ -624,7 +624,7 @@ paths:
         `theme_contracts_unavailable` instead of skipping validation.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/CSRFTokenHeader'
@@ -739,7 +739,7 @@ paths:
         CSRF token header, and an allowed Origin, but no body.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/CSRFTokenHeader'
@@ -893,7 +893,7 @@ paths:
         anything else is 409 `build_not_succeeded`.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/BuildId'
@@ -958,13 +958,15 @@ paths:
         atomically under the per-site publish lock. A failed publish is
         persisted as a release record with its failure (precise missing
         capabilities, URL conventions, or artifacts) and returns 422 — the
-        previous release stays live and serving.
+        previous release stays live and serving. Failed attempts stay in the
+        history and the same build may be retried after the fault clears.
 
-        One release per build: republishing an already-released build is
-        rejected. Only `owner` and `editor` members may publish.
+        One active release per build: republishing a build that already backs
+        a live or superseded release is 409 `release_build_conflict` (roll
+        back to it instead). Only `owner` and `editor` members may publish.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/CSRFTokenHeader'
@@ -1000,16 +1002,69 @@ paths:
           $ref: '#/components/responses/RequestBodyTooLarge'
         '415':
           $ref: '#/components/responses/UnsupportedMediaType'
+        '409':
+          description: The build already backs a live or superseded release (`release_build_conflict`); roll back to it instead of republishing.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '422':
           description: |
-            The build cannot back a release (`build_not_publishable`: missing,
-            not succeeded, foreign site, or already released) or the publish
-            failed its checks — in the latter case the body is the persisted
-            failed release record carrying the precise missing items.
+            Either the build cannot back a release (`build_not_publishable`:
+            missing, not succeeded, or foreign site — an `application/problem+json`
+            body), or the publish attempt failed its checks and was persisted —
+            in that case the body is `application/json` carrying the failed
+            release record with the precise missing items.
           content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                notPublishable:
+                  value:
+                    {
+                      'type': 'about:blank',
+                      'title': 'Unprocessable Entity',
+                      'status': 422,
+                      'code': 'build_not_publishable',
+                      'detail': 'Only a succeeded build of this site can be published.'
+                    }
             application/json:
               schema:
                 $ref: '#/components/schemas/Release'
+              examples:
+                publishFailed:
+                  value:
+                    {
+                      'id': '0192ab3c-4d5e-6f70-8192-ab3c4d5e6f73',
+                      'siteId': '018f3c1e-7a2b-4c3d-9e4f-0a1b2c3d4e5f',
+                      'buildId': '0192ab3c-4d5e-6f70-8192-ab3c4d5e6f72',
+                      'status': 'failed',
+                      'theme':
+                        {
+                          'themeId': 'fuyao-homepage',
+                          'version': '27.1.1',
+                          'manifestDigest': '9f2c7c14ad5b3e6f8192ab3c4d5e6f701234567890abcdef12345678abcdef12'
+                        },
+                      'inputDigests':
+                        {
+                          'contentDigest': 'sha256:1fbc59634b6d5bc4f579abf4f6ccb4e617af6be57ac7c7fb31198b2731e82690',
+                          'siteConfigDigest': 'sha256:98e1b1219d45e306d735fc84f3964eec61dfe455d3de7a627974ad27ce358a3a',
+                          'themeConfigDigest': 'sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a'
+                        },
+                      'routes': { 'spaFallback': '200.html', 'urlConventions': [posts] },
+                      'reasons': ['manual'],
+                      'failure':
+                        {
+                          'stage': 'artifacts',
+                          'message': 'The build output is missing artifacts the theme requires for a release.',
+                          'missingArtifacts': ['sitemap.xml']
+                        },
+                      'createdBy': '018f3c1e-7a2b-4c3d-9e4f-0a1b2c3d4e10',
+                      'createdAt': '2026-11-11T10:00:00Z',
+                      'activatedAt': null,
+                      'supersededAt': null
+                    }
         '503':
           description: The publish pipeline or theme contracts are not configured (`publish_unavailable`).
           content:
@@ -1047,6 +1102,53 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/releases/{releaseId}:
+    get:
+      operationId: getRelease
+      tags: [Releases]
+      summary: Read one release record
+      description: |
+        Returns one release record — live, superseded, or a failed attempt
+        with its persisted failure detail. This is the resource the
+        `Location` header of a publish response points at. Any site member
+        may read; non-members and foreign ids get 404 (`release_not_found`).
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/ReleaseId'
+      responses:
+        '200':
+          description: The release record.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Release'
+        '400':
+          description: The siteId or releaseId path segment is not a UUID (`invalid_site_id` or `invalid_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Release not found on this site for this caller (`release_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                notFound:
+                  value:
+                    {
+                      'type': 'about:blank',
+                      'title': 'Not Found',
+                      'status': 404,
+                      'code': 'release_not_found',
+                      'detail': 'The release does not exist on this site.'
+                    }
         default:
           $ref: '#/components/responses/Problem'
 
@@ -1105,7 +1207,7 @@ paths:
         roll back.
       security:
         - sessionCookie: []
-        - csrfHeader: []
+          csrfHeader: []
       parameters:
         - $ref: '#/components/parameters/SiteId'
         - $ref: '#/components/parameters/ReleaseId'
@@ -1340,20 +1442,24 @@ components:
         siteSettingsRevision: { type: integer, format: int64 }
         themeSelectionRevision: { type: integer, format: int64 }
         failure:
-          type: object
-          nullable: true
-          allOf:
+          oneOf:
             - $ref: '#/components/schemas/BuildFailure'
+            - enum: [null]
           description: Present (non-null) only for `failed` tasks; null while queued, running, or succeeded.
         inputDigests:
           type: object
           nullable: true
+          required: [contentDigest, siteConfigDigest, themeConfigDigest]
+          additionalProperties: false
+          properties:
+            contentDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+            siteConfigDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+            themeConfigDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
           description: |
-            The three input digests recorded by the theme preparation flow
-            (content, site config, theme config) as an object with
+            The three input digests recorded by the theme preparation flow:
             `contentDigest`, `siteConfigDigest`, and `themeConfigDigest`
-            SHA-256 string fields. Present only for `succeeded` tasks; null
-            otherwise.
+            SHA-256 strings. Present only for `succeeded` tasks; null while
+            queued, running, or failed.
         sourceDigest:
           type: string
           nullable: true
@@ -1444,7 +1550,18 @@ components:
         inputDigests:
           type: object
           nullable: true
-          description: The three input digests the release was built from (content, site config, theme config); present on live/superseded records, null on attempts that failed before the release metadata was generated.
+          required: [contentDigest, siteConfigDigest, themeConfigDigest]
+          additionalProperties: false
+          properties:
+            contentDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+            siteConfigDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+            themeConfigDigest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+          description: |
+            The three input digests the release was built from
+            (`contentDigest`, `siteConfigDigest`, `themeConfigDigest`
+            SHA-256 strings). A release always backs a succeeded build, so
+            the object carries all three fields; null only as a defensive
+            state when no digest could be carried.
         routes:
           type: object
           required: [spaFallback, urlConventions]
@@ -1464,10 +1581,9 @@ components:
           type: string
           enum: [live, superseded, failed]
         failure:
-          type: object
-          nullable: true
-          allOf:
+          oneOf:
             - $ref: '#/components/schemas/ReleaseFailure'
+            - enum: [null]
           description: Present (non-null) only for `failed` attempts; null otherwise.
         createdBy: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
@@ -1495,7 +1611,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -1527,6 +1643,7 @@ components:
             - build_not_found
             - publish_unavailable
             - build_not_publishable
+            - release_build_conflict
             - release_not_found
             - release_not_rollbackable
             - no_live_release

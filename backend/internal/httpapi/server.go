@@ -104,6 +104,7 @@ func (a *API) routes() []routeSpec {
 		// rollback re-points at an existing release without rebuilding.
 		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireAuth(a.withCSRF(a.handleCreateRelease))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireAuth(a.handleListReleases)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/releases/{releaseId}", "getRelease", a.requireAuth(a.handleGetRelease)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireAuth(a.handleGetCurrentRelease)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireAuth(a.withCSRF(a.handleRollbackRelease))},
 	}

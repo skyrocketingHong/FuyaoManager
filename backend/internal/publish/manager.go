@@ -112,6 +112,11 @@ var ErrNoContracts = errors.New("release contract validation is not configured")
 // not succeeded, wrong site, or already released).
 var ErrBuildNotPublishable = errors.New("build cannot back a release")
 
+// ErrBuildAlreadyReleased marks a publish of a build that already backs an
+// active release row; it is a conflict, not a failure, and is never recorded
+// as a failed attempt.
+var ErrBuildAlreadyReleased = errors.New("build already backs an active release")
+
 // Publish promotes a succeeded build to the site's live release. Steps:
 // capability/URL gap check against the trusted site requirements, required
 // artifact presence, release.json generation and contract validation, seal
@@ -154,6 +159,10 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		CreatedBy:      userID,
 	}
 
+	// recordFailure persists the failed attempt for history and returns the
+	// record for the 422 response. When the persistence itself fails, no
+	// phantom record is returned: the caller gets the original error and the
+	// API answers with a plain problem instead of an unroutable DTO.
 	recordFailure := func(err error) (model.Release, error) {
 		var pe *publishError
 		if errors.As(err, &pe) {
@@ -165,6 +174,7 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		release.Status = model.ReleaseStatusFailed
 		if fErr := m.releases.RecordFailed(context.Background(), release); fErr != nil {
 			m.logger.Error("record failed publish", "siteId", siteID, "error", fErr)
+			return model.Release{}, err
 		}
 		return release, err
 	}
@@ -231,49 +241,105 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		return recordFailure(fail(StageReleaseMetadata, "The generated release metadata does not satisfy the release contract."))
 	}
 
-	// Seal: copy the frozen artifacts into the per-site release directory,
-	// write release.json into the copy, verify, freeze. A partial seal is
-	// removed on failure so a retry starts clean.
+	// Seal into a per-attempt staging directory, never the shared final
+	// directory: two concurrent publishes of the same build must not be able
+	// to delete each other's sealed artifacts. The staging name carries this
+	// attempt's release row id, so its owner is unambiguous and cleanup on
+	// failure can only ever remove this attempt's own tree.
 	siteRoot := filepath.Join(m.releasesRoot, siteID.String())
-	releaseDir := filepath.Join(siteRoot, releaseID.String())
-	if err := os.MkdirAll(siteRoot, 0o700); err != nil {
-		return recordFailure(fail(StageWorkspace, "Failed to create the release directory."))
+	stagingRoot := filepath.Join(siteRoot, ".staging")
+	stagingDir := filepath.Join(stagingRoot, release.ID.String())
+	finalDir := filepath.Join(siteRoot, releaseID.String())
+	if err := os.MkdirAll(stagingRoot, 0o700); err != nil {
+		return recordFailure(fail(StageWorkspace, "Failed to create the release staging directory."))
 	}
-	if _, err := os.Stat(releaseDir); err == nil {
-		return recordFailure(fail(StageWorkspace, "The release directory already exists."))
-	}
-	if err := buildrunner.SealTree(build.ArtifactPath, releaseDir); err != nil {
-		_ = cleanupDir(releaseDir)
+	if err := buildrunner.SealTree(build.ArtifactPath, stagingDir); err != nil {
+		_ = cleanupDir(stagingDir)
 		return recordFailure(fail(StageWorkspace, "Failed to seal the release artifacts."))
 	}
-	metaPath := filepath.Join(releaseDir, "release.json")
+	metaPath := filepath.Join(stagingDir, "release.json")
 	if err := writeIntoFrozenTree(metaPath, releaseJSON); err != nil {
 		m.logger.Error("write release.json", "siteId", siteID, "error", err)
-		_ = cleanupDir(releaseDir)
+		_ = cleanupDir(stagingDir)
 		return recordFailure(fail(StageWorkspace, "Failed to write the release metadata."))
 	}
 
-	// Locked pointer switch: read the base state, insert live, supersede the
-	// previous live, re-point the site — one transaction.
+	// Locked activation: read the base state, place the final directory,
+	// insert live, supersede the previous live, re-point the site — one
+	// transaction holding the per-site publish lock.
 	tx, err := m.pool.Begin(ctx)
 	if err != nil {
-		_ = cleanupDir(releaseDir)
+		_ = cleanupDir(stagingDir)
 		return recordFailure(fail(StagePersist, "Failed to open the publish transaction."))
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := m.releases.AcquirePublishLock(ctx, tx, siteID); err != nil {
-		_ = cleanupDir(releaseDir)
+		_ = cleanupDir(stagingDir)
 		return recordFailure(fail(StagePersist, "Failed to acquire the publish lock."))
 	}
-	if _, err := m.releases.ActivateWithinTx(ctx, tx, release); err != nil {
-		_ = cleanupDir(releaseDir)
-		if errors.Is(err, store.ErrConflict) {
-			return recordFailure(fail(StagePersist, "This build already backs another release."))
+
+	// Republishing a build that already backs an active release is a
+	// conflict, not a failure: the existing release keeps serving and no
+	// failed row is recorded.
+	released, err := m.releases.BuildHasActiveReleaseWithinTx(ctx, tx, siteID, build.ID)
+	if err != nil {
+		_ = cleanupDir(stagingDir)
+		return recordFailure(fail(StagePersist, "Failed to check the build's release history."))
+	}
+	if released {
+		_ = cleanupDir(stagingDir)
+		return model.Release{}, ErrBuildAlreadyReleased
+	}
+
+	// Place the final directory under the lock. A leftover final directory
+	// here is unreferenced by definition (an active row would have tripped
+	// the check above; failed rows never reference a required directory), so
+	// replacing it is safe. The staging tree moves with an atomic same-volume
+	// rename; after the rename the result is committed to the database.
+	if _, err := os.Stat(finalDir); err == nil {
+		if err := cleanupDir(finalDir); err != nil {
+			_ = cleanupDir(stagingDir)
+			return recordFailure(fail(StageWorkspace, "Failed to replace an unreferenced release directory."))
 		}
+	}
+	// Renaming a directory requires the directory itself to be writable on
+	// some platforms (the ".." entry inside it is updated), so thaw the
+	// staging root, rename, and re-freeze — contents stay frozen throughout,
+	// and the whole exchange happens under the publish lock.
+	if err := os.Chmod(stagingDir, 0o755); err != nil {
+		m.logger.Error("thaw staging root", "siteId", siteID, "error", err)
+		_ = cleanupDir(stagingDir)
+		return recordFailure(fail(StageWorkspace, "Failed to move the release into place."))
+	}
+	if err := os.Rename(stagingDir, finalDir); err != nil {
+		m.logger.Error("move release into place", "siteId", siteID, "error", err)
+		_ = cleanupDir(stagingDir)
+		return recordFailure(fail(StageWorkspace, "Failed to move the release into place."))
+	}
+	if err := os.Chmod(finalDir, 0o555); err != nil {
+		m.logger.Error("re-freeze release root", "siteId", siteID, "error", err)
+		return recordFailure(fail(StageWorkspace, "Failed to freeze the release directory."))
+	}
+
+	if _, err := m.releases.ActivateWithinTx(ctx, tx, release); err != nil {
+		_ = cleanupDir(stagingDir)
+		if errors.Is(err, store.ErrConflict) {
+			// The unique active-build index fired under the lock: another
+			// row already backs this build. The outcome of this attempt is
+			// uncertain from here — never delete a final directory that may
+			// back a committed row; a later retry replaces it only under the
+			// lock and only while unreferenced.
+			return model.Release{}, ErrBuildAlreadyReleased
+		}
+		// Result of the switch is uncertain (not a conflict): the final
+		// directory stays in place — a retry under the lock replaces it only
+		// when still unreferenced; a committed row's directory is never
+		// touched by cleanup.
 		return recordFailure(fail(StagePersist, "Failed to switch the live release."))
 	}
 	if err := tx.Commit(ctx); err != nil {
-		_ = cleanupDir(releaseDir)
+		// Commit outcome uncertain: keep the final directory; never delete a
+		// directory that may already back a committed release row.
 		return recordFailure(fail(StagePersist, "Failed to commit the publish transaction."))
 	}
 	now := time.Now().UTC()
