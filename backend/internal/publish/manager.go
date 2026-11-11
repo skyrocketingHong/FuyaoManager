@@ -260,7 +260,9 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 	stagingRoot := filepath.Join(siteRoot, ".staging")
 	stagingDir := filepath.Join(stagingRoot, release.ID.String())
 	finalDir := filepath.Join(siteRoot, releaseID.String())
-	if err := os.MkdirAll(stagingRoot, 0o700); err != nil {
+	// 0755 so the reverse proxy (a separate user) can traverse into the
+	// frozen, world-readable release directories; staged trees stay private.
+	if err := os.MkdirAll(stagingRoot, 0o755); err != nil {
 		return recordFailure(fail(StageWorkspace, "Failed to create the release staging directory."))
 	}
 	if err := buildrunner.SealTree(build.ArtifactPath, stagingDir); err != nil {

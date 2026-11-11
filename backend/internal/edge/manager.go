@@ -116,7 +116,7 @@ func (m *Manager) SwitchCurrent(siteID uuid.UUID, releaseDir string) error {
 	if _, err := os.Stat(filepath.Join(target, "release.json")); err != nil {
 		return fmt.Errorf("release directory missing: %w", err)
 	}
-	if err := os.MkdirAll(siteRoot, 0o750); err != nil {
+	if err := os.MkdirAll(siteRoot, 0o755); err != nil {
 		return err
 	}
 	current := filepath.Join(siteRoot, "current")
