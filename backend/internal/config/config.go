@@ -22,6 +22,11 @@ const (
 	EnvChallengeTTL      = "FUYAO_ADMIN_CHALLENGE_TTL"
 	EnvPermitTTL         = "FUYAO_ADMIN_PERMIT_TTL"
 	EnvThemeContractsDir = "FUYAO_ADMIN_THEME_CONTRACTS"
+	EnvPreviewAddr       = "FUYAO_ADMIN_PREVIEW_ADDR"
+	EnvRepoRoot          = "FUYAO_ADMIN_REPO_ROOT"
+	EnvBuildMode         = "FUYAO_ADMIN_BUILD_MODE"
+	EnvRequireCaps       = "FUYAO_ADMIN_REQUIRE_CAPABILITIES"
+	EnvRequireURLs       = "FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS"
 )
 
 // Config is the fully validated runtime configuration. CookieSecure is
@@ -39,6 +44,10 @@ type Config struct {
 	PermitTTL         time.Duration
 	CookieSecure      bool
 	ThemeContractsDir string
+	RepoRoot          string
+	BuildMode         string
+	RequireCaps       []string
+	RequireURLs       []string
 }
 
 // Load reads the environment and validates it.
@@ -49,6 +58,10 @@ func Load() (Config, error) {
 		RPID:              envDefault(EnvRPID, "localhost"),
 		RPDisplayName:     envDefault(EnvRPName, "Fuyao Admin"),
 		ThemeContractsDir: envDefault(EnvThemeContractsDir, ""),
+		RepoRoot:          envDefault(EnvRepoRoot, ""),
+		BuildMode:         envDefault(EnvBuildMode, "ci"),
+		RequireCaps:       csvEnv(EnvRequireCaps, "blog"),
+		RequireURLs:       csvEnv(EnvRequireURLs, "posts,blog-rss,sitemap"),
 	}
 
 	origins := envDefault(EnvRPOrigins, "http://localhost:5174")
@@ -167,4 +180,20 @@ func envDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return 0, fmt.Errorf("%s must be a positive duration, got %q", key, v)
 	}
 	return d, nil
+}
+
+// csvEnv reads a comma-separated list setting with a fallback; empty entries
+// are dropped.
+func csvEnv(key, fallback string) []string {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		raw = fallback
+	}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		if v := strings.TrimSpace(part); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

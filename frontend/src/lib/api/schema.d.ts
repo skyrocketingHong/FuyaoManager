@@ -300,16 +300,79 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Persisted failure record of a build task. */
+        BuildFailure: {
+            /** @description The stage the task died in (capability-check, theme-lookup, theme-changed, theme-root, theme-source-changed, theme-manifest, workspace, snapshot, prepare, build, harvest, interrupted, internal). */
+            stage: string;
+            /** @description Client-safe message; never contains server paths. */
+            message: string;
+            /** @description Required capabilities the theme does not declare (capability-check stage only). */
+            missingCapabilities?: string[];
+            /** @description Required URL conventions the theme does not declare (capability-check stage only). */
+            missingUrlConventions?: string[];
+            /** @description Process exit code when a command step failed. */
+            exitCode?: number;
+        };
+        /**
+         * @description A persistent build-preview task. The identity block (theme, themeConfig,
+         *     siteSettings, both revisions) is frozen at creation and is the only
+         *     input the executor consumes. Filesystem locations are never exposed.
+         */
+        BuildTask: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            siteId: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /** Format: uuid */
+            requestedBy: string;
+            theme: {
+                themeId: string;
+                version: string;
+                manifestDigest: string;
+            };
+            /** @description The frozen theme configuration captured at creation. */
+            themeConfig: Record<string, never>;
+            /** @description The frozen public site settings snapshot captured at creation. */
+            siteSettings: {
+                site: {
+                    name: string;
+                    description: string;
+                    defaultLocale: string;
+                };
+            };
+            /** Format: int64 */
+            siteSettingsRevision: number;
+            /** Format: int64 */
+            themeSelectionRevision: number;
+            failure?: components["schemas"]["BuildFailure"];
+            /** @description The three input digests recorded by the theme preparation flow on success (content, site config, theme config). */
+            inputDigests?: Record<string, never>;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            startedAt?: string | null;
+            /** Format: date-time */
+            finishedAt?: string | null;
+        };
+        /** @description A short-lived private preview URL on a per-build loopback origin. */
+        PreviewLink: {
+            /** @description Entry URL carrying a one-time token exchanged for an HttpOnly cookie on the preview origin. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
         /** @description RFC 9457 error document with a stable machine-readable code. */
         Problem: {
             type: string;
             title: string;
             status: number;
             /**
-             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, internal_error.
+             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "no_theme_selected" | "internal_error";
             detail?: string;
         };
         User: {

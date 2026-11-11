@@ -43,10 +43,11 @@ func repoRoot(t *testing.T) string {
 // real migrations, the real handler stack, and a loopback HTTP server that
 // the synthetic authenticator targets as http://localhost:<port>.
 type testEnv struct {
-	t     *testing.T
-	base  string
-	pool  *pgxpool.Pool
-	store *store.Store
+	t            *testing.T
+	base         string
+	pool         *pgxpool.Pool
+	store        *store.Store
+	mutateConfig func(*Config)
 }
 
 // testDatabaseName is the only database the integration tests may touch.
@@ -124,7 +125,8 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	}
 	origin := fmt.Sprintf("http://localhost:%d", listener.Addr().(*net.TCPAddr).Port)
 
-	apply(ctx, &testEnv{t: t, base: "", pool: pool, store: nil})
+	applyEnv := &testEnv{t: t, base: "", pool: pool, store: nil}
+	apply(ctx, applyEnv)
 
 	webAuthn, err := wa.New(wa.Params{
 		RPID:          "localhost",
@@ -140,14 +142,18 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	if err != nil {
 		t.Fatalf("load theme contracts: %v", err)
 	}
-	handler := New(st, webAuthn, Config{
+	cfg := Config{
 		RPID:           "localhost",
 		RPOrigins:      []string{origin},
 		CookieSecure:   false,
 		SessionTTL:     time.Hour,
 		ChallengeTTL:   5 * time.Minute,
 		ThemeContracts: contracts,
-	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}
+	if applyEnv != nil && applyEnv.mutateConfig != nil {
+		applyEnv.mutateConfig(&cfg)
+	}
+	handler := New(st, webAuthn, cfg, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}
 	serveErr := make(chan error, 1)

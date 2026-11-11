@@ -813,6 +813,87 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    BuildFailure:
+      type: object
+      description: Persisted failure record of a build task.
+      required: [stage, message]
+      properties:
+        stage:
+          type: string
+          description: The stage the task died in (capability-check, theme-lookup, theme-changed, theme-root, theme-source-changed, theme-manifest, workspace, snapshot, prepare, build, harvest, interrupted, internal).
+        message:
+          type: string
+          description: Client-safe message; never contains server paths.
+        missingCapabilities:
+          type: array
+          items: { type: string }
+          description: Required capabilities the theme does not declare (capability-check stage only).
+        missingUrlConventions:
+          type: array
+          items: { type: string }
+          description: Required URL conventions the theme does not declare (capability-check stage only).
+        exitCode:
+          type: integer
+          description: Process exit code when a command step failed.
+
+    BuildTask:
+      type: object
+      description: |
+        A persistent build-preview task. The identity block (theme, themeConfig,
+        siteSettings, both revisions) is frozen at creation and is the only
+        input the executor consumes. Filesystem locations are never exposed.
+      required: [id, siteId, status, requestedBy, theme, themeConfig, siteSettings, siteSettingsRevision, themeSelectionRevision, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        siteId: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [queued, running, succeeded, failed]
+        requestedBy: { type: string, format: uuid }
+        theme:
+          type: object
+          required: [themeId, version, manifestDigest]
+          properties:
+            themeId: { type: string }
+            version: { type: string }
+            manifestDigest: { type: string }
+        themeConfig:
+          type: object
+          description: The frozen theme configuration captured at creation.
+        siteSettings:
+          type: object
+          description: The frozen public site settings snapshot captured at creation.
+          required: [site]
+          properties:
+            site:
+              type: object
+              required: [name, description, defaultLocale]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                defaultLocale: { type: string }
+        siteSettingsRevision: { type: integer, format: int64 }
+        themeSelectionRevision: { type: integer, format: int64 }
+        failure:
+          $ref: '#/components/schemas/BuildFailure'
+        inputDigests:
+          type: object
+          description: The three input digests recorded by the theme preparation flow on success (content, site config, theme config).
+        createdAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+
+    PreviewLink:
+      type: object
+      description: A short-lived private preview URL on a per-build loopback origin.
+      required: [url, expiresAt]
+      properties:
+        url:
+          type: string
+          description: Entry URL carrying a one-time token exchanged for an HttpOnly cookie on the preview origin.
+        expiresAt: { type: string, format: date-time }
+
+
     Problem:
       type: object
       description: RFC 9457 error document with a stable machine-readable code.
@@ -826,7 +907,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, invalid_id, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -850,6 +931,12 @@ components:
             - theme_not_found
             - invalid_theme_config
             - theme_contracts_unavailable
+            - invalid_id
+            - preview_unavailable
+            - build_runner_unavailable
+            - build_not_succeeded
+            - build_not_found
+            - no_theme_selected
             - internal_error
         detail:
           type: string

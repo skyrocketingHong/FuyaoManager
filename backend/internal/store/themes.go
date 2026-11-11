@@ -130,8 +130,8 @@ func (s *ThemeStore) Get(ctx context.Context, themeID, version string) (model.Th
 	return scanThemeRow(row.Scan)
 }
 
-// getByRowID returns one catalog row by its surrogate key.
-func (s *ThemeStore) getByRowID(ctx context.Context, id uuid.UUID) (model.Theme, error) {
+// GetByRowID returns one catalog row by its surrogate key.
+func (s *ThemeStore) GetByRowID(ctx context.Context, id uuid.UUID) (model.Theme, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+themeColumns+` FROM themes WHERE id = $1`, id)
 	return scanThemeRow(row.Scan)
 }
@@ -175,7 +175,7 @@ func (s *ThemeStore) GetSelectionForUser(ctx context.Context, siteID, userID uui
 	if sel.ThemeRowID == nil {
 		return rec, nil
 	}
-	theme, err := s.getByRowID(ctx, *sel.ThemeRowID)
+	theme, err := s.GetByRowID(ctx, *sel.ThemeRowID)
 	if err != nil {
 		return SelectionRecord{}, err
 	}

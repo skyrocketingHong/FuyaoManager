@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/config"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
@@ -152,13 +154,53 @@ func runServe(ctx context.Context) error {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := httpapi.New(store.New(pool), webAuthn, httpapi.Config{
+	st := store.New(pool)
+
+	// Build-preview executor and the private preview origin. The runner
+	// serializes whole builds across the shared site working directories; the
+	// preview listener is loopback-only and separate from the API origin.
+	repoRoot := cfg.RepoRoot
+	if repoRoot == "" {
+		cwd, wdErr := os.Getwd()
+		if wdErr != nil {
+			return fmt.Errorf("resolve repo root: %w", wdErr)
+		}
+		repoRoot = cwd
+	}
+	siteWork := filepath.Join(repoRoot, "site")
+	buildsRoot := filepath.Join(siteWork, ".fuyao", "admin-builds")
+	runner := buildrunner.NewRunner(buildrunner.Config{
+		BuildStore:   st.Builds,
+		ThemeStore:   st.Themes,
+		Pool:         pool,
+		RepoRoot:     repoRoot,
+		BuildsRoot:   buildsRoot,
+		Mode:         cfg.BuildMode,
+		Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
+		Logger:       logger,
+	})
+	if err := runner.Start(ctx); err != nil {
+		return fmt.Errorf("start build runner: %w", err)
+	}
+	defer runner.Stop()
+
+	// Preview origins are per-build loopback listeners created on demand by
+	// Issue; Close tears them all down with the service.
+	previews := buildrunner.NewPreviewServer(buildrunner.PreviewConfig{
+		Target:     st.Builds,
+		BuildsRoot: buildsRoot,
+	})
+	defer previews.Close()
+
+	handler := httpapi.New(st, webAuthn, httpapi.Config{
 		RPID:           cfg.RPID,
 		RPOrigins:      cfg.RPOrigins,
 		CookieSecure:   cfg.CookieSecure,
 		SessionTTL:     cfg.SessionTTL,
 		ChallengeTTL:   cfg.ChallengeTTL,
 		ThemeContracts: themeContracts,
+		BuildEnqueuer:  runner,
+		Previews:       previews,
 	}, logger)
 
 	server := &http.Server{

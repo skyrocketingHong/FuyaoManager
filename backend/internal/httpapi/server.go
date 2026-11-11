@@ -33,6 +33,8 @@ type Config struct {
 	SessionTTL     time.Duration
 	ChallengeTTL   time.Duration
 	ThemeContracts ThemeConfigValidator
+	BuildEnqueuer  BuildEnqueuer
+	Previews       PreviewIssuer
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
@@ -43,6 +45,8 @@ type API struct {
 	logger         *slog.Logger
 	origins        map[string]struct{}
 	themeContracts ThemeConfigValidator
+	buildEnqueuer  BuildEnqueuer
+	previews       PreviewIssuer
 }
 
 // New assembles the handler with its middleware chain.
@@ -56,6 +60,8 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		cfg:            cfg,
 		logger:         logger,
 		themeContracts: cfg.ThemeContracts,
+		buildEnqueuer:  cfg.BuildEnqueuer,
+		previews:       cfg.Previews,
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
 	for _, o := range cfg.RPOrigins {
@@ -85,6 +91,13 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 	mux.HandleFunc("GET /api/v1/themes", api.requireAuth(api.handleListThemes))
 	mux.HandleFunc("GET /api/v1/sites/{siteId}/theme", api.requireAuth(api.handleGetSiteTheme))
 	mux.HandleFunc("PUT /api/v1/sites/{siteId}/theme", api.requireAuth(api.withCSRF(api.handlePutSiteTheme)))
+
+	// Build-preview tasks: creation freezes the version view; the runner
+	// executes and persists state transitions that stay queryable here.
+	mux.HandleFunc("POST /api/v1/sites/{siteId}/builds", api.requireAuth(api.withCSRF(api.handleCreateBuild)))
+	mux.HandleFunc("GET /api/v1/sites/{siteId}/builds", api.requireAuth(api.handleListBuilds))
+	mux.HandleFunc("GET /api/v1/sites/{siteId}/builds/{buildId}", api.requireAuth(api.handleGetBuild))
+	mux.HandleFunc("POST /api/v1/sites/{siteId}/builds/{buildId}/preview-links", api.requireAuth(api.withCSRF(api.handleCreatePreviewLink)))
 
 	var h http.Handler = mux
 	h = api.originGuard(h)
