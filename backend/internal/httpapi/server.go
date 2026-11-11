@@ -14,6 +14,7 @@ import (
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 )
@@ -40,6 +41,7 @@ type Config struct {
 	PublishedOrigins PublishedOrigins
 	Provisioner      SiteProvisioner
 	Edge             EdgeManager
+	Content          ContentStore
 }
 
 // SiteProvisioner provisions the per-site on-disk tree at site creation.
@@ -52,6 +54,23 @@ type SiteProvisioner interface {
 type EdgeManager interface {
 	EntryURL(visibility string, port int) string
 	Reconcile(ctx context.Context) error
+}
+
+// ContentStore is the single authority for per-site editable content that
+// the frozen-snapshot builds consume. content.Store implements it; nil
+// disables the content endpoints (503).
+type ContentStore interface {
+	ListPosts(siteID uuid.UUID, query string, page, pageSize int) ([]content.Post, int, error)
+	GetPost(siteID uuid.UUID, rel string) (content.Post, error)
+	CreatePost(siteID uuid.UUID, post content.Post) (content.Post, error)
+	SavePost(siteID uuid.UUID, post content.Post, expectedDigest string) (content.Post, error)
+	DeletePost(siteID uuid.UUID, rel, expectedDigest string) error
+	GetFriends(siteID uuid.UUID) (content.FriendsDoc, string, error)
+	SaveFriends(siteID uuid.UUID, doc content.FriendsDoc, expectedDigest string) (content.FriendsDoc, string, error)
+	GetSocialLinks(siteID uuid.UUID) ([]content.SocialLink, string, error)
+	SaveSocialLinks(siteID uuid.UUID, links []content.SocialLink, expectedDigest string) ([]content.SocialLink, string, error)
+	GetSiteConfig(siteID uuid.UUID) (doc content.SiteConfigDoc, securitySet bool, digest string, err error)
+	SaveSiteConfig(siteID uuid.UUID, doc content.SiteConfigDoc, securityCode *string, expectedDigest string) (content.SiteConfigDoc, string, error)
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
@@ -68,6 +87,7 @@ type API struct {
 	publishedOrigins PublishedOrigins
 	provisioner      SiteProvisioner
 	edge             EdgeManager
+	content          ContentStore
 	exchangeLimiter  *exchangeLimiter
 }
 
@@ -118,6 +138,20 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/theme", "getSiteTheme", a.requireAuth(a.handleGetSiteTheme)},
 		{http.MethodPut, "/api/v1/sites/{siteId}/theme", "putSiteTheme", a.requireAuth(a.withCSRF(a.handlePutSiteTheme))},
 
+		// Per-site content (single authority for posts, friends, social
+		// links, and the visual site configuration the builds consume).
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts", "listPosts", a.requireAuth(a.contentRoute(a.handleListPosts))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/posts", "createPost", a.requireAuth(a.withCSRF(a.contentRoute(a.handleCreatePost)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts/{postPath}", "getPost", a.requireAuth(a.contentRoute(a.handleGetPost))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/posts/{postPath}", "putPost", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutPost)))},
+		{http.MethodDelete, "/api/v1/sites/{siteId}/posts/{postPath}", "deletePost", a.requireAuth(a.withCSRF(a.contentRoute(a.handleDeletePost)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/friends", "getFriends", a.requireAuth(a.contentRoute(a.handleGetFriends))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/friends", "putFriends", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutFriends)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/social-links", "getSocialLinks", a.requireAuth(a.contentRoute(a.handleGetSocialLinks))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/social-links", "putSocialLinks", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSocialLinks)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireAuth(a.contentRoute(a.handleGetSiteConfig))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
+
 		// Build-preview tasks: creation freezes the version view; the runner
 		// executes and persists state transitions that stay queryable here.
 		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireAuth(a.withCSRF(a.handleCreateBuild))},
@@ -154,6 +188,7 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		publishedOrigins: cfg.PublishedOrigins,
 		provisioner:      cfg.Provisioner,
 		edge:             cfg.Edge,
+		content:          cfg.Content,
 		exchangeLimiter:  newExchangeLimiter(),
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
@@ -173,6 +208,18 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 	h = api.recoverer(h)
 	h = api.securityHeaders(h)
 	return h
+}
+
+// contentRoute gates the content endpoints on the content store being
+// configured.
+func (a *API) contentRoute(h authedHandler) authedHandler {
+	return func(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+		if a.content == nil {
+			writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "The content store is not configured on this server.")
+			return
+		}
+		h(w, r, auth)
+	}
 }
 
 // passkeyRoute gates the legacy passkey ceremonies on the WebAuthn relying

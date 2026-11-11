@@ -915,6 +915,561 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/posts:
+    get:
+      operationId: listPosts
+      tags: [Content]
+      summary: List the site's markdown posts
+      description: |
+        Paginated, searchable projection of the site's posts tree (one
+        category nesting level, newest first). The `draft` flag mirrors the
+        theme's public-output gate; drafts never reach the built site.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: query
+          in: query
+          required: false
+          schema: { type: string, maxLength: 200 }
+          description: Case-insensitive filter over title, slug, category, and tags.
+        - name: page
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - name: pageSize
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Page of posts plus the total count.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostList'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: createPost
+      tags: [Content]
+      summary: Create a markdown post
+      description: |
+        Writes a new post under `posts/<category>/<slug>.md`. Creating over an
+        existing path answers 409; the response carries the digest ETag used
+        for later read-modify-write saves.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Post'
+            examples:
+              simple:
+                value:
+                  {
+                    'category': 'tech',
+                    'slug': 'hello-world',
+                    'title': 'Hello World',
+                    'date': '2026-11-11T10:00:00.000Z',
+                    'draft': false,
+                    'categories': ['技术开发'],
+                    'tags': ['hello'],
+                    'body': 'First post.'
+                  }
+      responses:
+        '201':
+          description: The created post.
+          headers:
+            ETag:
+              description: Quoted digest ETag for If-Match saves.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Field validation failed (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: A post already exists at this path (`content_exists`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/posts/{postPath}:
+    get:
+      operationId: getPost
+      tags: [Content]
+      summary: Read one editable post
+      description: |
+        Returns one post with its markdown body plus the digest ETag. The
+        postPath parameter is `category/slug.md` with the slash URL-encoded
+        (`tech%2Fhello.md`).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: postPath
+          in: path
+          required: true
+          schema: { type: string }
+          description: '`category/slug.md`, slash encoded as %2F.'
+      responses:
+        '200':
+          description: The post.
+          headers:
+            ETag:
+              description: Quoted digest ETag for If-Match saves.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Malformed path (`invalid_content_path` or `invalid_site_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putPost
+      tags: [Content]
+      summary: Save a post
+      description: |
+        Read-modify-write save: If-Match must carry the digest ETag from the
+        previous read (428 missing, 412 stale). The path's category and slug
+        win over body values.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: postPath
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Post'
+      responses:
+        '200':
+          description: The saved post with its new digest ETag.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Post'
+        '400':
+          description: Field validation failed or malformed request (`validation_error`, `invalid_if_match`, `invalid_content_path`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The post changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: deletePost
+      tags: [Content]
+      summary: Delete a post
+      description: Deletes after verifying the digest ETag in If-Match.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: postPath
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '204':
+          description: Post deleted.
+        '400':
+          description: Malformed path or If-Match (`invalid_content_path`, `invalid_if_match`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The post changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/content/friends:
+    get:
+      operationId: getFriends
+      tags: [Content]
+      summary: Read the friends document
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The friends document plus its digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for If-Match saves.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendsEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putFriends
+      tags: [Content]
+      summary: Replace the friends document
+      description: Validates every entry (name, absolute http(s) url, optional avatar URL, description at most 200 chars) and writes friends.yaml under If-Match semantics.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FriendsEnvelope'
+      responses:
+        '200':
+          description: The saved document with its new digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FriendsEnvelope'
+        '400':
+          description: Entry validation failed (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The document changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/content/social-links:
+    get:
+      operationId: getSocialLinks
+      tags: [Content]
+      summary: Read the social links
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The ordered social links plus digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for If-Match saves.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialLinksEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putSocialLinks
+      tags: [Content]
+      summary: Replace the social links
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SocialLinksEnvelope'
+      responses:
+        '200':
+          description: The saved links with the new digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SocialLinksEnvelope'
+        '400':
+          description: Entry validation failed (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The links changed after they were read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/site-config:
+    get:
+      operationId: getSiteConfig
+      tags: [Content]
+      summary: Read the visual site configuration
+      description: |
+        Returns the site.yaml projection (site, profile, repository, SEO,
+        services). The AMap security code is write-only: reads report only
+        whether one is set (`amapSecurityCodeSet`).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The configuration plus digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for If-Match saves.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteConfigEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putSiteConfig
+      tags: [Content]
+      summary: Save the visual site configuration
+      description: |
+        Validates the theme-required fields and writes site.yaml under
+        If-Match semantics. `secrets.amap.securityCode` is write-only:
+        omitted keeps the stored value, an empty string clears it, and the
+        value never appears in any response.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteConfigEnvelope'
+      responses:
+        '200':
+          description: The saved configuration with the new digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteConfigEnvelope'
+        '400':
+          description: Field validation failed (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The configuration changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/builds:
     post:
       operationId: createBuild
@@ -1613,6 +2168,12 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    PreconditionRequired:
+      description: The request requires an If-Match header (428).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
     Unauthenticated:
       description: No or invalid session (`unauthenticated`).
       content:
@@ -1946,6 +2507,9 @@ components:
             - provisioning_unavailable
             - passkey_unavailable
             - edge_apply_failed
+            - content_unavailable
+            - content_exists
+            - invalid_content_path
             - internal_error
         detail:
           type: string
@@ -2040,6 +2604,214 @@ components:
           type: object
           description: Optional theme configuration validated against the theme's config schema.
       additionalProperties: false
+
+    Post:
+      type: object
+      description: The editable projection of one markdown post; frontmatter fields mirror exactly what the theme's index generator consumes. `draft` is the public-output gate.
+      required: [path, category, title, slug, date, draft, digest]
+      properties:
+        path:
+          type: string
+          description: '`category/slug.md` relative to the posts root.'
+        category:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+        slug:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9-]{0,120}$'
+        date:
+          type: string
+          description: ISO date or datetime (RFC 3339 or date-only).
+        lastmod:
+          type: string
+        draft:
+          type: boolean
+        categories:
+          type: array
+          items: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        description:
+          type: string
+          maxLength: 500
+        cover:
+          type: string
+        coverAlt:
+          type: string
+        coverSource:
+          type: string
+        coverSourceLink:
+          type: string
+        body:
+          type: string
+          description: Markdown body (frontmatter excluded).
+        digest:
+          type: string
+          description: '`sha256:<hex>` content digest backing the ETag.'
+
+    PostList:
+      type: object
+      required: [posts, total]
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Post'
+        total:
+          type: integer
+
+    Friend:
+      type: object
+      required: [name, url]
+      properties:
+        name:
+          type: string
+        url:
+          type: string
+        description:
+          type: string
+          maxLength: 200
+        avatar:
+          type: string
+
+    FriendsEnvelope:
+      type: object
+      required: [friends, digest]
+      properties:
+        friends:
+          type: object
+          required: [online, offline]
+          properties:
+            online:
+              type: array
+              items:
+                $ref: '#/components/schemas/Friend'
+            offline:
+              type: array
+              items:
+                $ref: '#/components/schemas/Friend'
+        digest:
+          type: string
+
+    SocialLink:
+      type: object
+      required: [name, href]
+      properties:
+        name:
+          type: string
+        href:
+          type: string
+        icon:
+          type: string
+
+    SocialLinksEnvelope:
+      type: object
+      required: [links, digest]
+      properties:
+        links:
+          type: array
+          items:
+            $ref: '#/components/schemas/SocialLink'
+        digest:
+          type: string
+
+    SiteConfigEnvelope:
+      type: object
+      required: [config, digest]
+      properties:
+        config:
+          $ref: '#/components/schemas/SiteConfig'
+        amapSecurityCodeSet:
+          type: boolean
+        digest:
+          type: string
+        secrets:
+          type: object
+          description: Write-only secret channel; never present in responses.
+          properties:
+            amap:
+              type: object
+              properties:
+                securityCode:
+                  type: string
+                  writeOnly: true
+
+    SiteConfig:
+      type: object
+      description: The site.yaml projection the theme consumes (schema.ts); the AMap security code is write-only through the secrets channel.
+      required: [site, profile, repository, seo, services]
+      properties:
+        schemaVersion:
+          type: integer
+        site:
+          type: object
+          required: [name, url, defaultLocale]
+          properties:
+            name: { type: string }
+            url: { type: string }
+            startDate: { type: string }
+            startYear: { type: integer }
+            defaultLocale:
+              type: string
+              enum: [zh-CN, en-US]
+        profile:
+          type: object
+          required: [name, avatarUrl]
+          properties:
+            name: { type: string }
+            birthDate: { type: string }
+            avatarUrl: { type: string }
+            roles:
+              type: object
+              properties:
+                zh-CN: { type: string }
+                en-US: { type: string }
+            quotes:
+              type: object
+              properties:
+                zh-CN: { type: string }
+                en-US: { type: string }
+        repository:
+          type: object
+          required: [name, url, owner]
+          properties:
+            name: { type: string }
+            url: { type: string }
+            owner: { type: string }
+        seo:
+          type: object
+          required: [author, description]
+          properties:
+            author: { type: string }
+            description: { type: string }
+            keywords:
+              type: array
+              items: { type: string }
+            twitterId: { type: string }
+        services:
+          type: object
+          properties:
+            wallpaper:
+              type: object
+              required: [defaultUrl]
+              properties:
+                defaultUrl: { type: string }
+                apiUrl: { type: string }
+                metadataApiUrl: { type: string }
+            amap:
+              type: object
+              description: securityCode is write-only via the envelope's secrets channel.
+              properties:
+                browserKey: { type: string }
+                serviceHost: { type: string }
+            githubProxyUrl: { type: string }
+            analyticsProxyUrl: { type: string }
+            codingActivityProxyUrl: { type: string }
 
     Site:
       type: object

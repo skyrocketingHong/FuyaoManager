@@ -357,6 +357,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the site's markdown posts
+         * @description Paginated, searchable projection of the site's posts tree (one
+         *     category nesting level, newest first). The `draft` flag mirrors the
+         *     theme's public-output gate; drafts never reach the built site.
+         */
+        get: operations["listPosts"];
+        put?: never;
+        /**
+         * Create a markdown post
+         * @description Writes a new post under `posts/<category>/<slug>.md`. Creating over an
+         *     existing path answers 409; the response carries the digest ETag used
+         *     for later read-modify-write saves.
+         */
+        post: operations["createPost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/posts/{postPath}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one editable post
+         * @description Returns one post with its markdown body plus the digest ETag. The
+         *     postPath parameter is `category/slug.md` with the slash URL-encoded
+         *     (`tech%2Fhello.md`).
+         */
+        get: operations["getPost"];
+        /**
+         * Save a post
+         * @description Read-modify-write save: If-Match must carry the digest ETag from the
+         *     previous read (428 missing, 412 stale). The path's category and slug
+         *     win over body values.
+         */
+        put: operations["putPost"];
+        post?: never;
+        /**
+         * Delete a post
+         * @description Deletes after verifying the digest ETag in If-Match.
+         */
+        delete: operations["deletePost"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/content/friends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the friends document */
+        get: operations["getFriends"];
+        /**
+         * Replace the friends document
+         * @description Validates every entry (name, absolute http(s) url, optional avatar URL, description at most 200 chars) and writes friends.yaml under If-Match semantics.
+         */
+        put: operations["putFriends"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/content/social-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the social links */
+        get: operations["getSocialLinks"];
+        /** Replace the social links */
+        put: operations["putSocialLinks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/site-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the visual site configuration
+         * @description Returns the site.yaml projection (site, profile, repository, SEO,
+         *     services). The AMap security code is write-only: reads report only
+         *     whether one is set (`amapSecurityCodeSet`).
+         */
+        get: operations["getSiteConfig"];
+        /**
+         * Save the visual site configuration
+         * @description Validates the theme-required fields and writes site.yaml under
+         *     If-Match semantics. `secrets.amap.securityCode` is write-only:
+         *     omitted keeps the stored value, an empty string clears it, and the
+         *     value never appears in any response.
+         */
+        put: operations["putSiteConfig"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/builds": {
         parameters: {
             query?: never;
@@ -778,7 +906,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "internal_error";
             detail?: string;
         };
         User: {
@@ -826,6 +954,117 @@ export interface components {
             themeVersion?: string;
             /** @description Optional theme configuration validated against the theme's config schema. */
             themeConfig?: Record<string, never>;
+        };
+        /** @description The editable projection of one markdown post; frontmatter fields mirror exactly what the theme's index generator consumes. `draft` is the public-output gate. */
+        Post: {
+            /** @description `category/slug.md` relative to the posts root. */
+            path: string;
+            category: string;
+            title: string;
+            slug: string;
+            /** @description ISO date or datetime (RFC 3339 or date-only). */
+            date: string;
+            lastmod?: string;
+            draft: boolean;
+            categories?: string[];
+            tags?: string[];
+            description?: string;
+            cover?: string;
+            coverAlt?: string;
+            coverSource?: string;
+            coverSourceLink?: string;
+            /** @description Markdown body (frontmatter excluded). */
+            body?: string;
+            /** @description `sha256:<hex>` content digest backing the ETag. */
+            digest: string;
+        };
+        PostList: {
+            posts: components["schemas"]["Post"][];
+            total: number;
+        };
+        Friend: {
+            name: string;
+            url: string;
+            description?: string;
+            avatar?: string;
+        };
+        FriendsEnvelope: {
+            friends: {
+                online: components["schemas"]["Friend"][];
+                offline: components["schemas"]["Friend"][];
+            };
+            digest: string;
+        };
+        SocialLink: {
+            name: string;
+            href: string;
+            icon?: string;
+        };
+        SocialLinksEnvelope: {
+            links: components["schemas"]["SocialLink"][];
+            digest: string;
+        };
+        SiteConfigEnvelope: {
+            config: components["schemas"]["SiteConfig"];
+            amapSecurityCodeSet?: boolean;
+            digest: string;
+            /** @description Write-only secret channel; never present in responses. */
+            secrets?: {
+                amap?: {
+                    securityCode?: string;
+                };
+            };
+        };
+        /** @description The site.yaml projection the theme consumes (schema.ts); the AMap security code is write-only through the secrets channel. */
+        SiteConfig: {
+            schemaVersion?: number;
+            site: {
+                name: string;
+                url: string;
+                startDate?: string;
+                startYear?: number;
+                /** @enum {string} */
+                defaultLocale: "zh-CN" | "en-US";
+            };
+            profile: {
+                name: string;
+                birthDate?: string;
+                avatarUrl: string;
+                roles?: {
+                    "zh-CN"?: string;
+                    "en-US"?: string;
+                };
+                quotes?: {
+                    "zh-CN"?: string;
+                    "en-US"?: string;
+                };
+            };
+            repository: {
+                name: string;
+                url: string;
+                owner: string;
+            };
+            seo: {
+                author: string;
+                description: string;
+                keywords?: string[];
+                twitterId?: string;
+            };
+            services: {
+                wallpaper?: {
+                    defaultUrl: string;
+                    apiUrl?: string;
+                    metadataApiUrl?: string;
+                };
+                /** @description securityCode is write-only via the envelope's secrets channel. */
+                amap?: {
+                    browserKey?: string;
+                    serviceHost?: string;
+                };
+                githubProxyUrl?: string;
+                analyticsProxyUrl?: string;
+                codingActivityProxyUrl?: string;
+            };
         };
         Site: {
             /** Format: uuid */
@@ -1045,6 +1284,15 @@ export interface components {
     responses: {
         /** @description Unexpected error; the body never leaks SQL or connection details. */
         Problem: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request requires an If-Match header (428). */
+        PreconditionRequired: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1853,6 +2101,586 @@ export interface operations {
                 };
             };
             /** @description Theme contract validation is not configured on the server (`theme_contracts_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listPosts: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive filter over title, slug, category, and tags. */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of posts plus the total count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostList"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Post"];
+            };
+        };
+        responses: {
+            /** @description The created post. */
+            201: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Field validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description A post already exists at this path (`content_exists`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description `category/slug.md`, slash encoded as %2F. */
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The post. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Malformed path (`invalid_content_path` or `invalid_site_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putPost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Post"];
+            };
+        };
+        responses: {
+            /** @description The saved post with its new digest ETag. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Field validation failed or malformed request (`validation_error`, `invalid_if_match`, `invalid_content_path`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The post changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    deletePost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Post deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed path or If-Match (`invalid_content_path`, `invalid_if_match`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The post changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getFriends: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The friends document plus its digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FriendsEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putFriends: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FriendsEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved document with its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FriendsEnvelope"];
+                };
+            };
+            /** @description Entry validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The document changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSocialLinks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The ordered social links plus digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialLinksEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSocialLinks: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SocialLinksEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved links with the new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SocialLinksEnvelope"];
+                };
+            };
+            /** @description Entry validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The links changed after they were read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSiteConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The configuration plus digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteConfigEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSiteConfig: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteConfigEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved configuration with the new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteConfigEnvelope"];
+                };
+            };
+            /** @description Field validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The configuration changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
             503: {
                 headers: {
                     [name: string]: unknown;

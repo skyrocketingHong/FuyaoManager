@@ -22,6 +22,10 @@ import (
 type Provisioner struct {
 	// Root is the base directory holding one subtree per site id.
 	Root string
+	// SeedFaviconDir optionally points at a default favicon set (the first
+	// theme's static/favicon); an empty site favicon directory is seeded
+	// from it so production builds pass the theme's favicon validation.
+	SeedFaviconDir string
 }
 
 // New returns a Provisioner rooted at root. The root itself is created
@@ -73,6 +77,9 @@ func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings) er
 			return fmt.Errorf("create %s: %w", dir, err)
 		}
 	}
+	if err := p.seedFavicon(p.FaviconRoot(id)); err != nil {
+		return err
+	}
 
 	files := map[string][]byte{
 		// Content data scaffolds mirror the schema the theme consumes
@@ -92,6 +99,39 @@ func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings) er
 
 	for path, content := range files {
 		if err := writeIfAbsent(path, content, 0o640); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// seedFavicon copies the default favicon set into an empty favicon
+// directory; an already-populated directory is never touched.
+func (p *Provisioner) seedFavicon(target string) error {
+	if p.SeedFaviconDir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return nil
+	}
+	seed, err := os.ReadDir(p.SeedFaviconDir)
+	if err != nil {
+		// A configured but absent seed is a provisioning error, not a skip.
+		return fmt.Errorf("read favicon seed %s: %w", p.SeedFaviconDir, err)
+	}
+	for _, entry := range seed {
+		if entry.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(p.SeedFaviconDir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
 			return err
 		}
 	}

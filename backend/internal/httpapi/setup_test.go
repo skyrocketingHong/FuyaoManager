@@ -128,7 +128,12 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	}
 	origin := fmt.Sprintf("http://localhost:%d", listener.Addr().(*net.TCPAddr).Port)
 
-	applyEnv := &testEnv{t: t, base: "", pool: pool, store: nil}
+	provisionRoot := filepath.Join(t.TempDir(), "sites")
+	provisioner, err := siteprovision.New(provisionRoot)
+	if err != nil {
+		t.Fatalf("init site provisioner: %v", err)
+	}
+	applyEnv := &testEnv{t: t, base: "", pool: pool, store: nil, provisionRoot: provisionRoot}
 	apply(ctx, applyEnv)
 
 	webAuthn, err := wa.New(wa.Params{
@@ -144,11 +149,6 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 	contracts, err := themecontract.Load(filepath.Join(repoRoot(t), "contracts", "theme"))
 	if err != nil {
 		t.Fatalf("load theme contracts: %v", err)
-	}
-	provisionRoot := filepath.Join(t.TempDir(), "sites")
-	provisioner, err := siteprovision.New(provisionRoot)
-	if err != nil {
-		t.Fatalf("init site provisioner: %v", err)
 	}
 	cfg := Config{
 		RPID:           "localhost",

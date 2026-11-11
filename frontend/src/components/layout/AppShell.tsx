@@ -46,11 +46,22 @@ function GitHubMark() {
 	);
 }
 
-type SiteSection = 'overview' | 'settings' | 'theme' | 'builds' | 'releases';
+type SiteSection =
+	| 'overview'
+	| 'settings'
+	| 'config'
+	| 'theme'
+	| 'posts'
+	| 'friends'
+	| 'builds'
+	| 'releases';
 
 const siteSections: { key: SiteSection; path: string }[] = [
 	{ key: 'overview', path: '' },
 	{ key: 'settings', path: '/settings' },
+	{ key: 'config', path: '/config' },
+	{ key: 'posts', path: '/posts' },
+	{ key: 'friends', path: '/friends' },
 	{ key: 'theme', path: '/theme' },
 	{ key: 'builds', path: '/builds' },
 	{ key: 'releases', path: '/releases' }
@@ -63,7 +74,9 @@ function useRouteScope(): {
 	titleKey: MessageKey;
 } {
 	const { pathname } = useLocation();
-	const siteMatch = pathname.match(/^\/sites\/([^/]+)(\/(settings|theme|builds|releases))?\/?$/);
+	const siteMatch = pathname.match(
+		/^\/sites\/([^/]+)(\/(settings|config|posts|friends|theme|builds|releases))?\/?$/
+	);
 	if (siteMatch) {
 		const section = (siteMatch[3] as SiteSection | undefined) ?? 'overview';
 		return { siteId: siteMatch[1], section, titleKey: `nav.${section}` as MessageKey };

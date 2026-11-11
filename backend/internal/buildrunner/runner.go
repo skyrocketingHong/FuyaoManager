@@ -61,12 +61,16 @@ type ThemeStore interface {
 // ("ci" uses the repository sample content, "production" requires the three
 // trusted content-root settings).
 type Config struct {
-	BuildStore   BuildStore
-	ThemeStore   ThemeStore
-	Pool         *pgxpool.Pool
-	RepoRoot     string
-	BuildsRoot   string
-	Mode         string
+	BuildStore BuildStore
+	ThemeStore ThemeStore
+	Pool       *pgxpool.Pool
+	RepoRoot   string
+	BuildsRoot string
+	Mode       string
+	// ContentRoots resolves the per-site production content roots (content,
+	// config, favicon) consumed by prepare-build-inputs in production mode.
+	// nil is only valid for ci mode.
+	ContentRoots func(siteID uuid.UUID) (contentRoot, configRoot, faviconRoot string, err error)
 	Requirements SiteRequirements
 	BuildTimeout time.Duration
 	ShutdownWait time.Duration
@@ -456,12 +460,30 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	// and configuration ride along as JSON files, and the authority contract
 	// schemas are handed in as an absolute path so the copy stays
 	// self-contained. Failure keeps the working copy for inspection.
+	prepareEnv := []string{"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")}
+	if r.cfg.Mode == "production" {
+		if r.cfg.ContentRoots == nil {
+			return fail("prepare", "Production builds require per-site content roots; configure FUYAO_ADMIN_SITES_ROOT.")
+		}
+		contentRoot, configRoot, faviconRoot, err := r.cfg.ContentRoots(build.SiteID)
+		if err != nil {
+			return fail("prepare", "Failed to resolve the site's content roots.")
+		}
+		prepareEnv = append(prepareEnv,
+			"FUYAO_CONTENT_ROOT="+contentRoot,
+			"FUYAO_CONFIG_ROOT="+configRoot,
+			"FUYAO_FAVICON_ROOT="+faviconRoot,
+			// The script's production lock defaults to a server-only path;
+			// each platform task is an isolated workspace, so the lock
+			// belongs inside it.
+			"FUYAO_DEPLOY_LOCK="+filepath.Join(taskDir, "deploy.lock"))
+	}
 	prepareLog, err := r.runCommand(ctx, build, "prepare", themeCopy,
 		[]string{"node", "$THEME/scripts/prepare-build-inputs.js",
 			"--mode=" + r.cfg.Mode,
 			"--site-overrides=" + filepath.Join(taskDir, "site-overrides.json"),
 			"--theme-config=" + filepath.Join(taskDir, "theme-config.json")},
-		[]string{"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")})
+		prepareEnv)
 	if err != nil {
 		return r.commandFailure("prepare", prepareLog, err)
 	}

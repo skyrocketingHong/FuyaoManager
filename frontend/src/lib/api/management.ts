@@ -21,6 +21,14 @@ export type BuildTask = components['schemas']['BuildTask'];
 export type PreviewLink = components['schemas']['PreviewLink'];
 export type Release = components['schemas']['Release'];
 export type ReleaseCreate = components['schemas']['ReleaseCreate'];
+export type Post = components['schemas']['Post'];
+export type PostList = components['schemas']['PostList'];
+export type Friend = components['schemas']['Friend'];
+export type FriendsEnvelope = components['schemas']['FriendsEnvelope'];
+export type SocialLink = components['schemas']['SocialLink'];
+export type SocialLinksEnvelope = components['schemas']['SocialLinksEnvelope'];
+export type SiteConfig = components['schemas']['SiteConfig'];
+export type SiteConfigEnvelope = components['schemas']['SiteConfigEnvelope'];
 
 export function siteRole(site: Site): 'owner' | 'editor' | 'viewer' {
 	return site.role;
@@ -191,5 +199,134 @@ export async function rollbackRelease(siteId: string, releaseId: string): Promis
 		`/api/v1/sites/${siteId}/releases/${releaseId}/rollback`,
 		{ body: {} }
 	);
+	return data;
+}
+
+// --- site content (single authority for the frozen-snapshot builds) ---
+
+export async function listPosts(
+	siteId: string,
+	query: string,
+	page: number,
+	pageSize: number
+): Promise<PostList> {
+	const { data } = await api<PostList>(
+		'GET',
+		`/api/v1/sites/${siteId}/posts?query=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`
+	);
+	return data;
+}
+
+export async function createPost(siteId: string, post: Partial<Post>): Promise<Post> {
+	const { data } = await api<Post>('POST', `/api/v1/sites/${siteId}/posts`, { body: post });
+	return data;
+}
+
+export async function getPost(
+	siteId: string,
+	postPath: string
+): Promise<{ post: Post; etag: string }> {
+	const { data, etag } = await api<Post>(
+		'GET',
+		`/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`
+	);
+	if (etag === null) throw new Error('post response missing ETag');
+	return { post: data, etag };
+}
+
+export async function putPost(
+	siteId: string,
+	postPath: string,
+	post: Partial<Post>,
+	etag: string
+): Promise<Post> {
+	const { data } = await api<Post>(
+		'PUT',
+		`/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`,
+		{
+			body: post,
+			etag
+		}
+	);
+	return data;
+}
+
+export async function deletePost(siteId: string, postPath: string, etag: string): Promise<void> {
+	await api<void>('DELETE', `/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`, {
+		etag
+	});
+}
+
+export async function getFriends(
+	siteId: string
+): Promise<{ friends: FriendsEnvelope['friends']; digest: string }> {
+	const { data } = await api<FriendsEnvelope>('GET', `/api/v1/sites/${siteId}/content/friends`);
+	return { friends: data.friends, digest: data.digest };
+}
+
+export async function putFriends(
+	siteId: string,
+	friends: FriendsEnvelope['friends'],
+	digest: string
+): Promise<FriendsEnvelope> {
+	const { data } = await api<FriendsEnvelope>('PUT', `/api/v1/sites/${siteId}/content/friends`, {
+		body: { friends },
+		etag: digest
+	});
+	return data;
+}
+
+export async function getSocialLinks(
+	siteId: string
+): Promise<{ links: SocialLink[]; digest: string }> {
+	const { data } = await api<SocialLinksEnvelope>(
+		'GET',
+		`/api/v1/sites/${siteId}/content/social-links`
+	);
+	return { links: data.links, digest: data.digest };
+}
+
+export async function putSocialLinks(
+	siteId: string,
+	links: SocialLink[],
+	digest: string
+): Promise<SocialLinksEnvelope> {
+	const { data } = await api<SocialLinksEnvelope>(
+		'PUT',
+		`/api/v1/sites/${siteId}/content/social-links`,
+		{ body: { links }, etag: digest }
+	);
+	return data;
+}
+
+export async function getSiteConfig(
+	siteId: string
+): Promise<{ config: SiteConfig; amapSecurityCodeSet: boolean; digest: string }> {
+	const { data } = await api<SiteConfigEnvelope>('GET', `/api/v1/sites/${siteId}/site-config`);
+	return {
+		config: data.config,
+		amapSecurityCodeSet: data.amapSecurityCodeSet ?? false,
+		digest: data.digest
+	};
+}
+
+/**
+ * Saves the site configuration. secrets.amap.securityCode is write-only:
+ * undefined keeps the stored value; an empty string clears it.
+ */
+export async function putSiteConfig(
+	siteId: string,
+	config: SiteConfig,
+	digest: string,
+	securityCode?: string
+): Promise<SiteConfigEnvelope> {
+	const body: Record<string, unknown> = { config };
+	if (securityCode !== undefined) {
+		body.secrets = { amap: { securityCode } };
+	}
+	const { data } = await api<SiteConfigEnvelope>('PUT', `/api/v1/sites/${siteId}/site-config`, {
+		body: body as never,
+		etag: digest
+	});
 	return data;
 }

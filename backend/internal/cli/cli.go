@@ -18,10 +18,12 @@ import (
 	"time"
 
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/config"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
@@ -207,13 +209,25 @@ func runServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("prepare sites root: %w", err)
 	}
+	// Seed new sites' favicon directories from the first theme's default set
+	// so production builds satisfy the theme's favicon validation.
+	if seedDir := filepath.Join(siteWork, "static", "favicon"); dirExists(seedDir) {
+		provisioner.SeedFaviconDir = seedDir
+	}
+	contentStore, err := content.New(sitesRoot)
+	if err != nil {
+		return fmt.Errorf("prepare content store: %w", err)
+	}
 	runner := buildrunner.NewRunner(buildrunner.Config{
-		BuildStore:   st.Builds,
-		ThemeStore:   st.Themes,
-		Pool:         pool,
-		RepoRoot:     repoRoot,
-		BuildsRoot:   buildsRoot,
-		Mode:         cfg.BuildMode,
+		BuildStore: st.Builds,
+		ThemeStore: st.Themes,
+		Pool:       pool,
+		RepoRoot:   repoRoot,
+		BuildsRoot: buildsRoot,
+		Mode:       cfg.BuildMode,
+		ContentRoots: func(siteID uuid.UUID) (string, string, string, error) {
+			return contentStore.ContentRoot(siteID), contentStore.ConfigRoot(siteID), contentStore.FaviconRoot(siteID), nil
+		},
 		Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
 		Logger:       logger,
 	})
@@ -305,6 +319,7 @@ func runServe(ctx context.Context) error {
 		PublishedOrigins: publishedOrigins,
 		Provisioner:      provisioner,
 		Edge:             edgeMgr,
+		Content:          contentStore,
 	}, logger)
 
 	if cfg.AdminUIDir != "" {
@@ -460,6 +475,11 @@ func runBootstrapAdmin(ctx context.Context, args []string) error {
 	fmt.Printf("permit expires:    %s\n", expiresAt.Local().Format(time.RFC3339))
 	fmt.Println("Enter this permit in the admin console to register your passkey. It can be used once.")
 	return nil
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func runCreateSite(ctx context.Context, args []string) error {

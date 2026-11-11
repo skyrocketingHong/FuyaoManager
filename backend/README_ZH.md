@@ -16,6 +16,7 @@ FuyaoHomepage 内容管理系统的 Go 后端：真实 PostgreSQL 持久化、CL
 - 网页建站（`POST /api/v1/sites`）：slug 校验、可选初始主题选择（与主题 PUT 同标准校验）、可见性默认私有、明确的供应状态——`FUYAO_ADMIN_SITES_ROOT` 下的按站点内容/配置目录树必须真实创建后站点才报告 `ready`；失败可通过 `POST /api/v1/sites/{siteId}/provision` 幂等重试。
 - 主题登记、快照构建、私有预览、发布与回滚按 T3-a/b1/b2 工作包交付（见 `admin/ROADMAP.md`）。
 - 可选托管构建后的管理台静态产物（`FUYAO_ADMIN_UI_DIR`），带受限 CSP 与 SPA fallback。
+- **唯一内容权威源**（`internal/content` + `/api/v1/sites/{siteId}/...`）：Markdown 文章 CRUD（frontmatter 字段与主题索引生成器消费的完全一致、`draft` 即公开输出门控、基于摘要的 If-Match、`%2F` 编码的 category/slug 路径）、友链文档、社交链接、可视化 site.yaml 配置（资料/仓库/SEO/服务，AMap 安全码只写不读）。生产模式构建消费按站点内容/配置/favicon 根目录——冻结快照反映 API 编辑，草稿绝不进入快照。
 
 ## 环境要求
 
@@ -47,35 +48,35 @@ HTTP 契约位于仓库根目录 `contracts/openapi/management.yaml`，只描述
 
 全部配置来自环境变量，模板见 `config.example.env`（不含任何真实凭据）。
 
-| 变量                          | 默认值                  | 用途                                                                                                                                                                         |
-| ----------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `FUYAO_ADMIN_DATABASE_URL`    | 必填                    | PostgreSQL DSN。真实值不得提交。                                                                                                                                             |
-| `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | 监听地址；回环地址始终可用，其他主机必须列入 `FUYAO_ADMIN_TRUSTED_HOSTS`。                                                                                                    |
-| `FUYAO_ADMIN_TRUSTED_HOSTS`   | 未设置                  | 逗号分隔的主机列表，允许非回环绑定与明文 HTTP origin（例如服务器 Tailscale IP）。                                                                                              |
-| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn RP ID（仅 Passkey 兼容路径）。                                                                                                                                       |
-| `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | 逗号分隔的允许 origin（驱动 CORS、Origin 防护与 Cookie `Secure`）。明文 HTTP 仅允许回环或受信主机。                                                                           |
-| `FUYAO_ADMIN_RP_DISPLAY_NAME` | `Fuyao Admin`           | 创建选项中的显示名。                                                                                                                                                         |
-| `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | 会话有效期。                                                                                                                                                                 |
-| `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn 挑战有效期。                                                                                                                                                        |
-| `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | Passkey 登记许可有效期（遗留路径）。                                                                                                                                         |
-| `FUYAO_ADMIN_AUTH_CODE_TTL`   | `10m`                   | 一次性登录码有效期（`init-admin`、`login-code`）。                                                                                                                           |
-| `FUYAO_ADMIN_THEME_CONTRACTS` | 未设置                  | 仓库内 `contracts/theme` 路径。设置后启动时编译契约 schema，主题配置保存按各主题自身 schema 校验；未设置时保存主题选择返回 `503 theme_contracts_unavailable`，绝不跳过校验。 |
-| `FUYAO_ADMIN_REPO_ROOT`      | 工作目录                | 仓库根目录，锚定 `<repo>/site/.fuyao` 下的构建工作区与发布根目录。从其他目录启动 `serve` 时应显式设置。                                                                       |
-| `FUYAO_ADMIN_SITES_ROOT`     | `<repo>/site/.fuyao/admin-sites` | 按站点内容/配置树根目录（`<root>/<siteId>/{content,config}`）。                                                                                                               |
-| `FUYAO_ADMIN_UI_DIR`         | 未设置                  | 构建后的管理台目录；设置后非 `/api` 路径托管该静态 SPA（生产拓扑）。                                                                                                          |
-| `FUYAO_ADMIN_PREVIEW_BIND`    | `127.0.0.1`             | 预览监听绑定地址；设为私网地址即支持远程（Tailscale）预览。                                                                                                                                                                                    |
-| `FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE` | 未设置            | 预览链接返回给浏览器的 URL 基址（如 `http://100.117.154.115`）；存在远程客户端时绝不使用回环字面量。                                                                                                                                          |
-| `FUYAO_ADMIN_EDGE_SNIPPET_DIR` | 未设置                  | 受管 Caddy 片段目录；设置即启用已发布站点边缘管理。                                                                                                                                                                                             |
-| `FUYAO_ADMIN_EDGE_APPLY_CMD`  | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | 运维控制的校验+reload 命令，参数固定。                                                                                                                                                                                                  |
-| `FUYAO_ADMIN_EDGE_PRIVATE_BIND` | `127.0.0.1`           | 私有站点入口的绑定与访问地址（部署时为 Tailscale 地址）。                                                                                                                                                                                         |
-| `FUYAO_ADMIN_EDGE_PUBLIC_BIND` | `:`（全部接口）        | 公开站点入口的绑定地址。                                                                                                                                                                                                                          |
-| `FUYAO_ADMIN_EDGE_PUBLIC_HOST` | 未设置                  | 公开入口对外通告的 URL 主机（全网绑定时填公网 IP）。                                                                                                                                                                                              |
-| `FUYAO_ADMIN_BUILDS_ROOT` | `<repo>/site/.fuyao/admin-builds` | 持久构建任务根目录；部署时应指向程序目录之外。 |
-| `FUYAO_ADMIN_RELEASES_ROOT` | `<repo>/site/.fuyao/admin-releases` | 持久发布根目录；部署时应指向程序目录之外。 |
-| `FUYAO_ADMIN_PORT_MIN`/`FUYAO_ADMIN_PORT_MAX` | `20000`/`20100` | 运维批准的端口范围（含端点），用于站点入口与预览监听；非法或倒置的取值直接拒绝启动。                                                                                                                                                    |
-| `FUYAO_ADMIN_BUILD_MODE`     | `ci`                    | 平台构建的内容来源：`ci` 使用仓库 fixture 内容；`production` 需要受信任的内容根目录设置。                                                                                     |
-| `FUYAO_ADMIN_REQUIRE_CAPABILITIES` | `blog`            | 受信任站点需求：主题构建与发布前必须满足的能力。默认值仅保证博客能力兼容；实际启用首主题全部页面的站点必须设置为 `blog,albums,footprint,friends,pay,favicon`。                |
-| `FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS` | `posts,blog-rss,sitemap` | 同上，针对 URL 约定；首主题全部功能还需 `release.json,data,media-albums,blog-search`。                                                                                       |
+| 变量                                          | 默认值                                      | 用途                                                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FUYAO_ADMIN_DATABASE_URL`                    | 必填                                        | PostgreSQL DSN。真实值不得提交。                                                                                                                                             |
+| `FUYAO_ADMIN_ADDR`                            | `127.0.0.1:8787`                            | 监听地址；回环地址始终可用，其他主机必须列入 `FUYAO_ADMIN_TRUSTED_HOSTS`。                                                                                                   |
+| `FUYAO_ADMIN_TRUSTED_HOSTS`                   | 未设置                                      | 逗号分隔的主机列表，允许非回环绑定与明文 HTTP origin（例如服务器 Tailscale IP）。                                                                                            |
+| `FUYAO_ADMIN_RP_ID`                           | `localhost`                                 | WebAuthn RP ID（仅 Passkey 兼容路径）。                                                                                                                                      |
+| `FUYAO_ADMIN_RP_ORIGINS`                      | `http://localhost:5174`                     | 逗号分隔的允许 origin（驱动 CORS、Origin 防护与 Cookie `Secure`）。明文 HTTP 仅允许回环或受信主机。                                                                          |
+| `FUYAO_ADMIN_RP_DISPLAY_NAME`                 | `Fuyao Admin`                               | 创建选项中的显示名。                                                                                                                                                         |
+| `FUYAO_ADMIN_SESSION_TTL`                     | `12h`                                       | 会话有效期。                                                                                                                                                                 |
+| `FUYAO_ADMIN_CHALLENGE_TTL`                   | `5m`                                        | WebAuthn 挑战有效期。                                                                                                                                                        |
+| `FUYAO_ADMIN_PERMIT_TTL`                      | `10m`                                       | Passkey 登记许可有效期（遗留路径）。                                                                                                                                         |
+| `FUYAO_ADMIN_AUTH_CODE_TTL`                   | `10m`                                       | 一次性登录码有效期（`init-admin`、`login-code`）。                                                                                                                           |
+| `FUYAO_ADMIN_THEME_CONTRACTS`                 | 未设置                                      | 仓库内 `contracts/theme` 路径。设置后启动时编译契约 schema，主题配置保存按各主题自身 schema 校验；未设置时保存主题选择返回 `503 theme_contracts_unavailable`，绝不跳过校验。 |
+| `FUYAO_ADMIN_REPO_ROOT`                       | 工作目录                                    | 仓库根目录，锚定 `<repo>/site/.fuyao` 下的构建工作区与发布根目录。从其他目录启动 `serve` 时应显式设置。                                                                      |
+| `FUYAO_ADMIN_SITES_ROOT`                      | `<repo>/site/.fuyao/admin-sites`            | 按站点内容/配置树根目录（`<root>/<siteId>/{content,config}`）。                                                                                                              |
+| `FUYAO_ADMIN_UI_DIR`                          | 未设置                                      | 构建后的管理台目录；设置后非 `/api` 路径托管该静态 SPA（生产拓扑）。                                                                                                         |
+| `FUYAO_ADMIN_PREVIEW_BIND`                    | `127.0.0.1`                                 | 预览监听绑定地址；设为私网地址即支持远程（Tailscale）预览。                                                                                                                  |
+| `FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE`           | 未设置                                      | 预览链接返回给浏览器的 URL 基址（如 `http://100.117.154.115`）；存在远程客户端时绝不使用回环字面量。                                                                         |
+| `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                | 未设置                                      | 受管 Caddy 片段目录；设置即启用已发布站点边缘管理。                                                                                                                          |
+| `FUYAO_ADMIN_EDGE_APPLY_CMD`                  | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | 运维控制的校验+reload 命令，参数固定。                                                                                                                                       |
+| `FUYAO_ADMIN_EDGE_PRIVATE_BIND`               | `127.0.0.1`                                 | 私有站点入口的绑定与访问地址（部署时为 Tailscale 地址）。                                                                                                                    |
+| `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                | `:`（全部接口）                             | 公开站点入口的绑定地址。                                                                                                                                                     |
+| `FUYAO_ADMIN_EDGE_PUBLIC_HOST`                | 未设置                                      | 公开入口对外通告的 URL 主机（全网绑定时填公网 IP）。                                                                                                                         |
+| `FUYAO_ADMIN_BUILDS_ROOT`                     | `<repo>/site/.fuyao/admin-builds`           | 持久构建任务根目录；部署时应指向程序目录之外。                                                                                                                               |
+| `FUYAO_ADMIN_RELEASES_ROOT`                   | `<repo>/site/.fuyao/admin-releases`         | 持久发布根目录；部署时应指向程序目录之外。                                                                                                                                   |
+| `FUYAO_ADMIN_PORT_MIN`/`FUYAO_ADMIN_PORT_MAX` | `20000`/`20100`                             | 运维批准的端口范围（含端点），用于站点入口与预览监听；非法或倒置的取值直接拒绝启动。                                                                                         |
+| `FUYAO_ADMIN_BUILD_MODE`                      | `ci`                                        | 平台构建的内容来源：`ci` 使用仓库 fixture 内容；`production` 需要受信任的内容根目录设置。                                                                                    |
+| `FUYAO_ADMIN_REQUIRE_CAPABILITIES`            | `blog`                                      | 受信任站点需求：主题构建与发布前必须满足的能力。默认值仅保证博客能力兼容；实际启用首主题全部页面的站点必须设置为 `blog,albums,footprint,friends,pay,favicon`。               |
+| `FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS`         | `posts,blog-rss,sitemap`                    | 同上，针对 URL 约定；首主题全部功能还需 `release.json,data,media-albums,blog-search`。                                                                                       |
 
 ## 同源联调拓扑
 
