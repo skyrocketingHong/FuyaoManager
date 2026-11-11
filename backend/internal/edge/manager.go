@@ -273,14 +273,13 @@ func (m *Manager) render(rows []entryRow) ([]byte, error) {
 		fmt.Fprintf(&b, "\t\tpath *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.ico *.woff *.woff2 *.webp *.json *.xml *.txt *.yaml *.webmanifest\n")
 		fmt.Fprintf(&b, "\t\tpath /fonts/* /posts/* /data/*\n")
 		fmt.Fprintf(&b, "\t}\n")
-		fmt.Fprintf(&b, "\thandle @static {\n\t\tfile_server\n\t}\n")
-		fmt.Fprintf(&b, "\ttry_files {path}/index.html {path}index.html {path}.html /200.html\n")
-		fmt.Fprintf(&b, "\tencode gzip zstd\n")
 		fmt.Fprintf(&b, "\t@mutable path /release.json /service-worker.js /posts/* /data/* /albums/* /favicon/* /images/* /blog/rss.xml /sitemap.xml\n")
 		fmt.Fprintf(&b, "\theader @mutable Cache-Control \"no-store, no-transform, must-revalidate\"\n")
+		fmt.Fprintf(&b, "\tencode gzip zstd\n")
 		fmt.Fprintf(&b, "\thandle_path /media/albums/photos/* {\n\t\troot * %s\n\t\tfile_server\n\t}\n", quotePath(photosRoot))
 		fmt.Fprintf(&b, "\thandle_path /media/albums/thumbnails/* {\n\t\troot * %s\n\t\tfile_server\n\t}\n", quotePath(thumbsRoot))
-		fmt.Fprintf(&b, "\tfile_server\n}\n")
+		fmt.Fprintf(&b, "\thandle @static {\n\t\tfile_server\n\t}\n")
+		fmt.Fprintf(&b, "\thandle {\n\t\ttry_files {path}/index.html {path}index.html {path}.html /200.html\n\t\tfile_server\n\t}\n}\n")
 	}
 	return b.Bytes(), nil
 }
