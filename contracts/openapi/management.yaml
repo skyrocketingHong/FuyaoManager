@@ -20,6 +20,11 @@ info:
       strict Origin checking on unsafe methods.
     - Site list, site detail, and site settings with strong ETags and
       mandatory If-Match on updates.
+    - Theme catalog reading and per-site theme selection with configuration
+      persisted against each theme's own configuration schema. Themes are
+      registered by the operator-driven `fuyao-admin register-theme` CLI;
+      the HTTP surface never accepts file paths, shell commands, or Git
+      addresses, and the catalog never exposes server-side source paths.
 
     Not implemented in this package (and therefore not described here):
     Tailscale private-network exposure, the 30-minute public gate, articles,
@@ -39,6 +44,8 @@ tags:
     description: Session introspection and logout.
   - name: Sites
     description: Site listing, detail, and settings.
+  - name: Themes
+    description: Theme catalog and per-site theme selection.
 
 security:
   - sessionCookie: []
@@ -490,6 +497,220 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/themes:
+    get:
+      operationId: listThemes
+      tags: [Themes]
+      summary: List registered themes
+      description: |
+        Returns the theme catalog. Entries are registered by the
+        operator-driven `fuyao-admin register-theme` CLI; each entry carries
+        the validated manifest content, the manifest digest that distinguishes
+        registrations, and the theme's own configuration schema for rendering
+        the per-site configuration form. Server-side source paths and other
+        filesystem details are never exposed. Any authenticated administrator
+        may read the catalog, viewers included.
+      responses:
+        '200':
+          description: Theme catalog, ordered by theme id and version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThemeList'
+              examples:
+                firstTheme:
+                  value:
+                    themes:
+                      - id: '0192ab3c-4d5e-6f70-8192-ab3c4d5e6f70'
+                        themeId: fuyao-homepage
+                        version: '27.1.1'
+                        name: Fuyao Homepage
+                        description: The original SvelteKit public site registered as the first theme.
+                        adapter: node22-sveltekit-static
+                        inputProtocol: fuyao.theme.build-input/v1
+                        capabilities: [blog, albums, footprint, friends, pay, favicon]
+                        outputs:
+                          spaFallback: 200.html
+                          urlConventions:
+                            [
+                              release.json,
+                              posts,
+                              data,
+                              media-albums,
+                              sitemap,
+                              blog-rss,
+                              blog-search
+                            ]
+                          requiredArtifacts: [sitemap.xml, blog/rss.xml]
+                        configSchema:
+                          {
+                            '$schema': 'https://json-schema.org/draft/2020-12/schema',
+                            'title': 'Fuyao Homepage theme configuration (v1)',
+                            'type': 'object',
+                            'additionalProperties': false
+                          }
+                        manifestDigest: '9f2c7c14ad5b3e6f8192ab3c4d5e6f701234567890abcdef12345678abcdef12'
+                        registeredAt: '2026-11-11T08:00:00Z'
+                        updatedAt: '2026-11-11T08:00:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/theme:
+    get:
+      operationId: getSiteTheme
+      tags: [Themes]
+      summary: Read the site theme selection
+      description: |
+        Returns the site's selected theme registration and its configuration
+        plus the strong ETag used for optimistic concurrency. Revision 0 with
+        `selected: false` means no selection yet (ETag `"<siteId>-t0"`). Any
+        member (including viewers) may read; non-members get 404. The theme
+        selection revision is independent of the site settings revision, so
+        editing settings never overwrites a concurrent theme selection and
+        vice versa.
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Current selection.
+          headers:
+            ETag:
+              description: Strong entity tag `"<siteId>-t<revision>"` for use in If-Match.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteThemeSelection'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putSiteTheme
+      tags: [Themes]
+      summary: Save the site theme selection (If-Match required)
+      description: |
+        Saves the site's theme selection and its configuration. The theme and
+        version must exist in the catalog (404 `theme_not_found` otherwise),
+        and the configuration must satisfy the theme's own configuration
+        schema (422 `invalid_theme_config`; themes without a declared schema
+        accept only `{}`). Invalid input is never silently downgraded.
+
+        The request must carry the session cookie, the CSRF token header, an
+        allowed Origin, and an `If-Match` header with this site's exact theme
+        ETag from a prior GET (wildcards are rejected). Revision 0 creates the
+        first selection. The revision comparison and bump happen inside one
+        PostgreSQL transaction on a counter independent of the site settings
+        revision.
+
+        Only `owner` and `editor` members may write; viewers get 403 and
+        non-members get 404. Servers started without
+        `FUYAO_ADMIN_THEME_CONTRACTS` reject the save with 503
+        `theme_contracts_unavailable` instead of skipping validation.
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SiteThemeSelectionPut'
+            examples:
+              selectFirstTheme:
+                value: { 'themeId': 'fuyao-homepage', 'version': '27.1.1', 'themeConfig': {} }
+      responses:
+        '200':
+          description: Saved selection; a new strong ETag is returned.
+          headers:
+            ETag:
+              description: Strong ETag of the new revision.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteThemeSelection'
+        '400':
+          description: Validation failure (`validation_error` or `invalid_if_match`/`invalid_site_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Site or theme not found (`not_found` or `theme_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                themeNotFound:
+                  value:
+                    {
+                      'type': 'about:blank',
+                      'title': 'Not Found',
+                      'status': 404,
+                      'code': 'theme_not_found',
+                      'detail': 'The theme and version are not registered in the catalog.'
+                    }
+        '412':
+          description: The ETag is stale or belongs to a different resource (`precondition_failed`); the current ETag is returned in the ETag response header.
+          headers:
+            ETag:
+              description: Current (fresher) entity tag.
+              schema: { type: string }
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          description: The theme configuration does not satisfy the theme's configuration schema (`invalid_theme_config`). The exact validation error is logged server-side; the response detail never embeds validator internals or local paths.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              examples:
+                unknownOption:
+                  value:
+                    {
+                      'type': 'about:blank',
+                      'title': 'Unprocessable Entity',
+                      'status': 422,
+                      'code': 'invalid_theme_config',
+                      'detail': "The theme configuration does not satisfy the theme's configuration schema."
+                    }
+        '428':
+          description: If-Match is missing (`precondition_required`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Theme contract validation is not configured on the server (`theme_contracts_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -605,7 +826,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -626,6 +847,9 @@ components:
             - precondition_failed
             - request_too_large
             - unsupported_media_type
+            - theme_not_found
+            - invalid_theme_config
+            - theme_contracts_unavailable
             - internal_error
         detail:
           type: string
@@ -767,6 +991,152 @@ components:
         defaultLocale:
           type: string
           enum: [zh-CN, en-US]
+      additionalProperties: false
+
+    Theme:
+      type: object
+      description: |
+        One registered (theme id, version) catalog entry. Registered by the
+        operator-driven `fuyao-admin register-theme` CLI after full contract
+        validation; the manifest digest distinguishes the exact theme.json
+        bytes behind the entry. Server-side source paths are never exposed.
+      required:
+        [
+          id,
+          themeId,
+          version,
+          adapter,
+          inputProtocol,
+          capabilities,
+          outputs,
+          configSchema,
+          manifestDigest,
+          registeredAt,
+          updatedAt
+        ]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Catalog row id.
+        themeId:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*[a-z0-9]$'
+        version:
+          type: string
+          description: SemVer 2.0.0 theme version.
+        name:
+          type: string
+        description:
+          type: string
+        adapter:
+          type: string
+          description: Trusted build adapter this theme requires (currently `node22-sveltekit-static`).
+        inputProtocol:
+          type: string
+          description: Build-input snapshot protocol the theme consumes (`fuyao.theme.build-input/v1`).
+        capabilities:
+          type: array
+          items:
+            type: string
+            enum: [blog, albums, footprint, friends, pay, favicon]
+          description: Content capabilities the theme declares.
+        outputs:
+          type: object
+          required: [spaFallback, urlConventions, requiredArtifacts]
+          properties:
+            spaFallback:
+              type: string
+              nullable: true
+              description: SPA fallback page inside a release, or null when every route is prerendered.
+            urlConventions:
+              type: array
+              items:
+                type: string
+                enum: [release.json, posts, data, media-albums, sitemap, blog-rss, blog-search]
+            requiredArtifacts:
+              type: array
+              items:
+                type: string
+        configSchema:
+          type: object
+          nullable: true
+          description: The theme's own JSON Schema (draft 2020-12) document the per-site themeConfig must satisfy; null when the theme declares none (only `{}` is valid).
+        manifestDigest:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Hex SHA-256 digest of the exact theme.json bytes registered.
+        registeredAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ThemeList:
+      type: object
+      required: [themes]
+      properties:
+        themes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Theme'
+
+    SiteThemeSelection:
+      type: object
+      description: |
+        A site's theme selection. `selected: false` with revision 0 means no
+        selection yet; the matching ETag is `"<siteId>-t0"`. The selection
+        revision is independent of the site settings revision.
+      required: [siteId, selected, theme, themeConfig, revision]
+      properties:
+        siteId:
+          type: string
+          format: uuid
+        selected:
+          type: boolean
+        theme:
+          type: object
+          nullable: true
+          description: The selected catalog entry identity; null when no selection exists yet.
+          required: [themeId, version, manifestDigest]
+          properties:
+            themeId:
+              type: string
+            version:
+              type: string
+            manifestDigest:
+              type: string
+              pattern: '^[0-9a-f]{64}$'
+        themeConfig:
+          type: object
+          nullable: true
+          description: The saved configuration, already validated against the theme's schema; null when no selection exists yet.
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    SiteThemeSelectionPut:
+      type: object
+      description: |
+        Selects a catalog entry by theme id and version. `themeConfig` is
+        optional and defaults to `{}`; an explicit `null` is rejected — the
+        configuration must be an object.
+      required: [themeId, version]
+      properties:
+        themeId:
+          type: string
+          pattern: '^[a-z][a-z0-9-]*[a-z0-9]$'
+        version:
+          type: string
+          description: SemVer 2.0.0 string.
+        themeConfig:
+          type: object
       additionalProperties: false
 
     CreationOptionsEnvelope:

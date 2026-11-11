@@ -3,6 +3,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -94,4 +95,72 @@ type Membership struct {
 	UserID    uuid.UUID
 	Role      string
 	CreatedAt time.Time
+}
+
+// Theme is one registered (theme id, version) pair from the theme catalog.
+// Manifest holds the validated theme.json document; ManifestDigest is the
+// SHA-256 digest of the exact bytes read at registration, which distinguishes
+// identical re-registration from a changed manifest under the same version.
+// ConfigSchema is nil when the manifest declares no configSchema (only an
+// empty object is a valid theme configuration then). SourcePath is the
+// server-side trusted theme root for the build executor; it must never be
+// exposed through the management API.
+type Theme struct {
+	ID             uuid.UUID
+	ThemeID        string
+	Version        string
+	Adapter        string
+	Manifest       json.RawMessage
+	ManifestDigest []byte
+	ConfigSchema   json.RawMessage
+	SourcePath     string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+// SiteThemeSelection is a site's selected theme registration and its theme
+// configuration. Revision drives optimistic concurrency via strong ETags,
+// independently of SiteSettings.Revision.
+type SiteThemeSelection struct {
+	SiteID      uuid.UUID
+	ThemeID     uuid.UUID
+	ThemeConfig json.RawMessage
+	Revision    int64
+	SelectedBy  uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// ThemeManifestView is the typed projection of a validated theme.json
+// document. It mirrors the fields of the manifest contract
+// (contracts/theme/manifest.schema.json) that the management API exposes.
+type ThemeManifestView struct {
+	Contract      string   `json:"contract"`
+	ID            string   `json:"id"`
+	Version       string   `json:"version"`
+	Name          string   `json:"name,omitempty"`
+	Description   string   `json:"description,omitempty"`
+	Adapter       string   `json:"adapter"`
+	InputProtocol string   `json:"inputProtocol"`
+	Capabilities  []string `json:"capabilities"`
+	ConfigSchema  *struct {
+		File   string `json:"file"`
+		Format string `json:"format"`
+	} `json:"configSchema"`
+	Outputs struct {
+		SpaFallback       *string  `json:"spaFallback"`
+		URLConventions    []string `json:"urlConventions"`
+		RequiredArtifacts []string `json:"requiredArtifacts"`
+	} `json:"outputs"`
+}
+
+// ParseThemeManifest decodes a stored manifest document into its typed view.
+// The manifest was validated against the contract at registration time, so
+// decoding failures indicate storage corruption and are surfaced as errors.
+func ParseThemeManifest(data []byte) (ThemeManifestView, error) {
+	var view ThemeManifestView
+	if err := json.Unmarshal(data, &view); err != nil {
+		return ThemeManifestView{}, err
+	}
+	return view, nil
 }

@@ -25,8 +25,19 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
 )
+
+// repoRoot resolves the repository root from this test file's location.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate the test file")
+	}
+	return filepath.Join(filepath.Dir(file), "..", "..", "..", "..")
+}
 
 // testEnv is one integration-test world: a dedicated PostgreSQL schema with
 // real migrations, the real handler stack, and a loopback HTTP server that
@@ -49,11 +60,7 @@ func testDSN(t *testing.T) string {
 	if dsn := os.Getenv("FUYAO_ADMIN_TEST_DSN"); dsn != "" {
 		return dsn
 	}
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Skip("FUYAO_ADMIN_TEST_DSN unset and repository root unknown; skipping real-PostgreSQL tests")
-	}
-	root := filepath.Join(filepath.Dir(file), "..", "..", "..", "..")
+	root := repoRoot(t)
 	raw, err := os.ReadFile(filepath.Join(root, ".fuyao", "cms-mvp", "postgres-test.json"))
 	if err != nil {
 		t.Skip("FUYAO_ADMIN_TEST_DSN unset and no local test PostgreSQL descriptor; skipping real-PostgreSQL tests")
@@ -129,12 +136,17 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 		t.Fatalf("init webauthn: %v", err)
 	}
 	st := store.New(pool)
+	contracts, err := themecontract.Load(filepath.Join(repoRoot(t), "contracts", "theme"))
+	if err != nil {
+		t.Fatalf("load theme contracts: %v", err)
+	}
 	handler := New(st, webAuthn, Config{
-		RPID:         "localhost",
-		RPOrigins:    []string{origin},
-		CookieSecure: false,
-		SessionTTL:   time.Hour,
-		ChallengeTTL: 5 * time.Minute,
+		RPID:           "localhost",
+		RPOrigins:      []string{origin},
+		CookieSecure:   false,
+		SessionTTL:     time.Hour,
+		ChallengeTTL:   5 * time.Minute,
+		ThemeContracts: contracts,
 	}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	server := &http.Server{Handler: handler, ReadHeaderTimeout: 5 * time.Second}

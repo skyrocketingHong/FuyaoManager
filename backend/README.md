@@ -27,11 +27,13 @@ Explicitly not implemented (and not claimed): Tailscale private-network exposure
 ```text
 admin/backend/
 ├── cmd/fuyao-admin/          CLI entry point
-├── internal/cli/             migrate / serve / bootstrap-admin / create-site
+├── internal/cli/             migrate / serve / bootstrap-admin / create-site / validate-theme / register-theme
 ├── internal/config/          environment configuration and validation
 ├── internal/db/              pool helpers and the SQL migration runner
 ├── internal/model/           shared domain records
 ├── internal/store/           PostgreSQL persistence (one file per aggregate)
+├── internal/themecontract/   contracts/theme schema loading and validation
+├── internal/themeregistry/   trusted theme-root loading into the catalog (CLI-driven)
 ├── internal/wa/              WebAuthn relying-party setup and adapters
 ├── internal/httpapi/         HTTP handlers, middleware, and integration tests
 └── internal/testauth/        synthetic authenticator used by tests only
@@ -43,16 +45,17 @@ The HTTP contract lives at `contracts/openapi/management.yaml` in the repository
 
 All configuration is read from environment variables. See `config.example.env` for a template without real credentials.
 
-| Variable                      | Default                 | Purpose                                                                                                                             |
-| ----------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `FUYAO_ADMIN_DATABASE_URL`    | required                | PostgreSQL DSN. Never commit a real value.                                                                                          |
-| `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | Listen address; must be loopback or startup fails.                                                                                  |
-| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn relying-party ID.                                                                                                          |
-| `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | Comma-separated allowed origins. Plain HTTP is accepted only on loopback hosts; https origins enable the cookie `Secure` attribute. |
-| `FUYAO_ADMIN_RP_DISPLAY_NAME` | `Fuyao Admin`           | Display name in creation options.                                                                                                   |
-| `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | Session lifetime.                                                                                                                   |
-| `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn challenge lifetime.                                                                                                        |
-| `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | Enrollment permit lifetime.                                                                                                         |
+| Variable                      | Default                 | Purpose                                                                                                                                                                                                                                                                             |
+| ----------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FUYAO_ADMIN_DATABASE_URL`    | required                | PostgreSQL DSN. Never commit a real value.                                                                                                                                                                                                                                          |
+| `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | Listen address; must be loopback or startup fails.                                                                                                                                                                                                                                  |
+| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn relying-party ID.                                                                                                                                                                                                                                                          |
+| `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | Comma-separated allowed origins. Plain HTTP is accepted only on loopback hosts; https origins enable the cookie `Secure` attribute.                                                                                                                                                 |
+| `FUYAO_ADMIN_RP_DISPLAY_NAME` | `Fuyao Admin`           | Display name in creation options.                                                                                                                                                                                                                                                   |
+| `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | Session lifetime.                                                                                                                                                                                                                                                                   |
+| `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn challenge lifetime.                                                                                                                                                                                                                                                        |
+| `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | Enrollment permit lifetime.                                                                                                                                                                                                                                                         |
+| `FUYAO_ADMIN_THEME_CONTRACTS` | unset                   | Path to `contracts/theme` in the repository. When set, the schemas are compiled at startup and theme-configuration saves are validated against each theme's own schema; when unset, saving a selection fails with `503 theme_contracts_unavailable` instead of skipping validation. |
 
 ## Same-Origin Development Topology
 
@@ -74,8 +77,19 @@ go run ./cmd/fuyao-admin migrate
 go run ./cmd/fuyao-admin bootstrap-admin --username alice --display-name Alice
 # prints a one-time permit, e.g. MFRG-GZYT-MZWU-4TCO (valid 10 minutes)
 go run ./cmd/fuyao-admin create-site --slug blog --name "Fuyao Blog" --locale zh-CN --owner alice
-go run ./cmd/fuyao-admin serve   # http://127.0.0.1:8787
+# register a theme into the catalog (operator-driven; the HTTP API never
+# accepts file paths). The recorded source is the theme root itself, after
+# full manifest and config-schema validation:
+go run ./cmd/fuyao-admin register-theme --contracts ../../contracts/theme ../../site
+FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
+  go run ./cmd/fuyao-admin serve   # http://127.0.0.1:8787
 ```
+
+Theme notes:
+
+- Themes are read through `GET /api/v1/themes`; a site saves its selection and configuration through `PUT /api/v1/sites/{siteId}/theme` under the same membership, CSRF, Origin, and If-Match concurrency model as settings, with an independent revision counter (`"<siteId>-t<revision>"`, `t0` = unselected).
+- Registration identity is the theme id plus version; re-registering identical content (manifest digest and configuration schema) is idempotent, while any change under the same version is rejected — bump the theme version instead.
+- The catalog responses never expose server-side source paths; configuration validation failures return a fixed detail and the exact error is logged server-side only.
 
 First-run flow:
 
@@ -103,7 +117,7 @@ A present-but-invalid `FUYAO_ADMIN_*_TTL` value aborts startup instead of fallin
 
 When `FUYAO_ADMIN_TEST_DSN` is unset, the tests look for the repository-local descriptor at `.fuyao/cms-mvp/postgres-test.json` and skip gracefully if it is absent. The tests refuse to run against any database other than `fuyao_mvp_test`. Test sessions are constructed inside `_test.go` files only; the runtime has no equivalent backdoor.
 
-Covered by the suite: anonymous access denial, full bootstrap/register/login/settings lifecycle, concurrent first enrollments (exactly one winner), permit expiry during an in-flight ceremony, full-ETag If-Match binding (foreign tags, forged suffixes, wildcard rejection, 428/412), stable CSRF across two concurrent clients, verify-path body limits and trailing-JSON rejection, CSRF and Origin enforcement, membership isolation with viewer write rejection and cross-site 404, challenge replay/expiry with signature tampering, permit expiry and single use, TTL misconfiguration rejection, and settings validation.
+Covered by the suite: anonymous access denial, full bootstrap/register/login/settings lifecycle, concurrent first enrollments (exactly one winner), permit expiry during an in-flight ceremony, full-ETag If-Match binding (foreign tags, forged suffixes, wildcard rejection, 428/412), stable CSRF across two concurrent clients, verify-path body limits and trailing-JSON rejection, CSRF and Origin enforcement, membership isolation with viewer write rejection and cross-site 404, challenge replay/expiry with signature tampering, permit expiry and single use, TTL misconfiguration rejection, and settings validation. The theme surface adds: catalog reading, per-site selection persistence across a fresh store, schema-checked configuration (unknown option rejected with a path-free detail, explicit `null` rejected, omission defaults to `{}`), unknown theme/version rejection, registration idempotency across manifest and config-schema changes, concurrent first-time selection (exactly one winner), independent settings/theme revisions, the 503 behavior without `FUYAO_ADMIN_THEME_CONTRACTS`, and trusted-adapter/manifest/schema/path rejection in `internal/themeregistry`.
 
 ## Verification
 

@@ -5,10 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themeregistry"
 )
 
 // runValidateTheme validates a theme root against the contracts/theme
@@ -34,7 +33,7 @@ func runValidateTheme(args []string) error {
 	if err != nil {
 		return err
 	}
-	manifestPath, err := resolveWithin(themeRoot, "theme.json")
+	manifestPath, err := themeregistry.ResolveWithin(themeRoot, "theme.json")
 	if err != nil {
 		return fmt.Errorf("locating theme.json: %w", err)
 	}
@@ -74,7 +73,7 @@ func runValidateTheme(args []string) error {
 	// The schema pattern already forbids traversal and absolute paths; the
 	// realpath check below additionally rejects symlinks that resolve outside
 	// the theme root (the theme root itself may legitimately be a symlink).
-	schemaPath, err := resolveWithin(themeRoot, schemaFile)
+	schemaPath, err := themeregistry.ResolveWithin(themeRoot, schemaFile)
 	if err != nil {
 		return fmt.Errorf("reading config schema %s: %w", schemaFile, err)
 	}
@@ -94,22 +93,4 @@ func runValidateTheme(args []string) error {
 	}
 	fmt.Printf("theme.json and theme config valid; config schema %s\n", schemaFile)
 	return nil
-}
-
-// resolveWithin joins name onto the realpath of root and requires the fully
-// resolved target (symlinks included) to stay inside the realpath of root.
-func resolveWithin(root, name string) (string, error) {
-	realRoot, err := filepath.EvalSymlinks(filepath.Clean(root))
-	if err != nil {
-		return "", err
-	}
-	resolved, err := filepath.EvalSymlinks(filepath.Clean(filepath.Join(realRoot, name)))
-	if err != nil {
-		return "", err
-	}
-	relative, err := filepath.Rel(realRoot, resolved)
-	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
-		return "", fmt.Errorf("path %q escapes the theme root", name)
-	}
-	return resolved, nil
 }

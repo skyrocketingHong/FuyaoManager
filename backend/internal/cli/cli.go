@@ -1,5 +1,5 @@
 // Package cli implements the fuyao-admin commands: migrate, serve,
-// bootstrap-admin, create-site, and validate-theme.
+// bootstrap-admin, create-site, validate-theme, and register-theme.
 package cli
 
 import (
@@ -21,6 +21,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
 )
 
@@ -45,6 +46,8 @@ func Main(args []string) int {
 		err = runCreateSite(ctx, args[1:])
 	case "validate-theme":
 		err = runValidateTheme(args[1:])
+	case "register-theme":
+		err = runRegisterTheme(ctx, args[1:])
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 		return 0
@@ -71,9 +74,12 @@ Commands:
   create-site             Create a site owned by an active administrator.
   validate-theme          Validate a theme root (theme.json) against the
                           theme contracts, optionally with a theme config.
+  register-theme          Validate a theme root and record it in the theme
+                          catalog (operator-controlled registration entry).
 
 Configuration is read from the environment; see README.md for the variable
-reference. validate-theme reads only files given on its command line.
+reference. validate-theme and register-theme read only files given on their
+command line.
 `)
 }
 
@@ -133,13 +139,26 @@ func runServe(ctx context.Context) error {
 		return fmt.Errorf("initialize WebAuthn: %w", err)
 	}
 
+	// The theme-contract validator is optional: without it the server still
+	// serves the existing MVP surface, while saving a theme selection fails
+	// with an explicit 503 naming the missing variable.
+	var themeContracts httpapi.ThemeConfigValidator
+	if cfg.ThemeContractsDir != "" {
+		set, err := themecontract.Load(cfg.ThemeContractsDir)
+		if err != nil {
+			return fmt.Errorf("load theme contracts from %s: %w", cfg.ThemeContractsDir, err)
+		}
+		themeContracts = set
+	}
+
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := httpapi.New(store.New(pool), webAuthn, httpapi.Config{
-		RPID:         cfg.RPID,
-		RPOrigins:    cfg.RPOrigins,
-		CookieSecure: cfg.CookieSecure,
-		SessionTTL:   cfg.SessionTTL,
-		ChallengeTTL: cfg.ChallengeTTL,
+		RPID:           cfg.RPID,
+		RPOrigins:      cfg.RPOrigins,
+		CookieSecure:   cfg.CookieSecure,
+		SessionTTL:     cfg.SessionTTL,
+		ChallengeTTL:   cfg.ChallengeTTL,
+		ThemeContracts: themeContracts,
 	}, logger)
 
 	server := &http.Server{

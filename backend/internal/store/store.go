@@ -36,6 +36,7 @@ type Store struct {
 	AuthStates *AuthStateStore
 	Permits    *PermitStore
 	Sites      *SiteStore
+	Themes     *ThemeStore
 }
 
 // New wires a Store around the given pool.
@@ -48,6 +49,7 @@ func New(pool *pgxpool.Pool) *Store {
 		AuthStates: &AuthStateStore{pool: pool},
 		Permits:    &PermitStore{pool: pool},
 		Sites:      &SiteStore{pool: pool},
+		Themes:     &ThemeStore{pool: pool},
 	}
 }
 

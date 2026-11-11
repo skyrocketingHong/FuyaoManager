@@ -27,20 +27,22 @@ const (
 
 // Config carries the HTTP-facing runtime configuration.
 type Config struct {
-	RPID         string
-	RPOrigins    []string
-	CookieSecure bool
-	SessionTTL   time.Duration
-	ChallengeTTL time.Duration
+	RPID           string
+	RPOrigins      []string
+	CookieSecure   bool
+	SessionTTL     time.Duration
+	ChallengeTTL   time.Duration
+	ThemeContracts ThemeConfigValidator
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
 type API struct {
-	store   *store.Store
-	wa      *webauthnlib.WebAuthn
-	cfg     Config
-	logger  *slog.Logger
-	origins map[string]struct{}
+	store          *store.Store
+	wa             *webauthnlib.WebAuthn
+	cfg            Config
+	logger         *slog.Logger
+	origins        map[string]struct{}
+	themeContracts ThemeConfigValidator
 }
 
 // New assembles the handler with its middleware chain.
@@ -49,10 +51,11 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		logger = slog.Default()
 	}
 	api := &API{
-		store:  st,
-		wa:     wa,
-		cfg:    cfg,
-		logger: logger,
+		store:          st,
+		wa:             wa,
+		cfg:            cfg,
+		logger:         logger,
+		themeContracts: cfg.ThemeContracts,
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
 	for _, o := range cfg.RPOrigins {
@@ -75,6 +78,13 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 	mux.HandleFunc("GET /api/v1/sites/{siteId}", api.requireAuth(api.handleGetSite))
 	mux.HandleFunc("GET /api/v1/sites/{siteId}/settings", api.requireAuth(api.handleGetSettings))
 	mux.HandleFunc("PATCH /api/v1/sites/{siteId}/settings", api.requireAuth(api.withCSRF(api.handlePatchSettings)))
+
+	// Theme catalog and per-site theme selection. Registration itself is
+	// operator-driven (fuyao-admin register-theme); the HTTP surface only
+	// reads the catalog and saves selections.
+	mux.HandleFunc("GET /api/v1/themes", api.requireAuth(api.handleListThemes))
+	mux.HandleFunc("GET /api/v1/sites/{siteId}/theme", api.requireAuth(api.handleGetSiteTheme))
+	mux.HandleFunc("PUT /api/v1/sites/{siteId}/theme", api.requireAuth(api.withCSRF(api.handlePutSiteTheme)))
 
 	var h http.Handler = mux
 	h = api.originGuard(h)

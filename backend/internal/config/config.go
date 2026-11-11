@@ -13,14 +13,15 @@ import (
 
 // Environment variable names.
 const (
-	EnvDatabaseURL  = "FUYAO_ADMIN_DATABASE_URL"
-	EnvAddr         = "FUYAO_ADMIN_ADDR"
-	EnvRPID         = "FUYAO_ADMIN_RP_ID"
-	EnvRPName       = "FUYAO_ADMIN_RP_DISPLAY_NAME"
-	EnvRPOrigins    = "FUYAO_ADMIN_RP_ORIGINS"
-	EnvSessionTTL   = "FUYAO_ADMIN_SESSION_TTL"
-	EnvChallengeTTL = "FUYAO_ADMIN_CHALLENGE_TTL"
-	EnvPermitTTL    = "FUYAO_ADMIN_PERMIT_TTL"
+	EnvDatabaseURL       = "FUYAO_ADMIN_DATABASE_URL"
+	EnvAddr              = "FUYAO_ADMIN_ADDR"
+	EnvRPID              = "FUYAO_ADMIN_RP_ID"
+	EnvRPName            = "FUYAO_ADMIN_RP_DISPLAY_NAME"
+	EnvRPOrigins         = "FUYAO_ADMIN_RP_ORIGINS"
+	EnvSessionTTL        = "FUYAO_ADMIN_SESSION_TTL"
+	EnvChallengeTTL      = "FUYAO_ADMIN_CHALLENGE_TTL"
+	EnvPermitTTL         = "FUYAO_ADMIN_PERMIT_TTL"
+	EnvThemeContractsDir = "FUYAO_ADMIN_THEME_CONTRACTS"
 )
 
 // Config is the fully validated runtime configuration. CookieSecure is
@@ -28,24 +29,26 @@ const (
 // loopback hosts, and cookies are marked Secure unless every origin is a
 // loopback HTTP origin.
 type Config struct {
-	DatabaseURL   string
-	Addr          string
-	RPID          string
-	RPDisplayName string
-	RPOrigins     []string
-	SessionTTL    time.Duration
-	ChallengeTTL  time.Duration
-	PermitTTL     time.Duration
-	CookieSecure  bool
+	DatabaseURL       string
+	Addr              string
+	RPID              string
+	RPDisplayName     string
+	RPOrigins         []string
+	SessionTTL        time.Duration
+	ChallengeTTL      time.Duration
+	PermitTTL         time.Duration
+	CookieSecure      bool
+	ThemeContractsDir string
 }
 
 // Load reads the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		DatabaseURL:   os.Getenv(EnvDatabaseURL),
-		Addr:          envDefault(EnvAddr, "127.0.0.1:8787"),
-		RPID:          envDefault(EnvRPID, "localhost"),
-		RPDisplayName: envDefault(EnvRPName, "Fuyao Admin"),
+		DatabaseURL:       os.Getenv(EnvDatabaseURL),
+		Addr:              envDefault(EnvAddr, "127.0.0.1:8787"),
+		RPID:              envDefault(EnvRPID, "localhost"),
+		RPDisplayName:     envDefault(EnvRPName, "Fuyao Admin"),
+		ThemeContractsDir: envDefault(EnvThemeContractsDir, ""),
 	}
 
 	origins := envDefault(EnvRPOrigins, "http://localhost:5174")

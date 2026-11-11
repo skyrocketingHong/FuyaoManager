@@ -224,6 +224,78 @@ export interface paths {
         patch: operations["updateSiteSettings"];
         trace?: never;
     };
+    "/api/v1/themes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List registered themes
+         * @description Returns the theme catalog. Entries are registered by the
+         *     operator-driven `fuyao-admin register-theme` CLI; each entry carries
+         *     the validated manifest content, the manifest digest that distinguishes
+         *     registrations, and the theme's own configuration schema for rendering
+         *     the per-site configuration form. Server-side source paths and other
+         *     filesystem details are never exposed. Any authenticated administrator
+         *     may read the catalog, viewers included.
+         */
+        get: operations["listThemes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/theme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the site theme selection
+         * @description Returns the site's selected theme registration and its configuration
+         *     plus the strong ETag used for optimistic concurrency. Revision 0 with
+         *     `selected: false` means no selection yet (ETag `"<siteId>-t0"`). Any
+         *     member (including viewers) may read; non-members get 404. The theme
+         *     selection revision is independent of the site settings revision, so
+         *     editing settings never overwrites a concurrent theme selection and
+         *     vice versa.
+         */
+        get: operations["getSiteTheme"];
+        /**
+         * Save the site theme selection (If-Match required)
+         * @description Saves the site's theme selection and its configuration. The theme and
+         *     version must exist in the catalog (404 `theme_not_found` otherwise),
+         *     and the configuration must satisfy the theme's own configuration
+         *     schema (422 `invalid_theme_config`; themes without a declared schema
+         *     accept only `{}`). Invalid input is never silently downgraded.
+         *
+         *     The request must carry the session cookie, the CSRF token header, an
+         *     allowed Origin, and an `If-Match` header with this site's exact theme
+         *     ETag from a prior GET (wildcards are rejected). Revision 0 creates the
+         *     first selection. The revision comparison and bump happen inside one
+         *     PostgreSQL transaction on a counter independent of the site settings
+         *     revision.
+         *
+         *     Only `owner` and `editor` members may write; viewers get 403 and
+         *     non-members get 404. Servers started without
+         *     `FUYAO_ADMIN_THEME_CONTRACTS` reject the save with 503
+         *     `theme_contracts_unavailable` instead of skipping validation.
+         */
+        put: operations["putSiteTheme"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -234,10 +306,10 @@ export interface components {
             title: string;
             status: number;
             /**
-             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, internal_error.
+             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "internal_error";
             detail?: string;
         };
         User: {
@@ -301,6 +373,80 @@ export interface components {
             description?: string;
             /** @enum {string} */
             defaultLocale?: "zh-CN" | "en-US";
+        };
+        /**
+         * @description One registered (theme id, version) catalog entry. Registered by the
+         *     operator-driven `fuyao-admin register-theme` CLI after full contract
+         *     validation; the manifest digest distinguishes the exact theme.json
+         *     bytes behind the entry. Server-side source paths are never exposed.
+         */
+        Theme: {
+            /**
+             * Format: uuid
+             * @description Catalog row id.
+             */
+            id: string;
+            themeId: string;
+            /** @description SemVer 2.0.0 theme version. */
+            version: string;
+            name?: string;
+            description?: string;
+            /** @description Trusted build adapter this theme requires (currently `node22-sveltekit-static`). */
+            adapter: string;
+            /** @description Build-input snapshot protocol the theme consumes (`fuyao.theme.build-input/v1`). */
+            inputProtocol: string;
+            /** @description Content capabilities the theme declares. */
+            capabilities: ("blog" | "albums" | "footprint" | "friends" | "pay" | "favicon")[];
+            outputs: {
+                /** @description SPA fallback page inside a release, or null when every route is prerendered. */
+                spaFallback: string | null;
+                urlConventions: ("release.json" | "posts" | "data" | "media-albums" | "sitemap" | "blog-rss" | "blog-search")[];
+                requiredArtifacts: string[];
+            };
+            /** @description The theme's own JSON Schema (draft 2020-12) document the per-site themeConfig must satisfy; null when the theme declares none (only `{}` is valid). */
+            configSchema: Record<string, never> | null;
+            /** @description Hex SHA-256 digest of the exact theme.json bytes registered. */
+            manifestDigest: string;
+            /** Format: date-time */
+            registeredAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ThemeList: {
+            themes: components["schemas"]["Theme"][];
+        };
+        /**
+         * @description A site's theme selection. `selected: false` with revision 0 means no
+         *     selection yet; the matching ETag is `"<siteId>-t0"`. The selection
+         *     revision is independent of the site settings revision.
+         */
+        SiteThemeSelection: {
+            /** Format: uuid */
+            siteId: string;
+            selected: boolean;
+            /** @description The selected catalog entry identity; null when no selection exists yet. */
+            theme: {
+                themeId: string;
+                version: string;
+                manifestDigest: string;
+            } | null;
+            /** @description The saved configuration, already validated against the theme's schema; null when no selection exists yet. */
+            themeConfig: Record<string, never> | null;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            updatedAt?: string | null;
+        };
+        /**
+         * @description Selects a catalog entry by theme id and version. `themeConfig` is
+         *     optional and defaults to `{}`; an explicit `null` is rejected — the
+         *     configuration must be an object.
+         */
+        SiteThemeSelectionPut: {
+            themeId: string;
+            /** @description SemVer 2.0.0 string. */
+            version: string;
+            themeConfig?: Record<string, never>;
         };
         /** @description Creation options response; the `publicKey` member is the PublicKeyCredentialCreationOptions consumed by `navigator.credentials.create()`. */
         CreationOptionsEnvelope: {
@@ -874,6 +1020,159 @@ export interface operations {
             415: components["responses"]["UnsupportedMediaType"];
             /** @description If-Match is missing (`precondition_required`). */
             428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listThemes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Theme catalog, ordered by theme id and version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSiteTheme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current selection. */
+            200: {
+                headers: {
+                    /** @description Strong entity tag `"<siteId>-t<revision>"` for use in If-Match. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteThemeSelection"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSiteTheme: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteThemeSelectionPut"];
+            };
+        };
+        responses: {
+            /** @description Saved selection; a new strong ETag is returned. */
+            200: {
+                headers: {
+                    /** @description Strong ETag of the new revision. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteThemeSelection"];
+                };
+            };
+            /** @description Validation failure (`validation_error` or `invalid_if_match`/`invalid_site_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Site or theme not found (`not_found` or `theme_not_found`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The ETag is stale or belongs to a different resource (`precondition_failed`); the current ETag is returned in the ETag response header. */
+            412: {
+                headers: {
+                    /** @description Current (fresher) entity tag. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            413: components["responses"]["RequestBodyTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description The theme configuration does not satisfy the theme's configuration schema (`invalid_theme_config`). The exact validation error is logged server-side; the response detail never embeds validator internals or local paths. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match is missing (`precondition_required`). */
+            428: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Theme contract validation is not configured on the server (`theme_contracts_unavailable`). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -27,11 +27,13 @@ FuyaoHomepage 内容管理系统的 Go 后端。本包是敏捷开发的第一�
 ```text
 admin/backend/
 ├── cmd/fuyao-admin/          CLI 入口
-├── internal/cli/             migrate / serve / bootstrap-admin / create-site
+├── internal/cli/             migrate / serve / bootstrap-admin / create-site / validate-theme / register-theme
 ├── internal/config/          环境变量配置与校验
 ├── internal/db/              连接池与 SQL migration 执行器
 ├── internal/model/           共享领域记录
 ├── internal/store/           PostgreSQL 持久化（按聚合分文件）
+├── internal/themecontract/   contracts/theme 契约 schema 加载与校验
+├── internal/themeregistry/   受信任主题根目录加载入目录（仅 CLI 驱动）
 ├── internal/wa/              WebAuthn RP 配置与适配
 ├── internal/httpapi/         HTTP 处理器、中间件与集成测试
 └── internal/testauth/        仅供测试使用的合成认证器
@@ -43,16 +45,17 @@ HTTP 契约位于仓库根目录 `contracts/openapi/management.yaml`，只描述
 
 全部配置来自环境变量，模板见 `config.example.env`（不含任何真实凭据）。
 
-| 变量                          | 默认值                  | 用途                                                                                             |
-| ----------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------ |
-| `FUYAO_ADMIN_DATABASE_URL`    | 必填                    | PostgreSQL DSN。真实值不得提交。                                                                 |
-| `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | 监听地址；必须为回环地址，否则拒绝启动。                                                         |
-| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn RP ID。                                                                                 |
-| `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | 逗号分隔的允许 origin。明文 HTTP 仅允许回环主机；出现 https origin 时启用 Cookie `Secure` 属性。 |
-| `FUYAO_ADMIN_RP_DISPLAY_NAME` | `Fuyao Admin`           | 创建选项中的显示名。                                                                             |
-| `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | 会话有效期。                                                                                     |
-| `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn 挑战有效期。                                                                            |
-| `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | 登记许可有效期。                                                                                 |
+| 变量                          | 默认值                  | 用途                                                                                                                                                                         |
+| ----------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FUYAO_ADMIN_DATABASE_URL`    | 必填                    | PostgreSQL DSN。真实值不得提交。                                                                                                                                             |
+| `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | 监听地址；必须为回环地址，否则拒绝启动。                                                                                                                                     |
+| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn RP ID。                                                                                                                                                             |
+| `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | 逗号分隔的允许 origin。明文 HTTP 仅允许回环主机；出现 https origin 时启用 Cookie `Secure` 属性。                                                                             |
+| `FUYAO_ADMIN_RP_DISPLAY_NAME` | `Fuyao Admin`           | 创建选项中的显示名。                                                                                                                                                         |
+| `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | 会话有效期。                                                                                                                                                                 |
+| `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn 挑战有效期。                                                                                                                                                        |
+| `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | 登记许可有效期。                                                                                                                                                             |
+| `FUYAO_ADMIN_THEME_CONTRACTS` | 未设置                  | 仓库内 `contracts/theme` 路径。设置后启动时编译契约 schema，主题配置保存按各主题自身 schema 校验；未设置时保存主题选择返回 `503 theme_contracts_unavailable`，绝不跳过校验。 |
 
 ## 同源联调拓扑
 
@@ -72,8 +75,18 @@ go run ./cmd/fuyao-admin migrate
 go run ./cmd/fuyao-admin bootstrap-admin --username alice --display-name Alice
 # 打印一次性许可，例如 MFRG-GZYT-MZWU-4TCO（10 分钟内有效）
 go run ./cmd/fuyao-admin create-site --slug blog --name "Fuyao Blog" --locale zh-CN --owner alice
-go run ./cmd/fuyao-admin serve   # http://127.0.0.1:8787
+# 将主题登记入目录（操作员驱动；HTTP 接口不接受文件路径）。
+# 记录的 source 即主题根目录本身，登记前完成清单与配置 schema 全量校验：
+go run ./cmd/fuyao-admin register-theme --contracts ../../contracts/theme ../../site
+FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
+  go run ./cmd/fuyao-admin serve   # http://127.0.0.1:8787
 ```
+
+主题说明：
+
+- 主题经 `GET /api/v1/themes` 读取；站点通过 `PUT /api/v1/sites/{siteId}/theme` 保存主题选择与配置，沿用与站点配置一致的成员权限、CSRF、Origin 与 If-Match 并发模型，修订号计数独立（`"<siteId>-t<revision>"`，`t0` 表示未选择）。
+- 登记身份是主题 ID 加版本；内容完全一致（清单摘要与配置 schema）的重复登记幂等，同版本下任何变化一律拒绝——请递增主题版本。
+- 目录响应不暴露服务端 source 路径；配置校验失败返回固定 detail，完整错误仅记录在服务端日志。
 
 首次流程：
 
@@ -101,7 +114,7 @@ FUYAO_ADMIN_TEST_DSN='postgres://user@/fuyao_mvp_test?host=/path/to/socket&port=
 
 `FUYAO_ADMIN_TEST_DSN` 未设置时，测试会查找仓库本地描述文件 `.fuyao/cms-mvp/postgres-test.json`；两者都不可用时优雅跳过。测试拒绝在 `fuyao_mvp_test` 以外的数据库上运行。测试会话只在 `_test.go` 内构造，运行时代码没有等价后门。
 
-测试覆盖：匿名访问拒绝、bootstrap/注册/登录/配置完整生命周期、并发首次登记（仅一者成功）、挑战签发后许可过期、完整 ETag 的 If-Match 绑定（跨站标签、伪造后缀、通配拒绝、428/412）、两个并发客户端共享稳定 CSRF、verify 路径请求体限额与尾随 JSON 拒绝、CSRF 与 Origin 校验、成员隔离与 viewer 拒写及跨站 404、挑战重放/过期与签名篡改、许可过期与单次使用、TTL 配置错误拒绝、配置字段校验。
+测试覆盖：匿名访问拒绝、bootstrap/注册/登录/配置完整生命周期、并发首次登记（仅一者成功）、挑战签发后许可过期、完整 ETag 的 If-Match 绑定（跨站标签、伪造后缀、通配拒绝、428/412）、两个并发客户端共享稳定 CSRF、verify 路径请求体限额与尾随 JSON 拒绝、CSRF 与 Origin 校验、成员隔离与 viewer 拒写及跨站 404、挑战重放/过期与签名篡改、许可过期与单次使用、TTL 配置错误拒绝、配置字段校验。主题面补充：目录读取、逐站选择在全新 store 上仍持久、按 schema 校验配置（未知选项以不含路径的固定 detail 拒绝、显式 null 拒绝、省略按 `{}` 处理）、未知主题/版本拒绝、登记幂等覆盖清单与配置 schema 变化、并发首次选择（仅一者成功）、settings 与主题修订号互不影响、未设置 `FUYAO_ADMIN_THEME_CONTRACTS` 时的 503 行为，以及 `internal/themeregistry` 中受信任适配器/清单/schema/路径拒绝。
 
 ## 验证
 
