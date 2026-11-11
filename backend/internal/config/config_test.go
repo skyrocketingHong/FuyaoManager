@@ -77,3 +77,18 @@ func TestLoadRejectsInvalidTTL(t *testing.T) {
 		t.Fatal("a non-positive TTL must fail loudly")
 	}
 }
+
+func TestLoadTrustedHTTPHostKeepsCookieUsable(t *testing.T) {
+	t.Setenv(EnvDatabaseURL, "postgres://x")
+	t.Setenv(EnvAddr, "100.117.154.115:8787")
+	t.Setenv(EnvTrustedHosts, "100.117.154.115")
+	t.Setenv(EnvRPID, "100.117.154.115")
+	t.Setenv(EnvRPOrigins, "http://100.117.154.115:8787")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("trusted plain-HTTP host must load: %v", err)
+	}
+	if cfg.CookieSecure {
+		t.Fatal("plain-HTTP origins (loopback or trusted) must not mark cookies Secure; browsers would drop the session")
+	}
+}

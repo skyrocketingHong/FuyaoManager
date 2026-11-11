@@ -45,10 +45,10 @@ const (
 )
 
 // Config is the fully validated runtime configuration. CookieSecure is
-// derived from the origin schemes: plain-HTTP origins are permitted on
-// loopback hosts and on hosts explicitly listed in TrustedHosts (the private
-// deployment topology), and cookies are marked Secure unless every origin is
-// a loopback HTTP origin.
+// derived from the origin schemes: only an https origin marks cookies
+// Secure, because browsers refuse Secure cookies over the plain-HTTP
+// topologies this server supports (loopback development and the explicitly
+// trusted private-network address).
 type Config struct {
 	DatabaseURL         string
 	Addr                string
@@ -188,7 +188,6 @@ func (c *Config) validate() error {
 		return fmt.Errorf("%s must contain at least one origin", EnvRPOrigins)
 	}
 
-	allHTTPLoopback := true
 	anyHTTPS := false
 	for _, raw := range c.RPOrigins {
 		u, err := url.Parse(raw)
@@ -199,13 +198,9 @@ func (c *Config) validate() error {
 		switch u.Scheme {
 		case "https":
 			anyHTTPS = true
-			allHTTPLoopback = false
 		case "http":
 			if !isLoopbackHost(host) && !c.isTrustedHost(host) {
 				return fmt.Errorf("plain-HTTP origin %q is only allowed on a loopback host or a host listed in %s", raw, EnvTrustedHosts)
-			}
-			if !isLoopbackHost(host) {
-				allHTTPLoopback = false
 			}
 		default:
 			return fmt.Errorf("origin %q must use the http or https scheme", raw)
@@ -218,9 +213,12 @@ func (c *Config) validate() error {
 		}
 	}
 
-	// Cookies stay unencrypted only for the all-loopback local development
-	// setup; any https (or mixed) configuration enforces the Secure attribute.
-	c.CookieSecure = anyHTTPS || !allHTTPLoopback
+	// Cookies carry the Secure attribute only when an https origin is in
+	// play. A plain-HTTP topology (loopback development or the explicitly
+	// trusted private-network address) must NOT set Secure: browsers refuse to
+	// store or return Secure cookies over HTTP, which would break sessions
+	// while the API keeps answering 200.
+	c.CookieSecure = anyHTTPS
 	return nil
 }
 
