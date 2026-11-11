@@ -17,10 +17,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -48,6 +46,7 @@ type BuildStore interface {
 	MarkFailed(ctx context.Context, buildID uuid.UUID, failure model.BuildFailure) error
 	RecoverInterrupted(ctx context.Context) (int64, error)
 	ListQueued(ctx context.Context) ([]uuid.UUID, error)
+	UpdateSourceDigest(ctx context.Context, buildID uuid.UUID, aggregateDigest string, fileCount int) error
 }
 
 // ThemeStore resolves a build's frozen theme identity to its catalog row.
@@ -390,8 +389,13 @@ func fail(stage, message string) error {
 	return &buildError{failure: model.BuildFailure{Stage: stage, Message: message}}
 }
 
-// runBuild executes the full trusted sequence for one claimed build row,
-// entirely inside the registered theme root captured on the task.
+// runBuild executes the full trusted sequence for one claimed build row.
+// Every writing step happens inside the task's private working copy of the
+// registered theme root (taskDir/theme): snapshot preparation, dependency
+// caches resolved from the repository tree, and build output all stay there,
+// and the registered source is read-only from first byte to last. The copy
+// carries a full per-file source manifest, so the recorded source identity
+// covers the whole tree, not just theme.json.
 func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	theme, err := r.cfg.ThemeStore.GetByRowID(ctx, build.ThemeRowID)
 	if err != nil {
@@ -420,13 +424,6 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	if err := os.MkdirAll(taskDir, 0o700); err != nil {
 		return fail("workspace", "Failed to create the build workspace.")
 	}
-	// The build rewrites the theme's shared build-context.json to point at
-	// this task's snapshot; restore the pre-build state afterwards (success
-	// or failure) so the theme workspace stays as usable as before — a task
-	// snapshot may be cleaned up at any time and must not leave the theme
-	// toolchain reading a dangling path.
-	restoreContext := snapshotBuildContext(themeRoot)
-	defer restoreContext()
 	if err := r.writeInput(taskDir, "site-overrides.json", build.SiteSettings); err != nil {
 		return fail("workspace", "Failed to stage the site settings snapshot.")
 	}
@@ -434,32 +431,49 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 		return fail("workspace", "Failed to stage the theme configuration.")
 	}
 
+	// Materialize the task's private source copy and record its full
+	// per-file provenance before any command runs.
+	themeCopy := filepath.Join(taskDir, "theme")
+	manifest, err := copyThemeSource(themeCopy, themeRoot)
+	if err != nil {
+		return fail("workspace", "Failed to materialize the task source copy.")
+	}
+	if err := writeSourceManifest(taskDir, manifest); err != nil {
+		return fail("workspace", "Failed to record the task source manifest.")
+	}
+	if err := r.cfg.BuildStore.UpdateSourceDigest(ctx, build.ID, manifest.Aggregate, manifest.FileCount); err != nil {
+		r.logger.Error("record source digest", "buildId", build.ID, "error", err)
+	}
+
 	// The theme's own Node flow prepares the snapshot (digests, permissions,
-	// contract self-checks); the database-saved settings and configuration ride
-	// along as JSON files instead of being merged by Go. Both command stages
-	// run inside the registered theme root.
-	prepareLog, err := r.runCommand(ctx, build, "prepare", themeRoot,
+	// contract self-checks) inside the task copy; the database-saved settings
+	// and configuration ride along as JSON files, and the authority contract
+	// schemas are handed in as an absolute path so the copy stays
+	// self-contained. Failure keeps the working copy for inspection.
+	prepareLog, err := r.runCommand(ctx, build, "prepare", themeCopy,
 		[]string{"node", "$THEME/scripts/prepare-build-inputs.js",
 			"--mode=" + r.cfg.Mode,
 			"--site-overrides=" + filepath.Join(taskDir, "site-overrides.json"),
-			"--theme-config=" + filepath.Join(taskDir, "theme-config.json")}, nil)
+			"--theme-config=" + filepath.Join(taskDir, "theme-config.json")},
+		[]string{"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")})
 	if err != nil {
 		return r.commandFailure("prepare", prepareLog, err)
 	}
-	snapshotWork := filepath.Join(themeRoot, ".fuyao", "build-inputs", "current")
+	snapshotWork := filepath.Join(themeCopy, ".fuyao", "build-inputs", "current")
 	snapshotDir := filepath.Join(taskDir, "snapshot")
 	if err := sealTree(snapshotWork, snapshotDir); err != nil {
 		return fail("snapshot", "Failed to seal the build snapshot into its task directory.")
 	}
 
-	buildLog, err := r.runCommand(ctx, build, "build", themeRoot,
+	buildLog, err := r.runCommand(ctx, build, "build", themeCopy,
 		[]string{"npm", "run", "build"},
-		[]string{"FUYAO_FROZEN_INPUT=" + snapshotDir, "FUYAO_SKIP_LOCK=1"})
+		[]string{"FUYAO_FROZEN_INPUT=" + snapshotDir, "FUYAO_SKIP_LOCK=1",
+			"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")})
 	if err != nil {
 		return r.commandFailure("build", buildLog, err)
 	}
 
-	buildOut := filepath.Join(themeRoot, "build")
+	buildOut := filepath.Join(themeCopy, "build")
 	artifacts := filepath.Join(taskDir, "artifacts")
 	if err := sealTree(buildOut, artifacts); err != nil {
 		return fail("harvest", "No build output was produced to harvest.")
@@ -472,7 +486,14 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	if err := r.cfg.BuildStore.MarkSucceeded(ctx, build.ID, artifacts, digests); err != nil {
 		return fmt.Errorf("persist success: %w", err)
 	}
-	r.logger.Info("build succeeded", "buildId", build.ID, "theme", theme.ThemeID+"@"+theme.Version)
+	// The working copy has served its purpose; the sealed snapshot and
+	// artifacts are the durable record. Removing it keeps task directories
+	// from growing by a full source tree each.
+	if err := MakeTreeWritable(themeCopy); err == nil {
+		_ = os.RemoveAll(themeCopy)
+	}
+	r.logger.Info("build succeeded", "buildId", build.ID, "theme", theme.ThemeID+"@"+theme.Version,
+		"sourceFiles", manifest.FileCount)
 	return nil
 }
 
@@ -559,69 +580,6 @@ func (r *Runner) checkRequirements(theme model.Theme) error {
 	}}
 }
 
-// runCommand executes one step with a scrubbed environment: only PATH, HOME,
-// TMPDIR, and the explicit FUYAO_* variables above. Database URLs, admin
-// secrets, and anything else inherited from the management process are never
-// forwarded to the theme's build. The command runs in its own process group
-// and is killed group-wide on cancellation, so npm's children cannot survive
-// and touch the shared workspace afterwards. This is environment and process
-// hygiene, not an OS-level sandbox.
-func (r *Runner) runCommand(ctx context.Context, build model.Build, stage, dir string, argv, extraEnv []string) (string, error) {
-	name, args := argv[0], make([]string, 0, len(argv)-1)
-	for _, arg := range argv[1:] {
-		if len(arg) >= 6 && arg[:6] == "$THEME" {
-			arg = filepath.Join(dir, arg[6:])
-		}
-		args = append(args, arg)
-	}
-
-	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Dir = dir
-	cmd.Env = append(scrubbedEnv(), extraEnv...)
-	setupProcessGroup(cmd, 10*time.Second)
-	logPath := filepath.Join(r.cfg.BuildsRoot, build.ID.String(), stage+".log")
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
-	if err != nil {
-		return "", err
-	}
-	defer logFile.Close()
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
-	if err := cmd.Run(); err != nil {
-		return logPath, err
-	}
-	return logPath, nil
-}
-
-func scrubbedEnv() []string {
-	var out []string
-	for _, name := range []string{"PATH", "HOME", "TMPDIR", "LANG"} {
-		if v, ok := os.LookupEnv(name); ok {
-			out = append(out, name+"="+v)
-		}
-	}
-	return out
-}
-
-func (r *Runner) writeInput(taskDir, name string, payload json.RawMessage) error {
-	return os.WriteFile(filepath.Join(taskDir, name), append(payload, '\n'), 0o600)
-}
-
-func (r *Runner) commandFailure(stage, logPath string, err error) error {
-	f := model.BuildFailure{Stage: stage, Message: "The " + stage + " step failed; see the task log."}
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		code := exitErr.ExitCode()
-		f.ExitCode = &code
-		f.Message = fmt.Sprintf("The %s step exited with code %d; see the task log.", stage, code)
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		f.Message = "The " + stage + " step timed out or was cancelled."
-	}
-	_ = logPath
-	return &buildError{failure: f}
-}
-
 // readInputDigests extracts the three input digests recorded by the Node flow.
 func readInputDigests(snapshotDir string) (json.RawMessage, error) {
 	data, err := os.ReadFile(filepath.Join(snapshotDir, "private", "input.json"))
@@ -638,150 +596,6 @@ func readInputDigests(snapshotDir string) (json.RawMessage, error) {
 		return nil, errors.New("input.json carries no digests")
 	}
 	return input.Inputs, nil
-}
-
-// freezeTree marks the harvested artifacts read-only so later tasks cannot
-// mutate a succeeded build's product.
-func freezeTree(root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		perm := os.FileMode(0o444)
-		if info.IsDir() {
-			perm = 0o555
-		}
-		return os.Chmod(path, perm)
-	})
-}
-
-// sealTree copies a produced tree into the per-task directory and freezes
-// the copy read-only. The shared theme working tree (the fresh snapshot
-// staging directory and the build output) stays where it was — a task must
-// leave the theme workspace exactly as usable as before, and the sealed copy
-// is the immutable record preview and future publication consume.
-func sealTree(src, dst string) error {
-	if err := copyTree(src, dst); err != nil {
-		return err
-	}
-	if err := verifyTreeCopy(src, dst); err != nil {
-		return err
-	}
-	return freezeTree(dst)
-}
-
-// MakeTreeWritable restores owner write bits on a frozen tree so it can be
-// modified or removed; exported for test cleanup of frozen task directories.
-func MakeTreeWritable(root string) error {
-	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return err
-		}
-		if info.IsDir() {
-			return os.Chmod(path, info.Mode().Perm()|0o700)
-		}
-		return os.Chmod(path, info.Mode().Perm()|0o200)
-	})
-}
-
-func copyTree(src, dst string) error {
-	info, err := os.Lstat(src)
-	if err != nil {
-		return err
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return errors.New("refusing to copy symlink input")
-	}
-	// The source tree is frozen read-only (0555/0444); destination
-	// directories need the write bit during the copy, restored to frozen
-	// by the caller once the copy verifies.
-	if err := os.MkdirAll(dst, info.Mode().Perm()|0o700); err != nil {
-		return err
-	}
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		s := filepath.Join(src, entry.Name())
-		d := filepath.Join(dst, entry.Name())
-		if entry.IsDir() {
-			if err := copyTree(s, d); err != nil {
-				return err
-			}
-			continue
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return errors.New("refusing to copy symlink input")
-		}
-		if err := copyFile(s, d); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
-}
-
-// verifyTreeCopy confirms every regular file copied with identical size; a
-// full digest pass is unnecessary because the frozen inputs carry their own
-// digests and the build consumer re-verifies them.
-func verifyTreeCopy(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil || !info.Mode().IsRegular() {
-			return err
-		}
-		rel, relErr := filepath.Rel(src, path)
-		if relErr != nil {
-			return relErr
-		}
-		target, statErr := os.Stat(filepath.Join(dst, rel))
-		if statErr != nil {
-			return statErr
-		}
-		if target.Size() != info.Size() {
-			return fmt.Errorf("copy size mismatch at %s", rel)
-		}
-		return nil
-	})
-}
-
-// snapshotBuildContext captures build-context.json bytes (nil when absent)
-// and returns a restore closure.
-func snapshotBuildContext(themeRoot string) func() {
-	contextPath := filepath.Join(themeRoot, ".fuyao", "build-context.json")
-	previous, err := os.ReadFile(contextPath)
-	existed := err == nil
-	return func() {
-		if existed {
-			_ = os.WriteFile(contextPath, previous, 0o600)
-			return
-		}
-		_ = os.Remove(contextPath)
-	}
-}
-
-func dirMissing(path string) bool {
-	info, err := os.Stat(path)
-	return err != nil || !info.IsDir()
 }
 
 // NewPreviewToken issues the random URL token for a preview link.

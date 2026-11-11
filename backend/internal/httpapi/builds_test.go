@@ -94,12 +94,28 @@ func (l *latePreviews) Issue(siteID, buildID uuid.UUID) (string, time.Time, erro
 }
 
 // setupBuilds provisions a test world whose handler is wired to a real
-// buildrunner.Runner and PreviewServer. BuildsRoot is a per-test temp dir on
-// a different volume than the theme root, so the cross-volume move fallback
-// is exercised by every real build.
+// buildrunner.Runner and PreviewServer. BuildsRoot lives inside the
+// repository tree so the task's private source copy resolves the repository
+// node_modules, and each test gets its own subdirectory under it.
 func setupBuilds(t *testing.T) (*testEnv, *buildrunner.Runner, *buildrunner.PreviewServer, string) {
 	t.Helper()
-	return setupBuildsAt(t, filepath.Join(t.TempDir(), "admin-builds"))
+	// BuildsRoot must sit under the registered site workspace (the CLI
+	// default shape): the task's private source copy resolves dependencies
+	// by walking up to site/node_modules and then the repository root,
+	// exactly like the real deployment layout does.
+	root := repoRoot(t)
+	buildsRoot := filepath.Join(root, "site", ".fuyao", "admin-builds-test",
+		fmt.Sprintf("%d", time.Now().UnixNano()))
+	if err := os.MkdirAll(buildsRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = buildrunner.MakeTreeWritable(buildsRoot)
+		if !t.Failed() {
+			_ = os.RemoveAll(buildsRoot)
+		}
+	})
+	return setupBuildsAt(t, buildsRoot)
 }
 
 // setupBuildsAt is setupBuilds with an explicit BuildsRoot.
@@ -140,12 +156,14 @@ func setupBuildsAt(t *testing.T, buildsRoot string) (*testEnv, *buildrunner.Runn
 }
 
 type buildResp struct {
-	ID           string           `json:"id"`
-	Status       string           `json:"status"`
-	Theme        selectedThemeDTO `json:"theme"`
-	Failure      *buildFailureDTO `json:"failure"`
-	InputDigests json.RawMessage  `json:"inputDigests"`
-	SiteSettings json.RawMessage  `json:"siteSettings"`
+	ID              string           `json:"id"`
+	Status          string           `json:"status"`
+	Theme           selectedThemeDTO `json:"theme"`
+	Failure         *buildFailureDTO `json:"failure"`
+	InputDigests    json.RawMessage  `json:"inputDigests"`
+	SiteSettings    json.RawMessage  `json:"siteSettings"`
+	SourceDigest    *string          `json:"sourceDigest"`
+	SourceFileCount *int64           `json:"sourceFileCount"`
 }
 
 // TestBuildPreviewClosedLoop drives the real closed loop end to end: an owner
@@ -174,6 +192,10 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	ownerClient := env.clientFor(ownerToken, ownerCSRF)
 	viewerClient := env.clientFor(viewerToken, viewerCSRF)
 	outsiderClient := env.clientFor(outsiderToken, outsiderCSRF)
+
+	// Baseline the registered theme workspace before any build runs: the
+	// whole point of task workspaces is that these trees never change.
+	baseline := workspaceBaseline(t, repoRoot(t))
 
 	// Viewer cannot trigger builds; a site without selection gets a 422.
 	if status, _, _ := viewerClient.do("POST", "/api/v1/sites/"+site.Site.ID.String()+"/builds", nil, nil); status != http.StatusForbidden {
@@ -420,7 +442,56 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 		}
 		anonResp.Body.Close()
 	}
+
+	// The registered source and its shared working trees are byte-identical
+	// to the pre-build baseline: tasks wrote only inside their own
+	// directories.
+	assertWorkspaceUnchanged(t, repoRoot(t), baseline)
+
+	// The task recorded its full source-copy identity, broader than the
+	// theme.json manifest digest.
+	if final.SourceDigest == nil || final.SourceFileCount == nil || *final.SourceFileCount < 10 {
+		t.Fatalf("task missing source-copy identity: %+v", final.SourceDigest)
+	}
 	_ = previews
+}
+
+// workspaceBaseline digests the theme's shared trees that tasks must never
+// touch: sources, configs, the fresh snapshot staging area, the build
+// output, and the build context.
+func workspaceBaseline(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, rel := range []string{
+		"theme.json", "package.json", "src", "scripts", "config", "static", "fixtures",
+		filepath.Join(".fuyao", "build-context.json"),
+		filepath.Join(".fuyao", "build-inputs", "current"),
+		"build",
+	} {
+		path := filepath.Join(root, "site", rel)
+		if _, err := os.Stat(path); err != nil {
+			out[rel] = "absent"
+			continue
+		}
+		digest, err := buildrunner.TreeDigest(path)
+		if err != nil {
+			t.Fatalf("digest baseline %s: %v", rel, err)
+		}
+		out[rel] = digest
+	}
+	return out
+}
+
+// assertWorkspaceUnchanged re-digests the baselined trees and requires exact
+// equality.
+func assertWorkspaceUnchanged(t *testing.T, root string, baseline map[string]string) {
+	t.Helper()
+	fresh := workspaceBaseline(t, root)
+	for rel, want := range baseline {
+		if got := fresh[rel]; got != want {
+			t.Fatalf("theme workspace tree %q changed across builds", rel)
+		}
+	}
 }
 
 // readAll drains and closes a response body.

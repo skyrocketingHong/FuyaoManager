@@ -57,6 +57,8 @@ type buildDTO struct {
 	CreatedAt              string           `json:"createdAt"`
 	StartedAt              *string          `json:"startedAt"`
 	FinishedAt             *string          `json:"finishedAt"`
+	SourceDigest           *string          `json:"sourceDigest"`
+	SourceFileCount        *int64           `json:"sourceFileCount"`
 }
 
 func toBuildDTO(b model.Build) buildDTO {
@@ -89,6 +91,10 @@ func toBuildDTO(b model.Build) buildDTO {
 		dto.InputDigests = b.InputDigests
 	} else {
 		dto.InputDigests = json.RawMessage("null")
+	}
+	if b.SourceDigest != "" {
+		dto.SourceDigest = &b.SourceDigest
+		dto.SourceFileCount = &b.SourceFileCount
 	}
 	if b.StartedAt != nil {
 		s := b.StartedAt.UTC().Format(timeFormat)

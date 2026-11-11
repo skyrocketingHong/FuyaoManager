@@ -879,6 +879,14 @@ components:
         inputDigests:
           type: object
           description: The three input digests recorded by the theme preparation flow on success (content, site config, theme config).
+        sourceDigest:
+          type: string
+          nullable: true
+          description: Aggregate SHA-256 over the task's private source copy (every copied file's path and digest, sorted) once the copy is materialized; broader than the manifest digest, which covers theme.json only.
+        sourceFileCount:
+          type: integer
+          nullable: true
+          description: Number of source files the task's private copy recorded.
         createdAt: { type: string, format: date-time }
         startedAt: { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }

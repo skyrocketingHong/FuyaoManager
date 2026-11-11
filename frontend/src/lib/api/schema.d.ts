@@ -349,6 +349,10 @@ export interface components {
             failure?: components["schemas"]["BuildFailure"];
             /** @description The three input digests recorded by the theme preparation flow on success (content, site config, theme config). */
             inputDigests?: Record<string, never>;
+            /** @description Aggregate SHA-256 over the task's private source copy (every copied file's path and digest, sorted) once the copy is materialized; broader than the manifest digest, which covers theme.json only. */
+            sourceDigest?: string | null;
+            /** @description Number of source files the task's private copy recorded. */
+            sourceFileCount?: number | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

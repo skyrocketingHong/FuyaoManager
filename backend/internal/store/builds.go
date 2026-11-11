@@ -23,16 +23,18 @@ type BuildStore struct {
 const buildColumns = `b.id, b.site_id, b.requested_by, b.theme_row_id, b.theme_id, b.theme_version,
 	b.manifest_digest, b.theme_config, b.site_settings, b.site_settings_revision,
 	b.theme_selection_revision, b.status, b.failure, b.artifact_path, b.input_digests,
-	b.created_at, b.started_at, b.finished_at`
+	b.source_digest, b.source_file_count, b.created_at, b.started_at, b.finished_at`
 
 func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	var b model.Build
 	var failure []byte
 	var artifactPath *string
+	var sourceDigest *string
+	var sourceFileCount *int64
 	err := scan(&b.ID, &b.SiteID, &b.RequestedBy, &b.ThemeRowID, &b.ThemeID, &b.ThemeVersion,
 		&b.ManifestDigest, &b.ThemeConfig, &b.SiteSettings, &b.SiteSettingsRevision,
 		&b.ThemeSelectionRevision, &b.Status, &failure, &artifactPath, &b.InputDigests,
-		&b.CreatedAt, &b.StartedAt, &b.FinishedAt)
+		&sourceDigest, &sourceFileCount, &b.CreatedAt, &b.StartedAt, &b.FinishedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Build{}, ErrNotFound
 	}
@@ -41,6 +43,12 @@ func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	}
 	if artifactPath != nil {
 		b.ArtifactPath = *artifactPath
+	}
+	if sourceDigest != nil {
+		b.SourceDigest = *sourceDigest
+	}
+	if sourceFileCount != nil {
+		b.SourceFileCount = *sourceFileCount
 	}
 	if len(failure) > 0 {
 		var f model.BuildFailure
@@ -295,4 +303,13 @@ func (s *BuildStore) GetPreviewTarget(ctx context.Context, buildID uuid.UUID) (s
 func (s *BuildStore) Get(ctx context.Context, buildID uuid.UUID) (model.Build, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+buildColumns+` FROM site_builds b WHERE b.id = $1`, buildID)
 	return scanBuildRow(row.Scan)
+}
+
+// UpdateSourceDigest records the task's private source-copy identity: the
+// aggregate digest over every copied file and the copied file count.
+func (s *BuildStore) UpdateSourceDigest(ctx context.Context, buildID uuid.UUID, aggregateDigest string, fileCount int) error {
+	_, err := s.pool.Exec(ctx,
+		`UPDATE site_builds SET source_digest = $2, source_file_count = $3 WHERE id = $1`,
+		buildID, aggregateDigest, fileCount)
+	return err
 }

@@ -42,6 +42,8 @@ type Build struct {
 	SiteSettingsRevision   int64
 	ThemeSelectionRevision int64
 	Status                 string
+	SourceDigest           string
+	SourceFileCount        int64
 	Failure                *BuildFailure
 	ArtifactPath           string
 	InputDigests           json.RawMessage
