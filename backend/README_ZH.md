@@ -17,6 +17,7 @@ FuyaoHomepage 内容管理系统的 Go 后端：真实 PostgreSQL 持久化、CL
 - 主题登记、快照构建、私有预览、发布与回滚按 T3-a/b1/b2 工作包交付（见 `admin/ROADMAP.md`）。
 - 可选托管构建后的管理台静态产物（`FUYAO_ADMIN_UI_DIR`），带受限 CSP 与 SPA fallback。
 - **唯一内容权威源**（`internal/content` + `/api/v1/sites/{siteId}/...`）：Markdown 文章 CRUD（frontmatter 字段与主题索引生成器消费的完全一致、`draft` 即公开输出门控、基于摘要的 If-Match、`%2F` 编码的 category/slug 路径）、友链文档、社交链接、可视化 site.yaml 配置（资料/仓库/SEO/服务，AMap 安全码只写不读）。生产模式构建消费按站点内容/配置/favicon 根目录——冻结快照反映 API 编辑，草稿绝不进入快照。
+- **相册与足迹**：照片上传（按字节嗅探类型、40 MiB 上限、服务端受控 `yyyy/mm/dd` 路径）经站点主题自身索引器异步处理 EXIF/缩略图（`site_media_tasks` 持久化、带失败记录与重启恢复），按年相册元数据编辑（标题/说明/替代文本/排序，按 filename 配对），引用检查式删除（仍被生效或可回滚发布冻结元数据引用的照片以 `photo_in_use` 拒绝），以及足迹点位文档（双语名称、GCJ-02 边界、city/spot 类型、YYYYMMDD 日期、唯一 id）支撑控制台的地图选点。
 
 ## 环境要求
 

@@ -27,6 +27,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/mediatask"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
@@ -281,6 +282,24 @@ func runServe(ctx context.Context) error {
 		}
 	}()
 
+	// Asynchronous media processing (album EXIF + thumbnails) reuses the
+	// site theme's own Node scripts against the site content tree.
+	mediaRunner := mediatask.NewRunner(mediatask.Config{
+		Tasks:  st.MediaTasks,
+		Themes: st.Themes,
+		ContentRoots: func(siteID uuid.UUID) (string, string, string, error) {
+			contentRoot := contentStore.ContentRoot(siteID)
+			return filepath.Join(contentRoot, "albums", "photos"),
+				filepath.Join(contentRoot, "albums", "thumbnails"),
+				filepath.Join(contentRoot, "albums", "metadata"), nil
+		},
+		Logger: logger,
+	})
+	if err := mediaRunner.Start(ctx); err != nil {
+		return fmt.Errorf("start media task runner: %w", err)
+	}
+	defer mediaRunner.Stop()
+
 	// The publish pipeline seals succeeded builds into per-site release
 	// directories and atomically switches the live release; published origins
 	// are per-site loopback listeners serving the current release. Publishing
@@ -320,6 +339,8 @@ func runServe(ctx context.Context) error {
 		Provisioner:      provisioner,
 		Edge:             edgeMgr,
 		Content:          contentStore,
+		MediaTasks:       st.MediaTasks,
+		ReleasesRoot:     releasesRoot,
 	}, logger)
 
 	if cfg.AdminUIDir != "" {

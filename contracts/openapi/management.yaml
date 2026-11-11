@@ -1470,6 +1470,401 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/albums:
+    get:
+      operationId: getAlbums
+      tags: [Content]
+      summary: Read the album index
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The album index (years, totals, devices) plus digest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumIndexEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/albums/photos:
+    post:
+      operationId: uploadAlbumPhoto
+      tags: [Content]
+      summary: Upload one photo original
+      description: |
+        Accepts a multipart form with one `file` field (jpeg, png, or webp up
+        to 40 MiB; the content type is sniffed from the bytes). The original
+        is stored under a server-controlled `yyyy/mm/dd/` path and the album
+        indexing task is queued; poll the task list for EXIF/thumbnail
+        results.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '202':
+          description: Stored; processing queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumUploadAccepted'
+        '400':
+          description: Not a valid multipart upload or unsupported type (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/RequestBodyTooLarge'
+        '503':
+          description: Media processing is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/albums/process:
+    post:
+      operationId: processAlbums
+      tags: [Content]
+      summary: Re-run album indexing
+      description: Queues the album indexing task again (for example to retry a failed run).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '202':
+          description: Task queued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumUploadAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Media processing is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/albums/tasks:
+    get:
+      operationId: listMediaTasks
+      tags: [Content]
+      summary: List media processing tasks
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Recent tasks with statuses and failure reasons.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaTaskList'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/albums/{year}:
+    get:
+      operationId: getAlbumYear
+      tags: [Content]
+      summary: Read one year album
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: year
+          in: path
+          required: true
+          schema: { type: string, pattern: '^\d{4}$' }
+      responses:
+        '200':
+          description: The year's photos plus digest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumYearEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putAlbumYear
+      tags: [Content]
+      summary: Edit one year album
+      description: |
+        Edits photo titles, descriptions, alt text, and the ordering under
+        If-Match semantics. Identity fields (path, variants, EXIF) are
+        importer-owned; the photo set itself may not change here.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: year
+          in: path
+          required: true
+          schema: { type: string, pattern: '^\d{4}$' }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlbumYearEnvelope'
+      responses:
+        '200':
+          description: The saved year document with its new digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlbumYearEnvelope'
+        '400':
+          description: Validation failed (`validation_error`, `invalid_if_match`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The document changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/albums/{year}/{filename}:
+    delete:
+      operationId: deleteAlbumPhoto
+      tags: [Content]
+      summary: Delete one photo
+      description: |
+        Deletes the original, its thumbnails, and the metadata entry after
+        verifying the digest ETag. Photos still referenced by any live or
+        rollback-able release's frozen metadata are refused (`photo_in_use`).
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: year
+          in: path
+          required: true
+          schema: { type: string, pattern: '^\d{4}$' }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '204':
+          description: Photo deleted.
+        '400':
+          description: Malformed request (`invalid_if_match`, `invalid_content_path`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The photo is still referenced by a live or rollback-able release (`photo_in_use`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '412':
+          description: The document changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/content/footprints:
+    get:
+      operationId: getFootprints
+      tags: [Content]
+      summary: Read the footprint points
+      description: The cities/places document; coordinates are GCJ-02 (AMap display coordinates).
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The footprints document plus digest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FootprintsEnvelope'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putFootprints
+      tags: [Content]
+      summary: Replace the footprint points
+      description: Validates the schema (bilingual names, GCJ-02 bounds, city/spot types, YYYYMMDD dates, unique ids) and writes footprints.yaml under If-Match semantics.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FootprintsEnvelope'
+      responses:
+        '200':
+          description: The saved document with its new digest.
+          headers:
+            ETag:
+              description: Quoted digest ETag for the next save.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FootprintsEnvelope'
+        '400':
+          description: Schema validation failed (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: The document changed after it was read (`precondition_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/builds:
     post:
       operationId: createBuild
@@ -2510,6 +2905,7 @@ components:
             - content_unavailable
             - content_exists
             - invalid_content_path
+            - photo_in_use
             - internal_error
         detail:
           type: string
@@ -2812,6 +3208,157 @@ components:
             githubProxyUrl: { type: string }
             analyticsProxyUrl: { type: string }
             codingActivityProxyUrl: { type: string }
+
+    AlbumIndexEnvelope:
+      type: object
+      required: [index, digest]
+      properties:
+        index:
+          type: object
+          required: [schemaVersion, totalPhotos, years, devices]
+          properties:
+            schemaVersion: { type: integer }
+            generatedAt: { type: string }
+            totalPhotos: { type: integer }
+            years:
+              type: array
+              items: { type: string }
+            devices:
+              type: array
+        digest: { type: string }
+
+    AlbumUploadAccepted:
+      type: object
+      required: [taskId]
+      properties:
+        path:
+          type: string
+          description: Stored original path (yyyy/mm/dd/name.ext); present for uploads.
+        taskId:
+          type: string
+
+    MediaTask:
+      type: object
+      required: [id, kind, status, createdAt]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [album-index] }
+        status: { type: string, enum: [queued, running, succeeded, failed] }
+        failure:
+          type: object
+          properties:
+            stage: { type: string }
+            message: { type: string }
+        createdAt: { type: string }
+        finishedAt: { type: string }
+
+    MediaTaskList:
+      type: object
+      required: [tasks]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/MediaTask'
+
+    AlbumPhotoEntry:
+      type: object
+      required: [filename, path]
+      properties:
+        filename: { type: string }
+        path: { type: string }
+        date: { type: string }
+        coordType: { type: string }
+        make: { type: string }
+        model: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        variants:
+          type: array
+          items:
+            type: object
+            properties:
+              path: { type: string }
+              width: { type: integer }
+              height: { type: integer }
+              type: { type: string }
+        title: { type: string }
+        description: { type: string }
+        alt: { type: string }
+
+    AlbumYearEnvelope:
+      type: object
+      required: [year, digest]
+      properties:
+        year:
+          type: object
+          required: [year, photos]
+          properties:
+            year: { type: integer }
+            photos:
+              type: array
+              items:
+                $ref: '#/components/schemas/AlbumPhotoEntry'
+        digest: { type: string }
+
+    FootprintName:
+      type: object
+      required: [zh, en]
+      properties:
+        zh: { type: string }
+        en: { type: string }
+
+    FootprintCoordinates:
+      type: object
+      required: [lng, lat]
+      properties:
+        lng: { type: number }
+        lat: { type: number }
+
+    FootprintPlace:
+      type: object
+      required: [id, name, coordinates, type, visitDate]
+      properties:
+        id: { type: string }
+        name:
+          $ref: '#/components/schemas/FootprintName'
+        coordinates:
+          $ref: '#/components/schemas/FootprintCoordinates'
+        type: { type: string, enum: [spot] }
+        visitDate: { type: string, pattern: '^\\d{8}$' }
+        description: { type: string }
+
+    FootprintCity:
+      type: object
+      required: [id, name, coordinates, type, visitDate]
+      properties:
+        id: { type: string }
+        name:
+          $ref: '#/components/schemas/FootprintName'
+        coordinates:
+          $ref: '#/components/schemas/FootprintCoordinates'
+        type: { type: string, enum: [city] }
+        adcode: { type: string }
+        visitDate: { type: string, pattern: '^\\d{8}$' }
+        description: { type: string }
+        places:
+          type: array
+          items:
+            $ref: '#/components/schemas/FootprintPlace'
+
+    FootprintsEnvelope:
+      type: object
+      required: [footprints, digest]
+      properties:
+        footprints:
+          type: object
+          required: [cities]
+          properties:
+            cities:
+              type: array
+              items:
+                $ref: '#/components/schemas/FootprintCity'
+        digest: { type: string }
 
     Site:
       type: object

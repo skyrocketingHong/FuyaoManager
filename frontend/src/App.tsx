@@ -13,6 +13,8 @@ import ThemePage from './pages/sites/ThemePage';
 import PostsPage from './pages/sites/PostsPage';
 import FriendsPage from './pages/sites/FriendsPage';
 import SiteConfigPage from './pages/sites/SiteConfigPage';
+import AlbumsPage from './pages/sites/AlbumsPage';
+import FootprintsPage from './pages/sites/FootprintsPage';
 import BuildsPage from './pages/sites/BuildsPage';
 import ReleasesPage from './pages/sites/ReleasesPage';
 
@@ -39,6 +41,8 @@ export default function App() {
 			<Route path="/sites/:siteId/config" element={<SiteConfigPage />} />
 			<Route path="/sites/:siteId/posts" element={<PostsPage />} />
 			<Route path="/sites/:siteId/friends" element={<FriendsPage />} />
+			<Route path="/sites/:siteId/albums" element={<AlbumsPage />} />
+			<Route path="/sites/:siteId/footprints" element={<FootprintsPage />} />
 			<Route path="/sites/:siteId/theme" element={<ThemePage />} />
 			<Route path="/sites/:siteId/builds" element={<BuildsPage />} />
 			<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />

@@ -29,6 +29,13 @@ export type SocialLink = components['schemas']['SocialLink'];
 export type SocialLinksEnvelope = components['schemas']['SocialLinksEnvelope'];
 export type SiteConfig = components['schemas']['SiteConfig'];
 export type SiteConfigEnvelope = components['schemas']['SiteConfigEnvelope'];
+export type AlbumIndex = components['schemas']['AlbumIndexEnvelope']['index'];
+export type AlbumPhotoEntry = components['schemas']['AlbumPhotoEntry'];
+export type AlbumYear = components['schemas']['AlbumYearEnvelope']['year'];
+export type MediaTask = components['schemas']['MediaTask'];
+export type FootprintCity = components['schemas']['FootprintCity'];
+export type FootprintPlace = components['schemas']['FootprintPlace'];
+export type FootprintsDoc = { cities: FootprintCity[] };
 
 export function siteRole(site: Site): 'owner' | 'editor' | 'viewer' {
 	return site.role;
@@ -328,5 +335,107 @@ export async function putSiteConfig(
 		body: body as never,
 		etag: digest
 	});
+	return data;
+}
+
+// --- albums ---
+
+export async function getAlbums(siteId: string): Promise<{ index: AlbumIndex; digest: string }> {
+	const { data } = await api<{ index: AlbumIndex; digest: string }>(
+		'GET',
+		`/api/v1/sites/${siteId}/albums`
+	);
+	return data;
+}
+
+export async function getAlbumYear(
+	siteId: string,
+	year: string
+): Promise<{ year: AlbumYear; digest: string }> {
+	const { data } = await api<{ year: AlbumYear; digest: string }>(
+		'GET',
+		`/api/v1/sites/${siteId}/albums/${year}`
+	);
+	return data;
+}
+
+export async function putAlbumYear(
+	siteId: string,
+	year: string,
+	photos: Array<{ filename: string; title?: string; description?: string; alt?: string }>,
+	digest: string
+): Promise<{ year: AlbumYear; digest: string }> {
+	const { data } = await api<{ year: AlbumYear; digest: string }>(
+		'PUT',
+		`/api/v1/sites/${siteId}/albums/${year}`,
+		{ body: { year: { photos } } as never, etag: digest }
+	);
+	return data;
+}
+
+/** Uploads one original; the returned task id tracks EXIF/thumbnail processing. */
+export async function uploadAlbumPhoto(
+	siteId: string,
+	file: File
+): Promise<{ path: string; taskId: string }> {
+	const form = new FormData();
+	form.append('file', file);
+	const { data } = await api<{ path: string; taskId: string }>(
+		'POST',
+		`/api/v1/sites/${siteId}/albums/photos`,
+		{ body: form, multipart: true }
+	);
+	return data;
+}
+
+export async function processAlbums(siteId: string): Promise<{ taskId: string }> {
+	const { data } = await api<{ taskId: string }>('POST', `/api/v1/sites/${siteId}/albums/process`, {
+		body: {}
+	});
+	return data;
+}
+
+export async function listMediaTasks(siteId: string): Promise<MediaTask[]> {
+	const { data } = await api<{ tasks: MediaTask[] }>('GET', `/api/v1/sites/${siteId}/albums/tasks`);
+	return data.tasks;
+}
+
+export async function deleteAlbumPhoto(
+	siteId: string,
+	year: string,
+	filename: string,
+	digest: string
+): Promise<void> {
+	await api<void>(
+		'DELETE',
+		`/api/v1/sites/${siteId}/albums/${year}/${encodeURIComponent(filename)}`,
+		{
+			etag: digest
+		}
+	);
+}
+
+// --- footprints ---
+
+export async function getFootprints(
+	siteId: string
+): Promise<{ footprints: FootprintsDoc; digest: string }> {
+	const { data } = await api<{ footprints: FootprintsDoc; digest: string }>(
+		'GET',
+		`/api/v1/sites/${siteId}/content/footprints`
+	);
+	return data;
+}
+
+export async function putFootprints(
+	siteId: string,
+	footprints: FootprintsDoc,
+	digest: string
+): Promise<{ footprints: FootprintsDoc; digest: string }> {
+	const { data } = await api<{ footprints: FootprintsDoc; digest: string }>(
+		'PUT',
+		`/api/v1/sites/${siteId}/content/footprints`,
+		{ body: { footprints }, etag: digest }
+	);
 	return data;
 }

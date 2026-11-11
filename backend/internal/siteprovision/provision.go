@@ -161,7 +161,7 @@ func emptyAlbumIndex() []byte {
 		"schemaVersion": 1,
 		"generatedAt":   time.Now().UTC().Format(time.RFC3339),
 		"totalPhotos":   0,
-		"years":         []string{},
+		"years":         []int{},
 		"devices":       []any{},
 	}
 	data, _ := json.MarshalIndent(doc, "", "  ")

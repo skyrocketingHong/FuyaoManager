@@ -17,6 +17,7 @@ Verified in this package:
 - Theme registry, snapshot builds, private previews, publish and rollback as delivered by work packages T3-a/b1/b2 (see `admin/ROADMAP.md`).
 - Optional static serving of the built admin console (`FUYAO_ADMIN_UI_DIR`) with a restrictive CSP and SPA fallback.
 - **Single content authority** (`internal/content` + `/api/v1/sites/{siteId}/...`): markdown posts CRUD (frontmatter fields exactly as the theme's index generator consumes them, `draft` as the public-output gate, digest-based If-Match, `%2F`-encoded category/slug paths), the friends document, social links, and the visual site.yaml configuration (profile, repository, SEO, services) with the AMap security code as a write-only secret. Production-mode builds consume the per-site content/config/favicon roots — the frozen snapshot reflects API edits, drafts never reach it.
+- **Albums and footprints**: photo uploads (type sniffed from bytes, 40 MiB cap, server-controlled `yyyy/mm/dd` paths) with asynchronous EXIF/thumbnail processing through the site theme's own indexer (persisted `site_media_tasks` with failure records and restart recovery), year-album metadata editing (title/description/alt/ordering paired by filename), reference-checked deletion (photos still listed by any live or rollback-able release's frozen metadata are refused with `photo_in_use`), and the footprint points document (bilingual names, GCJ-02 bounds, city/spot types, YYYYMMDD dates, unique ids) backing the map picker in the console.
 
 ## Requirements
 

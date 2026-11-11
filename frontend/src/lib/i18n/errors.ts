@@ -19,6 +19,7 @@ const codeToKey: Record<string, MessageKey> = {
 	content_unavailable: 'error.contentUnavailable',
 	content_exists: 'error.contentExists',
 	invalid_content_path: 'error.validation',
+	photo_in_use: 'error.photoInUse',
 	provisioning_unavailable: 'error.provisioningUnavailable',
 	unauthenticated: 'error.unauthenticated',
 	forbidden: 'error.forbidden',

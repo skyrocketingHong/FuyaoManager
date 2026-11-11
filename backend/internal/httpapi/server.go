@@ -6,6 +6,8 @@ package httpapi
 import (
 	"context"
 	"crypto/sha256"
+	"io"
+
 	"crypto/subtle"
 	"log/slog"
 	"net/http"
@@ -42,6 +44,8 @@ type Config struct {
 	Provisioner      SiteProvisioner
 	Edge             EdgeManager
 	Content          ContentStore
+	MediaTasks       *store.MediaTaskStore
+	ReleasesRoot     string
 }
 
 // SiteProvisioner provisions the per-site on-disk tree at site creation.
@@ -71,6 +75,13 @@ type ContentStore interface {
 	SaveSocialLinks(siteID uuid.UUID, links []content.SocialLink, expectedDigest string) ([]content.SocialLink, string, error)
 	GetSiteConfig(siteID uuid.UUID) (doc content.SiteConfigDoc, securitySet bool, digest string, err error)
 	SaveSiteConfig(siteID uuid.UUID, doc content.SiteConfigDoc, securityCode *string, expectedDigest string) (content.SiteConfigDoc, string, error)
+	GetAlbumIndex(siteID uuid.UUID) (content.AlbumIndex, string, error)
+	GetAlbumYear(siteID uuid.UUID, year string) (content.AlbumYear, string, error)
+	SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest string, edit func(*content.AlbumYear) error) (content.AlbumYear, string, error)
+	StoreUpload(siteID uuid.UUID, reader io.Reader, sizeHint int64) (string, error)
+	DeleteAlbumPhoto(siteID uuid.UUID, year, filename string, releaseJSONs [][]byte, expectedDigest string) error
+	GetFootprints(siteID uuid.UUID) (content.FootprintsDoc, string, error)
+	SaveFootprints(siteID uuid.UUID, doc content.FootprintsDoc, expectedDigest string) (content.FootprintsDoc, string, error)
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
@@ -88,6 +99,8 @@ type API struct {
 	provisioner      SiteProvisioner
 	edge             EdgeManager
 	content          ContentStore
+	mediaTasks       *store.MediaTaskStore
+	releasesRoot     string
 	exchangeLimiter  *exchangeLimiter
 }
 
@@ -152,6 +165,19 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireAuth(a.contentRoute(a.handleGetSiteConfig))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
 
+		// Albums and footprints: uploads with async processing tasks,
+		// metadata editing, reference-checked deletion, and the footprint
+		// point document.
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums", "getAlbums", a.requireAuth(a.contentRoute(a.handleGetAlbums))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/albums/photos", "uploadAlbumPhoto", a.requireAuth(a.withCSRF(a.contentRoute(a.handleUploadAlbumPhoto)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/albums/process", "processAlbums", a.requireAuth(a.withCSRF(a.contentRoute(a.handleEnqueueAlbumTask)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums/tasks", "listMediaTasks", a.requireAuth(a.contentRoute(a.handleListMediaTasks))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums/{year}", "getAlbumYear", a.requireAuth(a.contentRoute(a.handleGetAlbumYear))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/albums/{year}", "putAlbumYear", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutAlbumYear)))},
+		{http.MethodDelete, "/api/v1/sites/{siteId}/albums/{year}/{filename}", "deleteAlbumPhoto", a.requireAuth(a.withCSRF(a.contentRoute(a.handleDeleteAlbumPhoto)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/footprints", "getFootprints", a.requireAuth(a.contentRoute(a.handleGetFootprints))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/footprints", "putFootprints", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutFootprints)))},
+
 		// Build-preview tasks: creation freezes the version view; the runner
 		// executes and persists state transitions that stay queryable here.
 		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireAuth(a.withCSRF(a.handleCreateBuild))},
@@ -189,6 +215,8 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		provisioner:      cfg.Provisioner,
 		edge:             cfg.Edge,
 		content:          cfg.Content,
+		mediaTasks:       cfg.MediaTasks,
+		releasesRoot:     cfg.ReleasesRoot,
 		exchangeLimiter:  newExchangeLimiter(),
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))

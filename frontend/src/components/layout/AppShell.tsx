@@ -53,6 +53,8 @@ type SiteSection =
 	| 'theme'
 	| 'posts'
 	| 'friends'
+	| 'albums'
+	| 'footprints'
 	| 'builds'
 	| 'releases';
 
@@ -62,6 +64,8 @@ const siteSections: { key: SiteSection; path: string }[] = [
 	{ key: 'config', path: '/config' },
 	{ key: 'posts', path: '/posts' },
 	{ key: 'friends', path: '/friends' },
+	{ key: 'albums', path: '/albums' },
+	{ key: 'footprints', path: '/footprints' },
 	{ key: 'theme', path: '/theme' },
 	{ key: 'builds', path: '/builds' },
 	{ key: 'releases', path: '/releases' }

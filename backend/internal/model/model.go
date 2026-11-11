@@ -99,6 +99,12 @@ type Site struct {
 	UpdatedAt        time.Time
 }
 
+// MediaTaskFailure records why an asynchronous media task broke.
+type MediaTaskFailure struct {
+	Stage   string `json:"stage"`
+	Message string `json:"message"`
+}
+
 // ProvisionFailure records why a site's directory provisioning broke, with the
 // exact stage that failed so the UI can offer an informed retry.
 type ProvisionFailure struct {

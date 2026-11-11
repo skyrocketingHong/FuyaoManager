@@ -41,6 +41,8 @@ interface RequestOptions {
 	body?: unknown;
 	/** Exact ETag from a prior GET, sent as If-Match. */
 	etag?: string;
+	/** Send the body as multipart/form-data (fetch sets the boundary). */
+	multipart?: boolean;
 }
 
 export async function api<T>(
@@ -49,7 +51,7 @@ export async function api<T>(
 	opts: RequestOptions = {}
 ): Promise<ApiResult<T>> {
 	const headers: Record<string, string> = {};
-	if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+	if (opts.body !== undefined && !opts.multipart) headers['Content-Type'] = 'application/json';
 	if (opts.etag !== undefined) headers['If-Match'] = opts.etag;
 	if (csrfToken !== null && method !== 'GET' && method !== 'HEAD') {
 		headers['X-CSRF-Token'] = csrfToken;
@@ -59,7 +61,12 @@ export async function api<T>(
 		method,
 		headers,
 		credentials: 'same-origin',
-		body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined
+		body:
+			opts.body !== undefined
+				? opts.multipart
+					? (opts.body as FormData)
+					: JSON.stringify(opts.body)
+				: undefined
 	});
 	const etag = res.headers.get('ETag');
 
