@@ -1,0 +1,6 @@
+#!/bin/sh
+# Operator-controlled edge apply for fuyao-admin: validate the full Caddyfile
+# (including the managed snippet), then reload Caddy. Fixed arguments only.
+set -e
+/usr/bin/caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+/usr/bin/caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile

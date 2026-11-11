@@ -1,0 +1,24 @@
+[Unit]
+Description=Fuyao management backend
+After=network-online.target postgresql.service tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=fuyao-admin
+Group=fuyao-admin
+WorkingDirectory=/srv/fuyao-admin/current
+EnvironmentFile=/srv/fuyao-admin/etc/db.env
+EnvironmentFile=/srv/fuyao-admin/etc/config.env
+Environment=PATH=/opt/fuyao/node/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=NODE_OPTIONS=--max-old-space-size=1300
+ExecStart=/srv/fuyao-admin/current/fuyao-admin serve
+Restart=on-failure
+RestartSec=3
+MemoryMax=1750M
+ProtectSystem=full
+ProtectHome=yes
+ReadWritePaths=/srv/fuyao-admin/data /etc/caddy/fuyao-admin
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
