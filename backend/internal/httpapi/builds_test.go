@@ -282,30 +282,35 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	originBase := link.URL[:strings.Index(link.URL, "/__preview__/")]
 
 	// Open the issued URL exactly as a browser would: the entry swaps the
-	// token for a cookie (no follow needed there), then the root and its
-	// assets are fetched with a following client carrying the cookie.
+	// Redeem the entry URL exactly as a browser would: one shared cookie
+	// jar and default redirect following store the origin's uniquely named
+	// authorization cookie (HttpOnly, Lax) — never a manually re-attached
+	// fixed-name cookie. The entry response attributes are asserted first.
 	noFollow := &http.Client{Timeout: 15 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		}}
-	jar, _ := cookiejar.New(nil)
-	browser := &http.Client{Timeout: 15 * time.Second, Jar: jar}
-	resp, err := noFollow.Get(link.URL)
-	if err != nil || resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("preview entry: err=%v status=%v", err, resp)
+	entryResp, err := noFollow.Get(link.URL)
+	if err != nil || entryResp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("preview entry: err=%v status=%v", err, entryResp)
 	}
-	var cookies []*http.Cookie
-	for _, c := range resp.Cookies() {
-		if c.Name == "fuyao_preview_token" && c.HttpOnly {
-			cookies = append(cookies, c)
+	var setCookie *http.Cookie
+	for _, c := range entryResp.Cookies() {
+		if strings.HasPrefix(c.Name, "fuyao_preview_") {
+			setCookie = c
 		}
 	}
-	if len(cookies) == 0 {
-		t.Fatal("preview entry did not set the HttpOnly token cookie")
+	entryResp.Body.Close()
+	if setCookie == nil || !setCookie.HttpOnly || setCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("preview entry cookie must be uniquely named, HttpOnly, and Lax: %+v", setCookie)
 	}
-	resp.Body.Close()
 
-	rootResp := getWithCookie(t, browser, originBase+"/", cookies[0].Value)
+	jar, _ := cookiejar.New(nil)
+	browser := &http.Client{Timeout: 15 * time.Second, Jar: jar}
+	rootResp, err := browser.Get(link.URL)
+	if err != nil || rootResp.StatusCode != http.StatusOK {
+		t.Fatalf("preview open: err=%v status=%v", err, rootResp)
+	}
 	pageBytes := readAll(t, rootResp)
 	if !strings.Contains(pageBytes, "Build Site 标记名") {
 		t.Fatalf("preview page does not carry the DB site name")
@@ -317,27 +322,30 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	// Root-absolute assets referenced by the page resolve on the origin.
 	asset := extractRootAsset(t, pageBytes)
 	if asset != "" {
-		assetResp := getWithCookie(t, browser, originBase+asset, cookies[0].Value)
-		if assetResp.StatusCode != http.StatusOK {
-			t.Fatalf("root-absolute asset %s: status %d", asset, assetResp.StatusCode)
+		assetResp, err := browser.Get(originBase + asset)
+		if err != nil || assetResp.StatusCode != http.StatusOK {
+			t.Fatalf("root-absolute asset %s: err=%v status=%d", asset, err, assetResp.StatusCode)
 		}
 		assetResp.Body.Close()
 	}
 	// Deep prerendered page and data URL conventions serve real content;
 	// a client-only route falls back to the declared SPA fallback file.
-	blogResp := getWithCookie(t, browser, originBase+"/blog/", cookies[0].Value)
+	blogResp, err := browser.Get(originBase + "/blog/")
+	if err != nil {
+		t.Fatalf("deep blog page fetch: %v", err)
+	}
 	blogBody := readAll(t, blogResp)
 	if blogResp.StatusCode != http.StatusOK || !strings.Contains(blogBody, "博客") {
 		t.Fatalf("deep blog page missing on preview origin: status %v", blogResp.StatusCode)
 	}
-	dataResp := getWithCookie(t, browser, originBase+"/posts/all.json", cookies[0].Value)
-	if dataResp.StatusCode != http.StatusOK {
-		t.Fatalf("posts/all.json (posts URL convention) missing: status %v", dataResp.StatusCode)
+	dataResp, err := browser.Get(originBase + "/posts/all.json")
+	if err != nil || dataResp.StatusCode != http.StatusOK {
+		t.Fatalf("posts/all.json (posts URL convention) missing: err=%v status=%v", err, dataResp)
 	}
 	dataResp.Body.Close()
-	clientRoute := getWithCookie(t, browser, originBase+"/some/client-only/route", cookies[0].Value)
-	if clientRoute.StatusCode != http.StatusOK {
-		t.Fatalf("client-only route must hit the SPA fallback: status %v", clientRoute.StatusCode)
+	clientRoute, err := browser.Get(originBase + "/some/client-only/route")
+	if err != nil || clientRoute.StatusCode != http.StatusOK {
+		t.Fatalf("client-only route must hit the SPA fallback: err=%v status=%v", err, clientRoute)
 	}
 	readAll(t, clientRoute)
 
@@ -375,53 +383,44 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	}
 	decodeJSONBody(t, raw, &link2)
 	origin2 := link2.URL[:strings.Index(link2.URL, "/__preview__/")]
-	resp2, err := noFollow.Get(link2.URL)
-	if err != nil || resp2.StatusCode != http.StatusSeeOther {
-		t.Fatalf("second preview entry: err=%v status=%v", err, resp2)
+	// Redeem the second preview through the same browser client: its
+	// uniquely named cookie joins the shared jar without disturbing the
+	// first preview's authorization.
+	secondPage, err := browser.Get(link2.URL)
+	if err != nil || secondPage.StatusCode != http.StatusOK {
+		t.Fatalf("second preview open: err=%v status=%v", err, secondPage)
 	}
-	cookie2 := ""
-	for _, c := range resp2.Cookies() {
-		if c.Name == "fuyao_preview_token" {
-			cookie2 = c.Value
-		}
-	}
-	resp2.Body.Close()
-	secondPage := getWithCookie(t, browser, origin2+"/", cookie2)
 	if page2 := readAll(t, secondPage); !strings.Contains(page2, "Build Site 第二名") {
 		t.Fatalf("second preview shows the wrong build content")
 	}
-	// The first origin still serves the first build (no cross-contamination).
-	firstAgain := getWithCookie(t, browser, originBase+"/", cookies[0].Value)
+	// The first origin still serves the first build through the same client
+	// (no cross-contamination, no overwritten cookie).
+	firstAgain, err := browser.Get(originBase + "/")
+	if err != nil {
+		t.Fatalf("first preview re-visit: %v", err)
+	}
 	if page1 := readAll(t, firstAgain); !strings.Contains(page1, "Build Site 标记名") || strings.Contains(page1, "Build Site 第二名") {
 		t.Fatalf("first preview origin was contaminated by the second build")
 	}
-	// The first build's token is invalid on the second origin.
-	if resp, err := browser.Get(origin2 + "/__preview__/" + cookies[0].Value); err != nil || resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("cross-origin token must be rejected: err=%v status=%v", err, resp)
+	// The first build's entry token is invalid on the second origin.
+	firstToken := link.URL[strings.LastIndex(link.URL, "/")+1:]
+	crossResp, err := browser.Get(origin2 + "/__preview__/" + firstToken)
+	if err != nil || crossResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("cross-origin token must be rejected: err=%v status=%v", err, crossResp)
 	}
-	resp.Body.Close()
+	crossResp.Body.Close()
 
-	// Without a token nothing is served on any origin.
-	if resp, err := browser.Get(originBase + "/"); err != nil || resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("anonymous preview root: err=%v status=%v", err, resp)
+	// Without any cookie nothing is served on any origin: a separate
+	// cookie-less client (no jar) gets 404 everywhere.
+	bare := &http.Client{Timeout: 15 * time.Second}
+	for _, origin := range []string{originBase, origin2} {
+		anonResp, err := bare.Get(origin + "/")
+		if err != nil || anonResp.StatusCode != http.StatusNotFound {
+			t.Fatalf("anonymous preview root %s: err=%v status=%v", origin, err, anonResp)
+		}
+		anonResp.Body.Close()
 	}
-	resp.Body.Close()
 	_ = previews
-}
-
-// getWithCookie fetches with an explicit preview token cookie.
-func getWithCookie(t *testing.T, client *http.Client, url, token string) *http.Response {
-	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.AddCookie(&http.Cookie{Name: "fuyao_preview_token", Value: token})
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("GET %s: %v", url, err)
-	}
-	return resp
 }
 
 // readAll drains and closes a response body.

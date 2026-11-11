@@ -33,7 +33,17 @@ type PreviewConfig struct {
 	MaxOrigins int
 }
 
-const previewCookieName = "fuyao_preview_token"
+// previewCookiePrefix starts the per-origin authorization cookie name.
+// Browser cookies are scoped by host and path only — never by port — and
+// every preview origin shares 127.0.0.1 with Path "/", so one fixed name
+// would let a second preview overwrite the first's authorization in the same
+// cookie jar. The build id suffix keeps concurrent previews coexisting.
+const previewCookiePrefix = "fuyao_preview_"
+
+// cookieName is this origin's unique authorization cookie name.
+func (o *previewOrigin) cookieName() string {
+	return previewCookiePrefix + o.buildID.String()
+}
 
 // previewOrigin is one build's private loopback origin: its own listener,
 // its own token set. Because each build gets its own port, the theme's
@@ -186,7 +196,7 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		http.SetCookie(w, &http.Cookie{
-			Name:     previewCookieName,
+			Name:     o.cookieName(),
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
@@ -198,7 +208,7 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := ""
-	if c, err := r.Cookie(previewCookieName); err == nil {
+	if c, err := r.Cookie(o.cookieName()); err == nil {
 		token = c.Value
 	}
 	if !o.validToken(token) {
