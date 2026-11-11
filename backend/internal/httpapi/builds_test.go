@@ -176,7 +176,10 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("buildowner")
-	site, err := env.store.Sites.Create(ctx, "build-site", "Build Site 标记名", "站点描述", "zh-CN", owner.ID)
+	// defaultLocale en-US distinguishes the DB-saved value from the store's
+	// built-in zh-CN fallback: the bundle assertion below proves the setting
+	// is genuinely consumed by the locale initialization path.
+	site, err := env.store.Sites.Create(ctx, "build-site", "Build Site 标记名", "站点描述", "en-US", owner.ID)
 	if err != nil {
 		t.Fatalf("create site: %v", err)
 	}
@@ -278,6 +281,16 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	if err != nil || !strings.Contains(string(pageHTML), "Build Site 标记名") {
 		t.Fatalf("built index.html does not carry the DB site name (err=%v)", err)
 	}
+	// The DB-saved defaultLocale reaches the client bundle's inlined public
+	// config — the value the locale store consumes as its fallback default.
+	// (Minifiers may drop the quotes on identifier-safe keys, hence both
+	// forms.)
+	if !treeContainsFileContent(t, filepath.Join(buildsRoot, created.ID, "artifacts", "_app"),
+		`defaultLocale:"en-US"`) &&
+		!treeContainsFileContent(t, filepath.Join(buildsRoot, created.ID, "artifacts", "_app"),
+			`"defaultLocale":"en-US"`) {
+		t.Fatal("client bundle does not carry the DB-saved defaultLocale")
+	}
 	// Source content untouched: the fixtures content tree still has no marker.
 	fixtures, err := os.ReadFile(filepath.Join(repoRoot(t), "site", "fixtures", "content", "posts", "hello-world.md"))
 	if err == nil && strings.Contains(string(fixtures), "Build Site 标记名") {
@@ -339,6 +352,14 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	}
 	if csp := rootResp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "connect-src 'self'") {
 		t.Fatalf("preview CSP must allow same-origin data fetches: %s", csp)
+	}
+	if csp := rootResp.Header.Get("Content-Security-Policy"); !strings.Contains(csp, "https://webapi.amap.com") ||
+		!strings.Contains(csp, "img-src 'self' data: blob: https:") ||
+		!strings.Contains(csp, "worker-src 'self' blob:") {
+		t.Fatalf("preview CSP must not break the theme's map SDK, external images, or workers: %s", csp)
+	}
+	if rp := rootResp.Header.Get("Referrer-Policy"); rp != "strict-origin-when-cross-origin" {
+		t.Fatalf("preview Referrer-Policy must mirror production referrer behavior, got %q", rp)
 	}
 
 	// Root-absolute assets referenced by the page resolve on the origin.
@@ -520,6 +541,27 @@ func extractRootAsset(t *testing.T, page string) string {
 }
 
 func strPtr(v string) *string { return &v }
+
+// treeContainsFileContent reports whether any file under root contains the
+// given content snippet (used to assert bundle-inlined build-time values).
+func treeContainsFileContent(t *testing.T, root, needle string) bool {
+	t.Helper()
+	found := false
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil || found || !info.Mode().IsRegular() {
+			return err
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr == nil && strings.Contains(string(data), needle) {
+			found = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", root, err)
+	}
+	return found
+}
 
 // jsonEqualValueTest compares two JSON documents by parsed value; the task
 // row stores them through jsonb which re-serializes (indentation, key

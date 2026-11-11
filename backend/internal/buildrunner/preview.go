@@ -176,16 +176,25 @@ func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFal
 // cookie, everything else requires the cookie and serves that build's frozen
 // artifacts with real root-path semantics.
 func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// CSP allows the theme's real runtime (inline SvelteKit bootstrap, data
-	// and image fetches) while remaining a distinct origin from the
-	// management API — cross-origin responses stay unreadable to theme
-	// scripts. frame-ancestors 'none' keeps admin UIs from embedding it.
+	// CSP allows the first theme's real runtime: the inline SvelteKit
+	// bootstrap, the AMap JS SDK (webapi.amap.com) plus its WebGL blob
+	// workers, external avatars and wallpaper/tile images, and the theme's
+	// data requests (wallpaper API, AMap REST, configured proxies) — while
+	// remaining a distinct origin from the management API, so cross-origin
+	// management responses stay unreadable to theme scripts. frame-ancestors
+	// 'none' keeps admin UIs from embedding it.
 	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; "+
-			"img-src 'self' data:; font-src 'self'; connect-src 'self' data:; "+
-			"base-uri 'self'; form-action 'self'; frame-ancestors 'none'")
+		"default-src 'self'; script-src 'self' 'unsafe-inline' https://webapi.amap.com; "+
+			"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "+
+			"font-src 'self' data:; connect-src 'self' data: blob: https:; "+
+			"worker-src 'self' blob:; base-uri 'self'; form-action 'self'; "+
+			"frame-ancestors 'none'")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Referrer-Policy", "no-referrer")
+	// Match the production front end's referrer behavior (browser default:
+	// strict-origin-when-cross-origin). Domain-whitelisted services such as
+	// the AMap key see the same class of Referer they would in production;
+	// no-referrer here would unconditionally break them in previews.
+	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Cache-Control", "private, no-store")
 
 	// Token entry: exchange and redirect to the origin root.
