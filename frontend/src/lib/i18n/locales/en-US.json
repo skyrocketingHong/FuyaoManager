@@ -116,5 +116,8 @@
 	"releases.buildColumn": "Build",
 	"releases.themeColumn": "Theme",
 	"releases.roleNotice": "Only owners and editors may publish or roll back.",
-	"builds.status": "Status"
+	"builds.status": "Status",
+	"error.releaseBuildConflict": "This build already backs a release; roll back to it instead.",
+	"releases.candidate": "Candidate build",
+	"releases.candidatePublished": "Already released"
 }

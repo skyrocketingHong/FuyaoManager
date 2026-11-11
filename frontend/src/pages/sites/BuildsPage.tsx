@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Card, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import SiteNav from '../../components/sites/SiteNav';
+import Trans from '../../components/i18n/Trans';
 import {
 	canEditSite,
 	createBuild,
@@ -24,15 +25,21 @@ export default function BuildsPage() {
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [creating, setCreating] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
-	const pollRef = useRef<number | null>(null);
+	// Request epoch: every refresh bumps it; a response applies only while it
+	// is still the newest. Route changes and unmount bump it too, so a late
+	// answer for a previous site (or after leaving the page) can never
+	// overwrite the current list.
+	const epoch = useRef(0);
 
 	const refresh = useCallback(async () => {
 		if (!siteId) return;
+		const my = ++epoch.current;
 		try {
 			const list = await listBuilds(siteId);
+			if (my !== epoch.current) return;
 			setBuilds(list);
-			return list;
 		} catch (err) {
+			if (my !== epoch.current) return;
 			const key = apiErrorKey(err);
 			if (key === 'error.unauthenticated') {
 				navigate('/login');
@@ -42,30 +49,41 @@ export default function BuildsPage() {
 		}
 	}, [siteId, navigate]);
 
+	// Site change (same component instance, different route param): drop all
+	// previous data first so nothing from the old site survives, then load.
 	useEffect(() => {
 		if (!siteId) return;
+		epoch.current++;
+		setSite(null);
+		setBuilds(null);
+		setErrorKey(null);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
 				if (!cancelled) setSite(s);
 			})
-			.catch(() => undefined);
+			.catch((err) => {
+				if (cancelled) return;
+				if (apiErrorKey(err) === 'error.unauthenticated') {
+					navigate('/login');
+				}
+			});
+		void refresh();
 		return () => {
+			// Leaving the page or switching sites invalidates everything
+			// in flight, including the site record.
+			epoch.current++;
 			cancelled = true;
 		};
-	}, [siteId]);
+	}, [siteId, refresh, navigate]);
 
-	useEffect(() => {
-		void refresh();
-	}, [refresh]);
-
-	// Poll while any task is queued or running.
+	// Poll while any task is queued or running; cleared on unmount and site
+	// switch via the effect cleanup above (refresh identity changes with
+	// siteId, re-running this effect).
 	useEffect(() => {
 		if (builds === null || !builds.some((b) => !terminalStatus.has(b.status))) return;
-		pollRef.current = window.setInterval(() => void refresh(), 3000);
-		return () => {
-			if (pollRef.current !== null) window.clearInterval(pollRef.current);
-		};
+		const timer = window.setInterval(() => void refresh(), 3000);
+		return () => window.clearInterval(timer);
 	}, [builds, refresh]);
 
 	async function handleCreate() {
@@ -86,10 +104,10 @@ export default function BuildsPage() {
 		}
 	}
 
-	async function handlePreview(buildId: string) {
+	async function handlePreview(buildID: string) {
 		if (!siteId) return;
 		try {
-			const link = await createPreviewLink(siteId, buildId);
+			const link = await createPreviewLink(siteId, buildID);
 			window.open(link.url, '_blank', 'noopener');
 		} catch (err) {
 			const key = apiErrorKey(err);
@@ -104,7 +122,7 @@ export default function BuildsPage() {
 			{contextHolder}
 			<SiteNav active="builds" />
 			<Card
-				title={t('builds.title')}
+				title={<Trans text={t('builds.title')} />}
 				extra={
 					<Popconfirm
 						title={t('builds.create')}
@@ -112,7 +130,7 @@ export default function BuildsPage() {
 						disabled={!editable}
 					>
 						<Button type="primary" loading={creating} disabled={!editable}>
-							{t('builds.create')}
+							<Trans text={t('builds.create')} />
 						</Button>
 					</Popconfirm>
 				}
@@ -136,8 +154,12 @@ export default function BuildsPage() {
 						columns={[
 							{
 								title: 'ID',
-							 dataIndex: 'id',
-								render: (id: string) => <Typography.Text copyable code>{id.slice(0, 8)}</Typography.Text>
+								dataIndex: 'id',
+								render: (id: string) => (
+									<Typography.Text copyable code>
+										{id.slice(0, 8)}
+									</Typography.Text>
+								)
 							},
 							{
 								title: t('builds.status'),
@@ -189,7 +211,7 @@ export default function BuildsPage() {
 										) : null}
 										{record.status === 'succeeded' ? (
 											<Button size="small" onClick={() => void handlePreview(record.id)}>
-												{t('builds.preview')}
+												<Trans text={t('builds.preview')} />
 											</Button>
 										) : null}
 									</Space>

@@ -3,6 +3,13 @@
  * selection (with its strong ETag), edits the choice and the configuration
  * JSON, and saves through If-Match. 412 offers a conflict sync like the
  * settings editor.
+ *
+ * Draft semantics: the radio choice and the configuration textarea are an
+ * editing draft, kept strictly separate from the saved baseline. A save
+ * adopts the server response only for fields untouched since submitting;
+ * typing during the flight and during a 412 sync stays in the form and is
+ * never silently reset. The "current saved theme" is always the saved
+ * baseline, never the unsaved radio value.
  */
 import { ApiError } from '../api/client';
 import {
@@ -26,12 +33,31 @@ export type ThemePhase =
 export interface ThemeSelectionState {
 	site: Site | null;
 	themes: Theme[];
-	/** Catalog key of the edited choice: "themeId@version", or null. */
+	/** Catalog key of the edited draft choice: "themeId@version", or null. */
 	selected: string | null;
+	/** The saved baseline choice ("themeId@version"), null when unselected. */
+	savedSelected: string | null;
 	/** Whether any selection exists server-side. */
 	hasSelection: boolean;
 	configText: string;
 	phase: ThemePhase;
+}
+
+interface SelectionView {
+	selected: boolean;
+	themeKey: string | null;
+	configText: string;
+}
+
+function viewOf(selected: boolean, theme: { themeId: string; version: string } | null, config: unknown): SelectionView {
+	if (!selected || theme === null) {
+		return { selected: false, themeKey: null, configText: '{}' };
+	}
+	return {
+		selected: true,
+		themeKey: `${theme.themeId}@${theme.version}`,
+		configText: JSON.stringify(config ?? {}, null, 2)
+	};
 }
 
 export class ThemeSelection {
@@ -39,6 +65,7 @@ export class ThemeSelection {
 		site: null,
 		themes: [],
 		selected: null,
+		savedSelected: null,
 		hasSelection: false,
 		configText: '{}',
 		phase: { kind: 'loading' }
@@ -69,9 +96,13 @@ export class ThemeSelection {
 	}
 
 	dirty(): boolean {
-		if (!this.state.hasSelection && this.state.selected === null) return this.state.configText.trim() !== '{}';
-		return true; // any explicit save is meaningful; the server validates
+		return (
+			this.state.selected !== this.state.savedSelected ||
+			this.state.configText !== this.baselineConfig
+		);
 	}
+
+	private baselineConfig = '{}';
 
 	async load(siteId: string): Promise<void> {
 		const token = ++this.loadToken;
@@ -84,16 +115,19 @@ export class ThemeSelection {
 			]);
 			if (token !== this.loadToken) return;
 			this.etag = selection.etag;
+			const view = viewOf(
+				selection.selection.selected,
+				selection.selection.theme,
+				selection.selection.themeConfig
+			);
+			this.baselineConfig = view.configText;
 			this.set({
 				site,
 				themes,
-				hasSelection: selection.selection.selected,
-				selected: selection.selection.selected
-					? `${selection.selection.theme?.themeId ?? ''}@${selection.selection.theme?.version ?? ''}`
-					: null,
-				configText: selection.selection.selected
-					? JSON.stringify(selection.selection.themeConfig ?? {}, null, 2)
-					: '{}',
+				hasSelection: view.selected,
+				savedSelected: view.themeKey,
+				selected: view.themeKey,
+				configText: view.configText,
 				phase: { kind: 'ready' }
 			});
 		} catch (err) {
@@ -117,14 +151,18 @@ export class ThemeSelection {
 
 	async save(): Promise<void> {
 		if (!this.editable() || this.state.phase.kind === 'saving') return;
+		const submittedConfig = this.state.configText;
+		const submittedSelected = this.state.selected;
 		let config: unknown;
 		try {
-			config = JSON.parse(this.state.configText || '{}');
+			config = JSON.parse(submittedConfig || '{}');
 		} catch {
+			// The form stays editable with its text; only the phase flags the
+			// problem so the user can correct the JSON.
 			this.set({ phase: { kind: 'error', key: 'error.validation' } });
 			return;
 		}
-		const [themeId, version] = (this.state.selected ?? '@').split('@');
+		const [themeId, version] = (submittedSelected ?? '@').split('@');
 		if (!themeId || !version) {
 			this.set({ phase: { kind: 'error', key: 'error.noThemeSelected' } });
 			return;
@@ -137,16 +175,25 @@ export class ThemeSelection {
 				this.etag
 			);
 			this.etag = etag;
-			this.set({
-				hasSelection: selection.selected,
-				selected: selection.selected
-					? `${selection.theme?.themeId ?? ''}@${selection.theme?.version ?? ''}`
-					: null,
-				configText: selection.selected
-					? JSON.stringify(selection.themeConfig ?? {}, null, 2)
-					: '{}',
-				phase: { kind: 'saved' }
-			});
+			const view = viewOf(
+				selection.selected,
+				selection.theme,
+				selection.themeConfig
+			);
+			// Adopt the server response only where the user has not kept
+			// typing: text edited during the flight stays as an unsaved
+			// draft (same semantics as the settings editor).
+			const next: Partial<ThemeSelectionState> = { phase: { kind: 'saved' } };
+			this.baselineConfig = view.configText;
+			if (this.state.selected === submittedSelected) {
+				next.selected = view.themeKey;
+			}
+			if (this.state.configText === submittedConfig) {
+				next.configText = view.configText;
+			}
+			next.hasSelection = view.selected;
+			next.savedSelected = view.themeKey;
+			this.set(next);
 		} catch (err) {
 			if (err instanceof ApiError && err.status === 412) {
 				this.set({ phase: { kind: 'conflict', synced: false } });
@@ -161,20 +208,31 @@ export class ThemeSelection {
 		}
 	}
 
+	// Conflict recovery: refresh the baseline and ETag. Draft fields the user
+	// has not edited since the last adoption converge to the server values;
+	// genuinely edited fields keep the user's input and stay dirty.
 	async syncAfterConflict(siteId: string): Promise<void> {
 		try {
 			const { selection, etag } = await getSiteTheme(siteId);
 			this.etag = etag;
-			this.set({
-				hasSelection: selection.selected,
-				selected: selection.selected
-					? `${selection.theme?.themeId ?? ''}@${selection.theme?.version ?? ''}`
-					: null,
-				configText: selection.selected
-					? JSON.stringify(selection.themeConfig ?? {}, null, 2)
-					: '{}',
+			const view = viewOf(
+				selection.selected,
+				selection.theme,
+				selection.themeConfig
+			);
+			const next: Partial<ThemeSelectionState> = {
 				phase: { kind: 'conflict', synced: true }
-			});
+			};
+			if (this.state.selected === this.state.savedSelected) {
+				next.selected = view.themeKey;
+			}
+			if (this.state.configText === this.baselineConfig) {
+				next.configText = view.configText;
+			}
+			this.baselineConfig = view.configText;
+			next.hasSelection = view.selected;
+			next.savedSelected = view.themeKey;
+			this.set(next);
 		} catch {
 			this.set({ phase: { kind: 'error', key: 'error.generic' } });
 		}

@@ -116,5 +116,8 @@
 	"releases.buildColumn": "构建",
 	"releases.themeColumn": "主题",
 	"releases.roleNotice": "仅所有者和编辑者可以发布或回滚。",
-	"builds.status": "状态"
+	"builds.status": "状态",
+	"error.releaseBuildConflict": "该构建已有生效的发布记录；请改用回滚。",
+	"releases.candidate": "候选构建",
+	"releases.candidatePublished": "该构建已发布"
 }

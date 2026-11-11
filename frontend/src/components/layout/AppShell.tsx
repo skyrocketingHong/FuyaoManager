@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Button, Space, Tooltip } from 'antd';
 import { siGithub } from 'simple-icons';
+import Trans from '../i18n/Trans';
 import { i18nSnapshot, setLocale, subscribeI18n, t, type Locale } from '../../lib/i18n';
 import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
@@ -47,14 +48,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		<div className="shell">
 			<header>
 				<Space wrap size={[16, 8]} style={{ padding: '12px 16px' }}>
-					<span className="brand">{t('app.title')}</span>
+					<span className="brand"><Trans text={t('app.title')} /></span>
 					<GitHubMark />
 					<span style={{ flex: 1 }} />
 					<Button type="text" onClick={() => setLocale(other)} aria-label={other}>
-						{t('app.localeSwitch')}
+						<Trans text={t('app.localeSwitch')} />
 					</Button>
 					<Button type="text" onClick={toggleTheme}>
-						{dark ? t('app.theme.light') : t('app.theme.dark')}
+						<Trans key={dark ? 'd' : 'l'} text={dark ? t('app.theme.light') : t('app.theme.dark')} />
 					</Button>
 					{session.status === 'authenticated' && session.user ? (
 						<>
@@ -68,7 +69,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 									navigate('/login');
 								}}
 							>
-								{t('app.signOut')}
+								<Trans text={t('app.signOut')} />
 							</Button>
 						</>
 					) : null}

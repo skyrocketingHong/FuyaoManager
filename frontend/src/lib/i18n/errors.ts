@@ -26,6 +26,7 @@ const codeToKey: Record<string, MessageKey> = {
 	preview_unavailable: 'error.previewUnavailable',
 	publish_unavailable: 'error.publishUnavailable',
 	build_not_publishable: 'error.buildNotPublishable',
+	release_build_conflict: 'error.releaseBuildConflict',
 	release_not_found: 'error.releaseNotFound',
 	release_not_rollbackable: 'error.releaseNotRollbackable',
 	no_live_release: 'error.noLiveRelease'

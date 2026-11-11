@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
 	Button,
 	Card,
 	Modal,
+	Select,
 	Space,
 	Spin,
 	Table,
@@ -13,6 +14,7 @@ import {
 	message
 } from 'antd';
 import SiteNav from '../../components/sites/SiteNav';
+import Trans from '../../components/i18n/Trans';
 import {
 	canEditSite,
 	createRelease,
@@ -35,6 +37,15 @@ interface CurrentView {
 	originUrl: string;
 }
 
+/** A publish 422 answering application/json carries a failed release record. */
+function failedReleaseOf(err: unknown): Release | null {
+	if (err instanceof ApiError && err.body && typeof err.body === 'object') {
+		const body = err.body as Partial<Release>;
+		if (body.status === 'failed' && body.failure) return body as Release;
+	}
+	return null;
+}
+
 export default function ReleasesPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
@@ -42,25 +53,33 @@ export default function ReleasesPage() {
 	const [current, setCurrent] = useState<CurrentView | null>(null);
 	const [releases, setReleases] = useState<Release[] | null>(null);
 	const [succeeded, setSucceeded] = useState<BuildTask[]>([]);
+	const [candidate, setCandidate] = useState<string | null>(null);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [publishing, setPublishing] = useState(false);
 	const [rollbackTarget, setRollbackTarget] = useState<Release | null>(null);
 	const [rollingBack, setRollingBack] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
+	// Request epoch: late responses for a previous site (or after unmount)
+	// can never overwrite the current state.
+	const epoch = useRef(0);
 
 	const refresh = useCallback(async () => {
 		if (!siteId) return;
+		const my = ++epoch.current;
 		try {
 			const [releaseList, buildList] = await Promise.all([
 				listReleases(siteId),
 				listBuilds(siteId)
 			]);
+			if (my !== epoch.current) return;
 			setReleases(releaseList);
 			setSucceeded(buildList.filter((b) => b.status === 'succeeded'));
 			try {
 				const view = await getCurrentRelease(siteId);
+				if (my !== epoch.current) return;
 				setCurrent(view);
 			} catch (err) {
+				if (my !== epoch.current) return;
 				if (err instanceof ApiError && err.code === 'no_live_release') {
 					setCurrent(null);
 				} else {
@@ -68,6 +87,7 @@ export default function ReleasesPage() {
 				}
 			}
 		} catch (err) {
+			if (my !== epoch.current) return;
 			const key = apiErrorKey(err);
 			if (key === 'error.unauthenticated') {
 				navigate('/login');
@@ -77,46 +97,73 @@ export default function ReleasesPage() {
 		}
 	}, [siteId, navigate]);
 
+	// Site change (same component instance, different route param): reset all
+	// state — including the candidate and the rollback dialog — before
+	// loading, so nothing from the previous site survives.
 	useEffect(() => {
 		if (!siteId) return;
+		epoch.current++;
+		setSite(null);
+		setCurrent(null);
+		setReleases(null);
+		setSucceeded([]);
+		setCandidate(null);
+		setErrorKey(null);
+		setRollbackTarget(null);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
 				if (!cancelled) setSite(s);
 			})
-			.catch(() => undefined);
+			.catch((err) => {
+				if (cancelled) return;
+				if (apiErrorKey(err) === 'error.unauthenticated') {
+					navigate('/login');
+				}
+			});
+		void refresh();
 		return () => {
+			epoch.current++;
 			cancelled = true;
 		};
-	}, [siteId]);
+	}, [siteId, refresh, navigate]);
 
-	useEffect(() => {
-		void refresh();
-	}, [refresh]);
-
-	async function handlePublish(buildId: string) {
-		if (!siteId) return;
+	async function handlePublish() {
+		// Act on the effective candidate: the user's explicit selection when
+		// made, otherwise the newest unreleased succeeded build shown in the
+		// selector. The action is always bound to a concrete build id.
+		const target = effectiveCandidate;
+		if (!siteId || target === null) return;
 		setPublishing(true);
 		try {
-			const body: ReleaseCreate = { buildId, reasons: ['manual'] };
-			const release = await createRelease(siteId, body);
-			if (release.status === 'failed' && release.failure) {
-				void messageApi.error(
-					`${t('releases.status.failed')}: ${release.failure.stage}${
-						release.failure.missingArtifacts?.length
-							? ` (${release.failure.missingArtifacts.join(', ')})`
-							: ''
-					}`
-				);
-			}
+			const body: ReleaseCreate = { buildId: target, reasons: ['manual'] };
+			await createRelease(siteId, body);
 			await refresh();
 		} catch (err) {
-			const key = apiErrorKey(err);
-			if (key === 'error.unauthenticated') {
-				navigate('/login');
-				return;
+			// A persisted failure record answers application/json with the
+			// failed release; surface its structured detail and refresh the
+			// history so the attempt is visible.
+			const failed = failedReleaseOf(err);
+			if (failed && failed.failure) {
+				const missing = [
+					...(failed.failure.missingArtifacts ?? []),
+					...(failed.failure.missingCapabilities ?? []),
+					...(failed.failure.missingUrlConventions ?? [])
+				].join(', ');
+				void messageApi.error(
+					`${t('releases.status.failed')}: ${failed.failure.stage}${missing ? ` (${missing})` : ''}`
+				);
+			} else {
+				const key = apiErrorKey(err);
+				if (key === 'error.unauthenticated') {
+					navigate('/login');
+					setPublishing(false);
+					return;
+				}
+				// Unknown errors still get an explicit fallback message.
+				void messageApi.error(key !== null ? t(key) : t('error.generic'));
 			}
-			setErrorKey(key);
+			await refresh();
 		} finally {
 			setPublishing(false);
 		}
@@ -138,30 +185,46 @@ export default function ReleasesPage() {
 	}
 
 	const editable = site !== null && canEditSite(site);
-	const latestSucceeded = succeeded[0] ?? null;
-	const publishedBuildIds = new Set((releases ?? []).map((r) => r.buildId));
-	const publishable = latestSucceeded !== null && !publishedBuildIds.has(latestSucceeded.id);
+	// Only releases that actually back content block a build from being
+	// published again; failed attempts do not.
+	const releasedBuildIds = new Set(
+		(releases ?? []).filter((r) => r.status !== 'failed').map((r) => r.buildId)
+	);
+	const candidateOptions = succeeded.map((build) => ({
+		value: build.id,
+		label: releasedBuildIds.has(build.id)
+			? `${build.id.slice(0, 8)} · ${t('releases.candidatePublished')}`
+			: build.id.slice(0, 8)
+	}));
+	// Default the candidate to the newest succeeded build that has not been
+	// released yet, without silently publishing anything.
+	let effectiveCandidate: string | null =
+		candidate !== null && succeeded.some((b) => b.id === candidate)
+			? candidate
+			: (succeeded.find((b) => !releasedBuildIds.has(b.id))?.id ?? null);
+	const publishable =
+		editable && effectiveCandidate !== null && !releasedBuildIds.has(effectiveCandidate);
 
 	return (
 		<>
 			{contextHolder}
 			<SiteNav active="releases" />
 			<Card
-				title={t('releases.title')}
+				title={<Trans text={t('releases.title')} />}
 				extra={
 					<Space>
 						{current && current.originUrl ? (
 							<Button href={current.originUrl} target="_blank">
-								{t('releases.open')}
+								<Trans text={t('releases.open')} />
 							</Button>
 						) : null}
 						<Button
 							type="primary"
 							loading={publishing}
-							disabled={!editable || !publishable}
-							onClick={() => latestSucceeded && handlePublish(latestSucceeded.id)}
+							disabled={!publishable}
+							onClick={() => void handlePublish()}
 						>
-							{t('releases.publish')}
+							<Trans text={t('releases.publish')} />
 						</Button>
 					</Space>
 				}
@@ -189,8 +252,21 @@ export default function ReleasesPage() {
 						{!editable ? (
 							<Alert type="info" showIcon message={t('releases.roleNotice')} style={{ marginBottom: 16 }} />
 						) : null}
-						{editable && !publishable && latestSucceeded === null ? (
+						{editable && succeeded.length === 0 ? (
 							<Alert type="info" showIcon message={t('releases.noSucceededBuild')} style={{ marginBottom: 16 }} />
+						) : null}
+						{editable && succeeded.length > 0 ? (
+							<Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+								<label htmlFor="release-candidate">{t('releases.candidate')}</label>
+								<Select
+									id="release-candidate"
+									style={{ maxWidth: 360 }}
+									value={effectiveCandidate}
+									onChange={setCandidate}
+									options={candidateOptions}
+									aria-label={t('releases.candidate')}
+								/>
+							</Space>
 						) : null}
 						<Table<Release>
 							rowKey="id"

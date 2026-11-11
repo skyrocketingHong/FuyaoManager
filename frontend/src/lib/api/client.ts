@@ -11,7 +11,10 @@ export class ApiError extends Error {
 		public status: number,
 		public code: string,
 		public detail: string,
-		public etag: string | null
+		public etag: string | null,
+		/** Parsed body of a non-problem error response (for example the failed
+		 * release record a publish 422 carries as application/json). */
+		public body?: unknown
 	) {
 		super(`${status} ${code}${detail ? `: ${detail}` : ''}`);
 		this.name = 'ApiError';
@@ -63,14 +66,22 @@ export async function api<T>(
 	if (!res.ok) {
 		let code = 'internal_error';
 		let detail = '';
+		let body: unknown;
 		try {
-			const problem = (await res.json()) as { code?: string; detail?: string };
-			if (problem.code) code = problem.code;
-			if (problem.detail) detail = problem.detail;
+			const parsed = (await res.json()) as { code?: string; detail?: string };
+			if (parsed && typeof parsed.code === 'string' && parsed.code) {
+				code = parsed.code;
+			} else {
+				// Not an RFC 9457 problem document (e.g. the failed release
+				// record returned as application/json): keep the parsed body
+				// so callers can surface its structured content.
+				body = parsed;
+			}
+			if (parsed && typeof parsed.detail === 'string') detail = parsed.detail;
 		} catch {
 			// Non-JSON error body; keep the defaults.
 		}
-		throw new ApiError(res.status, code, detail, etag);
+		throw new ApiError(res.status, code, detail, etag, body);
 	}
 	if (res.status === 204) {
 		return { data: undefined as T, etag };
