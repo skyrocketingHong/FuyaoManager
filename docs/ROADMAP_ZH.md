@@ -15,20 +15,15 @@
 
 7. **T3-b1 —— 真实快照构建与私有预览闭环**（`admin/backend` + `site/`）：migration 0004 持久化按站点构建任务，创建事务冻结确切版本视图（站点设置快照与修订、主题选择修订、主题身份与配置）；执行器角色为集群级 advisory lock——仅持有者把中断的 `running` 行标记失败并重新入队 `queued`，且持有角色直到 worker 排空，第二实例不会误杀第一实例的活跃任务。执行器所有阶段绑定注册主题根，执行前按登记身份复核磁盘 `theme.json` 与配置 schema 摘要（发现注册后被篡改的源码），构建前用受信任服务端站点需求检查主题 capabilities/URL conventions（缺失项明确失败），以主题自身 Node 流程准备快照并注入数据库保存的站点设置（`site.name/description/defaultLocale`，description 经 `site.site.description` 进入公开 SEO 元数据）与主题配置（JSON 文件），随后以**复制+校验+冻结**把快照与产物固化到任务独立目录。工作区隔离返修后，所有写入步骤都在任务私有的注册主题源副本内完成（`taskDir/theme`，排除 node_modules 与可变构建状态，依赖按仓库树向上解析复用，契约 schema 经 `FUYAO_THEME_CONTRACTS` 绝对路径注入），注册源——含其 `.fuyao` 状态与 `build/`——全程零写入、不移走、不恢复；每个任务记录逐文件源码清单（聚合摘要与文件数，migration 0005），覆盖范围宽于 theme.json 摘要。命令在净化环境与独立进程组中运行（取消时组级终止），不继承数据库连接串或管理密钥；这是环境与进程卫生，不是 OS 级沙箱。预览：每个成功构建获得独立回环 origin（按构建监听），入口一次性令牌换取 HttpOnly cookie——根绝对资源、深层路由、声明的 SPA fallback 均保持生产行为，不同构建/站点绝不串产物，origin 与管理 API 不同源，主题脚本无法读取管理响应。HTTP 面：`POST/GET /api/v1/sites/{siteId}/builds`、`GET .../builds/{buildId}`、`POST .../builds/{buildId}/preview-links`，沿用既有成员/CSRF/Origin 模型；OpenAPI 与生成类型同次更新。已在任务 PostgreSQL 实例验证：闭环测试经 API 创建两个真实任务并真实执行 Node/SvelteKit 构建后走预览 HTTP 面（数据库设置冻结进快照、摘要入库、产物只读、第二构建 origin 只服务自身内容、跨 origin 令牌与匿名访问被拒），另含能力缺口构建的持久化明确失败；后端全量、site 受影响配置/主题输入测试、OpenAPI 漂移检查与 prettier 通过。证据存于 `.fuyao/theme-migration/verification/t3b1/`。
 
+8. **T3-b2 —— 发布与回滚闭环**（`admin/backend`）：migration 0006 新增 `site_releases`（冻结主题身份、三输入摘要、routes、reasons、live/superseded/failed 状态与失败记录）与 `sites.current_release_id` 指针，每构建仅一条发布。`internal/publish` 执行器复检受信站点需求（能力与 URL 约定缺口精确入失败记录）、核对清单 `requiredArtifacts`、生成并按 `release.schema.json` 校验 `release.json` 后以复制+校验+冻结固化进 `ReleasesRoot/<site>/<buildID>`，再于按站点发布 advisory lock 的事务内读取基础状态、原子切换指针；任一阶段失败持久化失败发布记录且原发布保持生效，部分固化目录自动清理。回滚直接复用既有产物重新指向（不重建、不动未发布编辑），对已生效/失败/产物缺失目标拒绝。发布 origin 为按站点回环监听、按请求解析当前 release，发布/回滚即时切换内容且与管理面不同源。HTTP 面：`POST/GET /api/v1/sites/{siteId}/releases`、`GET .../release`（当前发布+origin URL）、`POST .../releases/{releaseId}/rollback`，owner/editor 写、成员读；OpenAPI（含 Release/ReleaseCreate/ReleaseFailure schema 与新 Problem 码）、类型生成与路由↔操作覆盖核对同次更新（21 项操作全对齐）。经真实 Node/SvelteKit 构建验证：发布→冻结 release.json→origin 服务内容→未发布设置修改→二次发布切换→live/superseded 历史→回滚恢复且编辑保留→409/404/403 边界，以及 requiredArtifacts 缺失发布 422 精确缺失清单、原发布保持生效、失败记录入史、失败目标不可回滚；后端全量 `go test ./...` 通过。证据存于 `.fuyao/theme-migration/verification/t3b2/`。
+
+9. **T4 —— 管理前端迁移 React + TypeScript + Vite + 官方 Ant Design**（`admin/frontend`）：React 18 + react-router 7 + antd 5（ConfigProvider 双语 locale 与日/夜 algorithm）+ Simple Icons（GitHub 品牌图标），`admin/frontend` 内不再有 Svelte 运行时。保留 Passkey 登记/登录/注销与会话处理、5174 固定端口同源代理拓扑（WebAuthn origin 不变）、站点列表/详情/配置编辑的 dirty 字段提交、If-Match/412 冲突恢复、viewer 只读、乱序防护与按站点 keyed 状态（业务模块移植为框架无关存储 + `useSyncExternalStore`）；中英字典扩展、日夜主题切换 antd 算法、`prefers-reduced-motion` 收敛全部动画（含 antd 的）。新增主题选择（目录+JSON 配置+If-Match+412 同步）、构建任务（创建、排队/运行轮询、失败记录、私有预览链接）与发布页（当前发布+origin、历史、发布、确认回滚）。`pages/` 与路由层级对应，`lib/` 业务模块不含 JSX，生成 schema.d.ts 类型经同一 OpenAPI 链路消费（api:check 绿）。`npm run admin:check && npm run admin:test && npm run admin:build` 全部通过（25 项测试：client 6、i18n 3、编辑状态机 8、主题选择 5、挂载视图 3）。证据存于 `.fuyao/theme-migration/verification/t4/`。
+
+10. **T5 —— 联调与本地预览交付**：任务 PostgreSQL 实例上独立开发库（与集成测试库分离）、migrate、serve、React 管理台开发服务器与首主题注册全部就绪，向用户交付访问 URL、首次初始化步骤（bootstrap-admin 许可→UI 登记 Passkey→create-site→选主题→构建→预览→发布→回滚）与准确停止方式；真实平台认证器仪式与视觉验收按约定保留给用户。
+
 ## 后续（按序，一次一个工作包）
 
-7. 由用户驱动的真实浏览器回归（Touch ID / 硬件钥匙等真实平台认证器）与视觉验收。
-8. **T3 —— 后端发布管线**：受控构建执行器、预览、校验、原子切换、回滚（登记与逐站选择已作为 T3-a 落地；快照构建与私有预览已作为上方 T3-b1 落地——本项剩余范围为发布：按 `release.schema.json` 与 `requiredArtifacts` 校验、原子切换、回滚、发布记录）。
-   - 边界：`admin/backend` 增加基于平台内容、消费 T3-a 选择记录与受信任清单数据的快照准备、限定于枚举适配器的构建执行器（无管理密钥、无数据库访问、无任意命令）、私有预览根目录、按 `release.schema.json` 与各清单 `requiredArtifacts` 及阻止发布的能力/URL 约定缺口检查的发布校验，以及携带内容、主题、配置版本与任务状态、失败记录的发布记录；每个新增 HTTP 接口在同一次修改中同步 OpenAPI。
-   - 完成条件：从管理 API 驱动、基于现有站点内容的端到端本地发布，产物与 T2 直接构建等价；构建失败或不兼容时旧 release 保持生效，并精确报告缺失的能力或 URL 约定项；回滚恢复逐站的早期精确三元组。
-   - 验证：面向任务 PostgreSQL 实例的后端集成测试；OpenAPI 漂移与语义检查；发布、不兼容、失败与回滚的证据日志存于 `.fuyao/theme-migration/verification/`。
-9. **T4 —— 管理前端迁移到 React + TypeScript + Vite + 官方 Ant Design**。
-   - 边界：在 React 上以原生 antd 组件与设计令牌重建六个路由、Passkey 注册与登录、会话处理、站点列表/详情/配置、CSRF 处理、ETag/412 冲突恢复、跨站请求隔离、中英文切换、日夜主题与减少动态效果支持，品牌图标统一使用 Simple Icons（保留必要可访问名称，不为凑图标添加无用文案或装饰）；管理端技术栈为 TypeScript + React + Ant Design + Simple Icons，仅限前端——Go 服务端保持 Go（不做服务端 TypeScript 迁移），公开前台保持 Svelte 作为首个主题。保留 OpenAPI 契约、框架无关的纯 TS API 客户端（`client.ts`、`management.ts`、`passkey.ts`、生成的 `schema.d.ts`）以及 Vite 同源代理拓扑（5174 端口固定，WebAuthn Origin 不变）。
-   - 完成条件：逐路由证明与 Svelte 控制台的功能对等（无功能回退）；类型生成漂移检查、OpenAPI 语义检查、类型检查、测试与构建全部通过；`admin/frontend` 内不再有 Svelte 运行时。
-   - 验证：移植并扩展的 vitest 套件；根目录 `npm run admin:check && npm run admin:test && npm run admin:build`。
-10. **T5 —— 联调与本地预览交付**。
-    - 边界：同时运行 Go 管理服务、React 管理控制台、本地 PostgreSQL 实例与首主题前台或私有预览；向用户提供 URL 与停止方式；日志、凭据与私有数据不进 Git。
-    - 完成条件：用户能本地走通完整流程（登录、配置、发布、预览、回滚）；视觉验收与真实平台认证器仪式按约定保留给用户。
+11. 由用户驱动的真实浏览器回归（Touch ID / 硬件钥匙等真实平台认证器）与视觉验收。
 11. **文章**：列表、编辑、发布；复用 `site/` 脚本的 Markdown 管道。
 12. **页面与版式模块**；按站点划分的内容边界。
 13. **站群分发**与成员管理界面。
