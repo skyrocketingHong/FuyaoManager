@@ -70,6 +70,8 @@ HTTP 契约位于仓库根目录 `contracts/openapi/management.yaml`，只描述
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND` | `127.0.0.1`           | 私有站点入口的绑定与访问地址（部署时为 Tailscale 地址）。                                                                                                                                                                                         |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND` | `:`（全部接口）        | 公开站点入口的绑定地址。                                                                                                                                                                                                                          |
 | `FUYAO_ADMIN_EDGE_PUBLIC_HOST` | 未设置                  | 公开入口对外通告的 URL 主机（全网绑定时填公网 IP）。                                                                                                                                                                                              |
+| `FUYAO_ADMIN_BUILDS_ROOT` | `<repo>/site/.fuyao/admin-builds` | 持久构建任务根目录；部署时应指向程序目录之外。 |
+| `FUYAO_ADMIN_RELEASES_ROOT` | `<repo>/site/.fuyao/admin-releases` | 持久发布根目录；部署时应指向程序目录之外。 |
 | `FUYAO_ADMIN_PORT_MIN`/`FUYAO_ADMIN_PORT_MAX` | `20000`/`20100` | 运维批准的端口范围（含端点），用于站点入口与预览监听；非法或倒置的取值直接拒绝启动。                                                                                                                                                    |
 | `FUYAO_ADMIN_BUILD_MODE`     | `ci`                    | 平台构建的内容来源：`ci` 使用仓库 fixture 内容；`production` 需要受信任的内容根目录设置。                                                                                     |
 | `FUYAO_ADMIN_REQUIRE_CAPABILITIES` | `blog`            | 受信任站点需求：主题构建与发布前必须满足的能力。默认值仅保证博客能力兼容；实际启用首主题全部页面的站点必须设置为 `blog,albums,footprint,friends,pay,favicon`。                |

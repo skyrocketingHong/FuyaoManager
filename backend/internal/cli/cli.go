@@ -195,7 +195,10 @@ func runServe(ctx context.Context) error {
 		repoRoot = cwd
 	}
 	siteWork := filepath.Join(repoRoot, "site")
-	buildsRoot := filepath.Join(siteWork, ".fuyao", "admin-builds")
+	buildsRoot := cfg.BuildsRoot
+	if buildsRoot == "" {
+		buildsRoot = filepath.Join(siteWork, ".fuyao", "admin-builds")
+	}
 	sitesRoot := cfg.SitesRoot
 	if sitesRoot == "" {
 		sitesRoot = filepath.Join(siteWork, ".fuyao", "admin-sites")
@@ -235,7 +238,10 @@ func runServe(ctx context.Context) error {
 	})
 	defer previews.Close()
 
-	releasesRoot := filepath.Join(siteWork, ".fuyao", "admin-releases")
+	releasesRoot := cfg.ReleasesRoot
+	if releasesRoot == "" {
+		releasesRoot = filepath.Join(siteWork, ".fuyao", "admin-releases")
+	}
 
 	// The published-site edge: per-site current pointers plus the managed
 	// reverse-proxy snippet. Always constructed (EntryURL rendering works

@@ -32,6 +32,8 @@ const (
 	EnvEdgePrivateBind   = "FUYAO_ADMIN_EDGE_PRIVATE_BIND"
 	EnvEdgePublicBind    = "FUYAO_ADMIN_EDGE_PUBLIC_BIND"
 	EnvEdgePublicHost    = "FUYAO_ADMIN_EDGE_PUBLIC_HOST"
+	EnvBuildsRoot        = "FUYAO_ADMIN_BUILDS_ROOT"
+	EnvReleasesRoot      = "FUYAO_ADMIN_RELEASES_ROOT"
 	EnvPortMin           = "FUYAO_ADMIN_PORT_MIN"
 	EnvPortMax           = "FUYAO_ADMIN_PORT_MAX"
 	EnvRepoRoot          = "FUYAO_ADMIN_REPO_ROOT"
@@ -72,6 +74,8 @@ type Config struct {
 	EdgePublicHost      string
 	PortMin             int
 	PortMax             int
+	BuildsRoot          string
+	ReleasesRoot        string
 	BuildMode           string
 	RequireCaps         []string
 	RequireURLs         []string
@@ -97,6 +101,8 @@ func Load() (Config, error) {
 		EdgePublicHost:      envDefault(EnvEdgePublicHost, ""),
 		PortMin:             20000,
 		PortMax:             20100,
+		BuildsRoot:          envDefault(EnvBuildsRoot, ""),
+		ReleasesRoot:        envDefault(EnvReleasesRoot, ""),
 		BuildMode:           envDefault(EnvBuildMode, "ci"),
 		RequireCaps:         csvEnv(EnvRequireCaps, "blog"),
 		RequireURLs:         csvEnv(EnvRequireURLs, "posts,blog-rss,sitemap"),
