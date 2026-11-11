@@ -104,7 +104,8 @@ func writeFixtureTheme(t *testing.T, root string) {
 // The marker comes from this task's own staged input (one level above the
 // theme copy), so two tasks over one shared source must produce different
 // outputs — contamination would swap them.
-const overrides=JSON.parse(fs.readFileSync('../site-overrides.json','utf8'));
+// The copy sits at ws/site inside the task directory.
+const overrides=JSON.parse(fs.readFileSync('../../site-overrides.json','utf8'));
 fs.mkdirSync('build',{recursive:true});
 fs.writeFileSync('build/index.html','<html>built:'+overrides.site.name+'</html>');
 fs.writeFileSync('build/200.html','<html>fallback</html>');

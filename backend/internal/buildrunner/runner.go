@@ -431,12 +431,18 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 		return fail("workspace", "Failed to stage the theme configuration.")
 	}
 
-	// Materialize the task's private source copy and record its full
-	// per-file provenance before any command runs.
-	themeCopy := filepath.Join(taskDir, "theme")
+	// Materialize the task's private source copy inside a workspace layout
+	// that anchors dependency resolution at the registered source, and
+	// record its full per-file provenance before any command runs.
+	wsRoot := filepath.Join(taskDir, "ws")
+	themeCopy := filepath.Join(wsRoot, "site")
 	manifest, err := copyThemeSource(themeCopy, themeRoot)
 	if err != nil {
 		return fail("workspace", "Failed to materialize the task source copy.")
+	}
+	depRoot := FindWorkspaceRoot(themeRoot)
+	if err := assembleWorkspace(wsRoot, themeRoot, depRoot); err != nil {
+		return fail("workspace", "Failed to anchor the task dependency references.")
 	}
 	if err := writeSourceManifest(taskDir, manifest); err != nil {
 		return fail("workspace", "Failed to record the task source manifest.")
@@ -465,10 +471,25 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 		return fail("snapshot", "Failed to seal the build snapshot into its task directory.")
 	}
 
+	// Build CLIs (vite and friends) resolve from the source's real install:
+	// the workspace root's and the source's node_modules/.bin go first on
+	// PATH, ahead of whatever the task directory's own ancestry would offer.
+	binPaths := []string{
+		filepath.Join(depRoot, "node_modules", ".bin"),
+		filepath.Join(themeRoot, "node_modules", ".bin"),
+	}
+	pathValue, _ := os.LookupEnv("PATH")
+	buildEnv := []string{"FUYAO_FROZEN_INPUT=" + snapshotDir, "FUYAO_SKIP_LOCK=1",
+		"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")}
+	for _, bin := range binPaths {
+		if dirExists(bin) {
+			pathValue = bin + string(os.PathListSeparator) + pathValue
+		}
+	}
+	buildEnv = append(buildEnv, "PATH="+pathValue)
+
 	buildLog, err := r.runCommand(ctx, build, "build", themeCopy,
-		[]string{"npm", "run", "build"},
-		[]string{"FUYAO_FROZEN_INPUT=" + snapshotDir, "FUYAO_SKIP_LOCK=1",
-			"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")})
+		[]string{"npm", "run", "build"}, buildEnv)
 	if err != nil {
 		return r.commandFailure("build", buildLog, err)
 	}

@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // workspaceExcludes names the registered source's entries a task never
@@ -28,7 +29,28 @@ var workspaceExcludes = map[string]bool{
 }
 
 // workspaceScope names the copy rule for provenance records.
-const workspaceScope = "theme-root-except(node_modules,.fuyao,build,.svelte-kit,.git,.DS_Store)"
+const workspaceScope = "theme-root-except(node_modules,.fuyao,build,.svelte-kit,.git,.DS_Store" +
+	",*.env,*.env.*,*.npmrc,*.yarnrc,*.yarnrc.yml,*.pem,*.key,*.p12,*.pfx)"
+
+// sensitiveFileExcludes are file names (or .env. prefixes) never copied
+// into a task, at any depth: private environment secrets and package
+// registry credentials are not build inputs. The rule is name-based and
+// applies to any source tree, Git or not.
+var sensitiveFileExcludes = map[string]bool{
+	".env": true, ".npmrc": true, ".yarnrc": true, ".yarnrc.yml": true,
+}
+
+// sensitiveFileName reports whether a regular file must be skipped.
+func sensitiveFileName(name string) bool {
+	if sensitiveFileExcludes[name] || strings.HasPrefix(name, ".env.") {
+		return true
+	}
+	switch filepath.Ext(name) {
+	case ".pem", ".key", ".p12", ".pfx":
+		return true
+	}
+	return false
+}
 
 // sourceManifest is the per-task record of exactly which source bytes the
 // build consumed: one digest per copied file plus the aggregate digest over
@@ -60,8 +82,64 @@ func copyThemeSource(dst, src string) (sourceManifest, error) {
 	}
 	manifest.FileCount = len(manifest.Files)
 	manifest.Aggregate = aggregateDigest(manifest.Files)
-	manifest.ManifestSHA = manifest.Aggregate // aggregate covers every file entry
+	// The theme's own registered definition digest — the same value the
+	// catalog stores for theme.json, distinct from the whole-tree aggregate.
+	manifest.ManifestSHA = manifest.Files["theme.json"]
 	return manifest, nil
+}
+
+// assembleWorkspace mirrors the source's dependency topology inside the
+// task: the theme copy lands at wsRoot/site, with a private node_modules
+// reference on the copy for the source's own installed packages and one on
+// wsRoot for the packages hoisted to the source's workspace root. Node's
+// module lookup walks the copy, then wsRoot — the same two levels the real
+// workspace offers — so resolution is anchored at the registered source no
+// matter where the BuildsRoot lives. The references are task-private and
+// never enter the sealed snapshot or artifacts.
+func assembleWorkspace(wsRoot, sourceRoot, depRoot string) error {
+	for link, target := range map[string]string{
+		filepath.Join(wsRoot, "site", "node_modules"): filepath.Join(sourceRoot, "node_modules"),
+		filepath.Join(wsRoot, "node_modules"):         filepath.Join(depRoot, "node_modules"),
+	} {
+		if !dirExists(target) {
+			continue
+		}
+		if err := os.Symlink(target, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+// FindWorkspaceRoot walks up from the source root to the nearest ancestor
+// package.json declaring workspaces (bounded), returning that root; without
+// one the source itself is the dependency root. Build commands get that
+// root's node_modules/.bin on PATH so CLIs resolve from the source's real
+// install, not from wherever the task directory happens to sit.
+func FindWorkspaceRoot(sourceRoot string) string {
+	dir := sourceRoot
+	for i := 0; i < 8; i++ {
+		data, err := os.ReadFile(filepath.Join(dir, "package.json"))
+		if err == nil {
+			var pkg struct {
+				Workspaces any `json:"workspaces"`
+			}
+			if json.Unmarshal(data, &pkg) == nil && pkg.Workspaces != nil {
+				return dir
+			}
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return sourceRoot
 }
 
 // copyThemeTree copies one directory level, recording per-file digests under
@@ -94,6 +172,9 @@ func copyThemeTree(src, dst, rel string, digests map[string]string) error {
 		}
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("refusing irregular source entry %s", childRel)
+		}
+		if sensitiveFileName(child) {
+			continue
 		}
 		sum, err := copySourceFile(
 			filepath.Join(src, filepath.FromSlash(childRel)),

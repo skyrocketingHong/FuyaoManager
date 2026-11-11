@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -99,21 +100,20 @@ func (l *latePreviews) Issue(siteID, buildID uuid.UUID) (string, time.Time, erro
 // node_modules, and each test gets its own subdirectory under it.
 func setupBuilds(t *testing.T) (*testEnv, *buildrunner.Runner, *buildrunner.PreviewServer, string) {
 	t.Helper()
-	// BuildsRoot must sit under the registered site workspace (the CLI
-	// default shape): the task's private source copy resolves dependencies
-	// by walking up to site/node_modules and then the repository root,
-	// exactly like the real deployment layout does.
-	root := repoRoot(t)
-	buildsRoot := filepath.Join(root, "site", ".fuyao", "admin-builds-test",
-		fmt.Sprintf("%d", time.Now().UnixNano()))
-	if err := os.MkdirAll(buildsRoot, 0o700); err != nil {
-		t.Fatal(err)
-	}
+	// BuildsRoot deliberately sits OUTSIDE the source tree (a fresh temp
+	// directory, on another volume from the repo): dependency resolution is
+	// anchored at the registered source via the copy's private node_modules
+	// reference and injected bin paths, never at the task root's ancestry.
+	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
 	t.Cleanup(func() {
-		_ = buildrunner.MakeTreeWritable(buildsRoot)
-		if !t.Failed() {
-			_ = os.RemoveAll(buildsRoot)
+		if t.Failed() {
+			// keep the failed task's logs for inspection before unlocking
+			// the frozen trees
+			_ = os.MkdirAll("/tmp/t3b1-failed-tasks", 0o755)
+			_ = buildrunner.MakeTreeWritable(buildsRoot)
+			_ = execCopyTree(buildsRoot, "/tmp/t3b1-failed-tasks")
 		}
+		_ = buildrunner.MakeTreeWritable(buildsRoot)
 	})
 	return setupBuildsAt(t, buildsRoot)
 }
@@ -658,3 +658,10 @@ func runnerConfigFor(env *testEnv) buildrunner.Config {
 }
 
 func tTempDir(t *testing.T) string { return t.TempDir() }
+
+// execCopyTree is a test-only recursive copy (cp -R semantics).
+func execCopyTree(src, dst string) error {
+	out, err := exec.Command("cp", "-R", src, dst).CombinedOutput()
+	_ = out
+	return err
+}
