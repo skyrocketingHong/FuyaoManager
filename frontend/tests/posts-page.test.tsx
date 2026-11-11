@@ -9,6 +9,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import PostsPage from '../src/pages/sites/PostsPage';
 import * as management from '../src/lib/api/management';
+import type { Site } from '../src/lib/api/management';
 import { initLocale } from '../src/lib/i18n';
 
 vi.mock('../src/lib/api/management', async (importOriginal) => ({
@@ -17,15 +18,15 @@ vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	listPosts: vi.fn()
 }));
 
-const ownerSite = {
+const ownerSite: Site = {
 	siteId: '11111111-1111-1111-1111-111111111111',
 	slug: 'blog',
 	name: 'Blog',
 	description: '',
 	defaultLocale: 'zh-CN',
-	visibility: 'private' as const,
-	provisionState: 'ready' as const,
-	role: 'owner' as const,
+	visibility: 'private',
+	provisionState: 'ready',
+	role: 'owner',
 	settingsRevision: 1,
 	createdAt: '2026-01-01T00:00:00Z',
 	updatedAt: '2026-01-01T00:00:00Z'
@@ -62,7 +63,7 @@ beforeAll(() => {
 });
 
 describe('PostsPage', () => {
-	afterEach(cleanup)
+	afterEach(cleanup);
 
 	beforeEach(() => {
 		vi.mocked(management.getSite).mockResolvedValue(ownerSite);
