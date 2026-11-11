@@ -2,22 +2,38 @@
 
 English | [简体中文](./ROADMAP_ZH.md)
 
-Agile ledger for the content management platform. Each work package lands a running, verified increment; nothing is listed as done before it is implemented and verified.
+Agile ledger for the content management platform. Each work package lands a running, verified increment; nothing is listed as done before it is implemented and verified. On 2026-11-11 the "Next" section was restructured around the approved theming and React migration track (T1 to T5); the feature packages that follow keep their original scope.
 
 ## Done
 
 1. **Backend MVP (local development)** (`admin/backend`): PostgreSQL + SQL migrations, passkey-only WebAuthn auth (discoverable credentials, UV required), CLI (`migrate`, `serve`, `bootstrap-admin`, `create-site`), cookie sessions with CSRF/Origin enforcement, site list/detail/settings with transactional ETag concurrency. Loopback-only. Contract: `contracts/openapi/management.yaml`.
 2. **Hardening pass**: transactional first-enrollment closure (advisory lock; concurrent completions admit exactly one), permit expiry re-checked at verify time, full-ETag If-Match binding (wildcard rejected), stable per-session CSRF token (multi-tab safe), request limits and single-object JSON on verify paths, loud TTL validation, CORS ETag exposure.
 3. **Admin frontend MVP** (`admin/frontend`): enrollment, login/logout, site list/detail/settings with dirty-field patches, 412 conflict recovery, and viewer read-only; generated API types with drift check; zh-CN/en-US with Crossfade; day/night themes; same-origin dev proxy topology (port 5174 pinned, loopback only). The non-browser protocol integration (backend serve + dev proxy + cookie/origin flows) is exercised by this package's verification; real platform-authenticator ceremonies and visual acceptance remain with the user.
+4. **T1 — Theme contract v1** (`contracts/theme/`): machine-checkable contracts for the theme manifest (`theme.json`), the build-input snapshot metadata (`input.json`), and the release metadata (`release.json`), all JSON Schema draft 2020-12, with public-safe positive and negative fixtures covering version, path-traversal, capability, URL-convention, digest, and unknown-field rejections. Consumable validation landed with the contract: Go package `admin/backend/internal/themecontract` (schema compilation, theme-config cross-validation, manifest/input pairing, capability and URL-convention gap helpers) and the `fuyao-admin validate-theme` CLI. Reserved identifiers: first theme `fuyao-homepage`, first trusted adapter `node22-sveltekit-static`. Contract docs: `contracts/theme/README.md`. Verified by `go test ./internal/themecontract/ ./internal/cli/`, `go vet`, `gofmt`, `go build`, prettier, and the repository privacy audit.
 
 ## Next (in order, one package at a time)
 
-4. Real-browser regression with actual platform authenticators (Touch ID / hardware keys) and visual acceptance, driven by the user.
-5. Articles: list, edit, publish; markdown pipeline reuse from `site/` scripts.
-6. Pages and layout modules; site-scoped content boundaries.
-7. Multi-site fan-out and membership management UI.
-8. Server-side secret configuration, GitHub source updates, build/deploy and rollback entries with task state and failure records.
-9. Migrate remaining `site/scripts` responsibilities (media processing, validation, watchers, external data cache, versioning, migration, release) into the backend; retire old entry points only after parity acceptance.
-10. Tailscale private-network exposure and the 30-minute public gate; production deployment path.
+5. **Real-browser regression** with actual platform authenticators (Touch ID / hardware keys) and visual acceptance, driven by the user.
+6. **T2 — First theme registration** — `site/` becomes the `fuyao-homepage` theme.
+   - Boundary: add `site/theme.json` and `site/theme.config.schema.json` (contents mirror the contract fixtures); teach `site/scripts/prepare-build-inputs.js` to write `private/input.json` and rename `private/public-config.json` to `private/site-config.json`, computing the three SHA-256 input digests; keep builds reading only the frozen snapshot with the writable build-asset mirror staying separate; no route, URL, or visual changes.
+   - Done when: `fuyao-admin validate-theme` accepts the site theme root; a normal build produces artifacts file-by-file equivalent to the pre-change build plus the new metadata; all site checks stay green.
+   - Verify: `cd admin/backend && go run ./cmd/fuyao-admin validate-theme --contracts ../../contracts/theme ../../site`; root `npm run check && npm test && npm run build`; artifact diff against a reference build captured before the change.
+7. **T3 — Backend publish pipeline** — registry, guarded build executor, preview, verification, atomic switch, rollback.
+   - Boundary: `admin/backend` gains per-site theme registration (manifest validation and config storage validated against each theme's config schema), snapshot preparation from platform content, a build executor restricted to the enumerated adapter (no management keys, no database access, no arbitrary commands), private preview roots, publication verification against `release.schema.json` and each manifest's `requiredArtifacts`, and release records carrying the content, theme, and configuration versions plus task state and failure records; OpenAPI updated in the same change for every new HTTP endpoint.
+   - Done when: an end-to-end local publish driven from the admin API over existing site content produces a release equivalent to the T2 direct build; a failing or incompatible build leaves the previous release active and reports the exact missing capability or URL-convention items; rollback restores an earlier exact triple per site.
+   - Verify: backend integration tests against the task PostgreSQL instance; OpenAPI drift and semantic lint; publish, incompatibility, failure, and rollback evidence logs under `.fuyao/theme-migration/verification/`.
+8. **T4 — Admin frontend migration to React + TypeScript + Vite + official Ant Design**.
+   - Boundary: rebuild the six routes, passkey enrollment and login, session handling, site list/detail/settings, CSRF handling, ETag/412 conflict recovery, cross-site request isolation, zh-CN/en-US switching, light/dark themes, and reduced-motion support on React with native antd components and design tokens; keep the Go backend, the OpenAPI contract, the framework-agnostic pure-TS API clients (`client.ts`, `management.ts`, `passkey.ts`, generated `schema.d.ts`), and the Vite same-origin proxy topology (port 5174 pinned, WebAuthn origin unchanged).
+   - Done when: per-route feature parity with the Svelte console is demonstrated (no functional regression); type generation drift check, semantic OpenAPI lint, typecheck, tests, and build pass; no Svelte runtime remains in `admin/frontend`.
+   - Verify: ported and extended vitest suites; root `npm run admin:check && npm run admin:test && npm run admin:build`.
+9. **T5 — Joint debugging and local preview delivery**.
+   - Boundary: run the Go management service, the React admin console, the local PostgreSQL instance, and the first-theme site or private preview together; hand the user the URLs and stop instructions; keep logs, credentials, and private data out of Git.
+   - Done when: the user can complete the full local flow (login, configure, publish, preview, rollback); visual acceptance and real platform-authenticator ceremonies remain with the user by design.
+10. **Articles**: list, edit, publish; markdown pipeline reuse from `site/` scripts.
+11. **Pages and layout modules**; site-scoped content boundaries.
+12. **Multi-site fan-out** and membership management UI.
+13. **Server-side secret configuration and GitHub source updates**: build, deploy, and rollback entries land with T3; this package completes the remaining operations surface with task state and failure records.
+14. **Migrate remaining `site/scripts` responsibilities** (media processing, validation, watchers, external data cache, versioning, migration, release) into the backend; retire old entry points only after parity acceptance.
+15. **Tailscale private-network exposure** and the 30-minute public gate; production deployment path.
 
 Not planned for MVP: importing production data, migrating real keys, pulling production deployments.

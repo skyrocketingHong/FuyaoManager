@@ -1,5 +1,5 @@
 // Package cli implements the fuyao-admin commands: migrate, serve,
-// bootstrap-admin, and create-site.
+// bootstrap-admin, create-site, and validate-theme.
 package cli
 
 import (
@@ -43,6 +43,8 @@ func Main(args []string) int {
 		err = runBootstrapAdmin(ctx, args[1:])
 	case "create-site":
 		err = runCreateSite(ctx, args[1:])
+	case "validate-theme":
+		err = runValidateTheme(args[1:])
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 		return 0
@@ -67,9 +69,11 @@ Commands:
   bootstrap-admin         Register the first administrator and print a
                           single-use passkey enrollment permit.
   create-site             Create a site owned by an active administrator.
+  validate-theme          Validate a theme root (theme.json) against the
+                          theme contracts, optionally with a theme config.
 
 Configuration is read from the environment; see README.md for the variable
-reference.
+reference. validate-theme reads only files given on its command line.
 `)
 }
 
