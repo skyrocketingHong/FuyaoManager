@@ -41,6 +41,13 @@ const (
 	StagePersist         = "persist"
 )
 
+// EdgeHook couples the database switch to the serving edge (current pointer
+// plus managed reverse-proxy entry). edge.Manager implements it; a nil hook
+// keeps the purely database-driven behavior.
+type EdgeHook interface {
+	OnLive(ctx context.Context, siteID uuid.UUID, release model.Release) error
+}
+
 // Manager executes publishes and rollbacks against the releases root.
 type Manager struct {
 	pool         *pgxpool.Pool
@@ -50,6 +57,7 @@ type Manager struct {
 	releasesRoot string
 	contracts    ReleaseContract
 	requirements buildrunner.SiteRequirements
+	edge         EdgeHook
 	logger       *slog.Logger
 }
 
@@ -64,6 +72,7 @@ type Config struct {
 	ReleasesRoot string
 	Contracts    ReleaseContract
 	Requirements buildrunner.SiteRequirements
+	Edge         EdgeHook
 	Logger       *slog.Logger
 }
 
@@ -81,6 +90,7 @@ func NewManager(cfg Config) *Manager {
 		releasesRoot: cfg.ReleasesRoot,
 		contracts:    cfg.Contracts,
 		requirements: cfg.Requirements,
+		edge:         cfg.Edge,
 		logger:       logger,
 	}
 }
@@ -345,6 +355,16 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 	now := time.Now().UTC()
 	release.Status = model.ReleaseStatusLive
 	release.ActivatedAt = &now
+	if m.edge != nil {
+		// The database switch is committed; the edge (current pointer plus
+		// managed entry) follows. A failure here is surfaced — the release is
+		// live but the entry may lag — and Reconcile or the next publish
+		// repairs it. The release itself stays live and rollback-able.
+		if err := m.edge.OnLive(ctx, siteID, release); err != nil {
+			m.logger.Error("edge apply after publish", "siteId", siteID, "releaseId", releaseID, "error", err)
+			return release, fmt.Errorf("release is live but the site entry update failed: %w", err)
+		}
+	}
 	m.logger.Info("release published", "siteId", siteID, "releaseId", releaseID,
 		"theme", release.ThemeID+"@"+release.ThemeVersion)
 	return release, nil
@@ -378,6 +398,12 @@ func (m *Manager) Rollback(ctx context.Context, siteID, releaseID, userID uuid.U
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return model.Release{}, err
+	}
+	if m.edge != nil {
+		if err := m.edge.OnLive(ctx, siteID, rolled); err != nil {
+			m.logger.Error("edge apply after rollback", "siteId", siteID, "releaseId", releaseID, "error", err)
+			return rolled, fmt.Errorf("rollback is live but the site entry update failed: %w", err)
+		}
 	}
 	m.logger.Info("release rollback", "siteId", siteID, "releaseId", releaseID)
 	return rolled, nil

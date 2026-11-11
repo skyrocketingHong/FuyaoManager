@@ -1138,6 +1138,100 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/builds/{buildId}/preview-close:
+    post:
+      operationId: closePreviewLink
+      tags: [Builds]
+      summary: Close one build's private preview
+      description: |
+        Tears down the build's preview: issued tokens stop validating
+        immediately, the listener stops, and the platform port assignment is
+        released. Idempotent, and scoped to this one build — other builds'
+        previews and other sites are untouched. A later preview link for the
+        same build mints a fresh token under a new authorization.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/BuildId'
+      responses:
+        '204':
+          description: Preview closed (or already closed).
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The preview service is not configured (`preview_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/visibility:
+    put:
+      operationId: putSiteVisibility
+      tags: [Sites]
+      summary: Set the site's public or private visibility
+      description: |
+        Switches the site between public and private. The change re-binds the
+        site's edge entry by re-applying the managed reverse-proxy
+        configuration: private entries answer only on the private-network
+        address, public entries on all interfaces. The database switch
+        commits first; a failing entry update is reported (`edge_apply_failed`)
+        and stays repairable.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [visibility]
+              properties:
+                visibility:
+                  type: string
+                  enum: [public, private]
+              additionalProperties: false
+            examples:
+              private:
+                value: { visibility: private }
+      responses:
+        '200':
+          description: The refreshed site.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Site'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The database switched but the entry re-apply failed (`edge_apply_failed`); retry or contact the operator.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/releases:
     post:
       operationId: createRelease
@@ -1851,6 +1945,7 @@ components:
             - slug_taken
             - provisioning_unavailable
             - passkey_unavailable
+            - edge_apply_failed
             - internal_error
         detail:
           type: string

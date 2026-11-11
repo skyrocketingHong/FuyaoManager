@@ -1,20 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-	Alert,
-	Button,
-	Card,
-	Popconfirm,
-	Space,
-	Spin,
-	Table,
-	Tag,
-	Typography,
-	message
-} from 'antd';
+import { Alert, Button, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
 import {
 	canEditSite,
+	closePreviewLink,
 	createBuild,
 	createPreviewLink,
 	getSite,
@@ -34,6 +24,7 @@ export default function BuildsPage() {
 	const [builds, setBuilds] = useState<BuildTask[] | null>(null);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [creating, setCreating] = useState(false);
+	const [closing, setClosing] = useState<string | null>(null);
 	const [messageApi, contextHolder] = message.useMessage();
 	// Request epoch: every refresh bumps it; a response applies only while it
 	// is still the newest. Route changes and unmount bump it too, so a late
@@ -125,119 +116,141 @@ export default function BuildsPage() {
 		}
 	}
 
+	// Closing is a server-side action: tokens are revoked and the listener and
+	// port are released. It is confirmed, idempotent, and scoped to this one
+	// build's preview.
+	async function handleClosePreview(buildID: string) {
+		if (!siteId) return;
+		setClosing(buildID);
+		try {
+			await closePreviewLink(siteId, buildID);
+			void messageApi.success(t('builds.previewClosed'));
+		} catch (err) {
+			const key = apiErrorKey(err);
+			if (key !== null) void messageApi.warning(t(key));
+		} finally {
+			setClosing(null);
+		}
+	}
+
 	const editable = site !== null && canEditSite(site);
 
 	return (
 		<>
 			{contextHolder}
-			<Card
-				title={<Trans text={t('builds.title')} />}
-				extra={
-					<Popconfirm
-						title={t('builds.create')}
-						onConfirm={() => void handleCreate()}
-						disabled={!editable}
-					>
-						<Button type="primary" loading={creating} disabled={!editable}>
-							<Trans text={t('builds.create')} />
-						</Button>
-					</Popconfirm>
-				}
-				style={{ marginTop: 16 }}
-			>
-				{errorKey !== null ? (
-					<Alert
-						type="error"
-						showIcon
-						message={t(errorKey ?? 'error.generic')}
-						style={{ marginBottom: 16 }}
-					/>
-				) : null}
-				{builds === null ? (
-					<p role="status">
-						<Spin /> {t('common.loading')}
-					</p>
-				) : builds.length === 0 ? (
-					<p>{t('builds.empty')}</p>
-				) : (
-					<Table<BuildTask>
-						rowKey="id"
-						size="small"
-						dataSource={builds}
-						pagination={false}
-						columns={[
-							{
-								title: 'ID',
-								dataIndex: 'id',
-								render: (id: string) => (
-									<Typography.Text copyable code>
-										{id.slice(0, 8)}
+			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+				<Popconfirm
+					title={t('builds.create')}
+					onConfirm={() => void handleCreate()}
+					disabled={!editable}
+				>
+					<Button type="primary" loading={creating} disabled={!editable}>
+						<Trans text={t('builds.create')} />
+					</Button>
+				</Popconfirm>
+			</div>
+			{errorKey !== null ? (
+				<Alert
+					type="error"
+					showIcon
+					message={t(errorKey ?? 'error.generic')}
+					style={{ marginBottom: 16 }}
+				/>
+			) : null}
+			{builds === null ? (
+				<p role="status">
+					<Spin /> {t('common.loading')}
+				</p>
+			) : builds.length === 0 ? (
+				<p>{t('builds.empty')}</p>
+			) : (
+				<Table<BuildTask>
+					rowKey="id"
+					size="small"
+					dataSource={builds}
+					pagination={false}
+					columns={[
+						{
+							title: 'ID',
+							dataIndex: 'id',
+							render: (id: string) => (
+								<Typography.Text copyable code>
+									{id.slice(0, 8)}
+								</Typography.Text>
+							)
+						},
+						{
+							title: t('builds.status'),
+							dataIndex: 'status',
+							render: (status: string) => (
+								<Tag
+									color={
+										status === 'succeeded'
+											? 'green'
+											: status === 'failed'
+												? 'red'
+												: status === 'running'
+													? 'blue'
+													: 'default'
+									}
+								>
+									{t(`builds.status.${status}` as never)}
+								</Tag>
+							)
+						},
+						{
+							title: t('releases.themeColumn'),
+							render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
+						},
+						{
+							title: t('builds.siteSettingsRevision'),
+							dataIndex: 'siteSettingsRevision'
+						},
+						{
+							title: t('builds.themeRevision'),
+							dataIndex: 'themeSelectionRevision'
+						},
+						{
+							title: t('builds.inputDigests'),
+							render: (_, record) =>
+								record.inputDigests ? (
+									<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+										{String(
+											(record.inputDigests as Record<string, string>).contentDigest ?? ''
+										).slice(7, 19)}
+										…
 									</Typography.Text>
-								)
-							},
-							{
-								title: t('builds.status'),
-								dataIndex: 'status',
-								render: (status: string) => (
-									<Tag
-										color={
-											status === 'succeeded'
-												? 'green'
-												: status === 'failed'
-													? 'red'
-													: status === 'running'
-														? 'blue'
-														: 'default'
-										}
-									>
-										{t(`builds.status.${status}` as never)}
-									</Tag>
-								)
-							},
-							{
-								title: t('releases.themeColumn'),
-								render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
-							},
-							{
-								title: t('builds.siteSettingsRevision'),
-								dataIndex: 'siteSettingsRevision'
-							},
-							{
-								title: t('builds.themeRevision'),
-								dataIndex: 'themeSelectionRevision'
-							},
-							{
-								title: t('builds.inputDigests'),
-								render: (_, record) =>
-									record.inputDigests ? (
-										<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-											{String(
-												(record.inputDigests as Record<string, string>).contentDigest ?? ''
-											).slice(7, 19)}
-											…
+								) : null
+						},
+						{
+							render: (_, record) => (
+								<Space>
+									{record.failure ? (
+										<Typography.Text type="danger">
+											{t('builds.failureStage')}: {record.failure.stage}
 										</Typography.Text>
-									) : null
-							},
-							{
-								render: (_, record) => (
-									<Space>
-										{record.failure ? (
-											<Typography.Text type="danger">
-												{t('builds.failureStage')}: {record.failure.stage}
-											</Typography.Text>
-										) : null}
-										{record.status === 'succeeded' ? (
-											<Button size="small" onClick={() => void handlePreview(record.id)}>
-												<Trans text={t('builds.preview')} />
+									) : null}
+									{record.status === 'succeeded' ? (
+										<Button size="small" onClick={() => void handlePreview(record.id)}>
+											<Trans text={t('builds.preview')} />
+										</Button>
+									) : null}
+									{record.status === 'succeeded' && editable ? (
+										<Popconfirm
+											title={t('builds.previewCloseConfirm')}
+											onConfirm={() => void handleClosePreview(record.id)}
+										>
+											<Button size="small" loading={closing === record.id}>
+												<Trans text={t('builds.previewClose')} />
 											</Button>
-										) : null}
-									</Space>
-								)
-							}
-						]}
-					/>
-				)}
-			</Card>
+										</Popconfirm>
+									) : null}
+								</Space>
+							)
+						}
+					]}
+				/>
+			)}
 		</>
 	);
 }

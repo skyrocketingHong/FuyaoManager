@@ -20,11 +20,13 @@ type BuildEnqueuer interface {
 	Enqueue(buildID uuid.UUID)
 }
 
-// PreviewIssuer mints private preview links. buildrunner.PreviewServer
-// implements it; Issue returns the ready-to-open URL on the build's private
-// preview origin.
+// PreviewIssuer mints and closes private preview links. buildrunner's
+// PreviewServer implements it; Issue returns the ready-to-open URL on the
+// build's private preview origin, ClosePreview tears that one origin down
+// (tokens revoked, listener stopped, port released) idempotently.
 type PreviewIssuer interface {
 	Issue(siteID, buildID uuid.UUID) (url string, expiresAt time.Time, err error)
+	CloseOrigin(siteID, buildID uuid.UUID) error
 }
 
 var errRunnerNotConfigured = errors.New("build runner not configured")
@@ -232,6 +234,42 @@ func (a *API) handleCreatePreviewLink(w http.ResponseWriter, r *http.Request, au
 		"url":       url,
 		"expiresAt": expiresAt.UTC().Format(time.RFC3339),
 	})
+}
+
+// handleClosePreviewLink closes one build's private preview: issued tokens
+// stop validating immediately, the listener stops, and the platform port
+// assignment is released. Closing is idempotent and scoped to this one build
+// — other builds' previews and other sites are untouched. A later preview
+// link for the same build mints a fresh token (and may reuse the freed port).
+func (a *API) handleClosePreviewLink(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	siteID, ok := parseSiteID(w, r)
+	if !ok {
+		return
+	}
+	buildID, ok := parseUUIDPath(w, r, "buildId")
+	if !ok {
+		return
+	}
+	if a.previews == nil {
+		writeProblem(w, http.StatusServiceUnavailable, "preview_unavailable", "The preview server is not configured on this server.")
+		return
+	}
+	_, err := a.store.Builds.GetForUser(r.Context(), buildID, siteID, auth.User.ID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeProblem(w, http.StatusNotFound, "build_not_found", "The build task does not exist on this site.")
+		return
+	}
+	if err != nil {
+		a.logger.Error("get build for preview close", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to close the preview.")
+		return
+	}
+	if err := a.previews.CloseOrigin(siteID, buildID); err != nil {
+		a.logger.Error("close preview origin", "siteId", siteID, "buildId", buildID, "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to close the preview.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // parseUUIDPath extracts a request-path UUID value or writes a 400.

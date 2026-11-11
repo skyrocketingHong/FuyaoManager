@@ -445,6 +445,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/builds/{buildId}/preview-close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close one build's private preview
+         * @description Tears down the build's preview: issued tokens stop validating
+         *     immediately, the listener stops, and the platform port assignment is
+         *     released. Idempotent, and scoped to this one build — other builds'
+         *     previews and other sites are untouched. A later preview link for the
+         *     same build mints a fresh token under a new authorization.
+         */
+        post: operations["closePreviewLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the site's public or private visibility
+         * @description Switches the site between public and private. The change re-binds the
+         *     site's edge entry by re-applying the managed reverse-proxy
+         *     configuration: private entries answer only on the private-network
+         *     address, public entries on all interfaces. The database switch
+         *     commits first; a failing entry update is reported (`edge_apply_failed`)
+         *     and stays repairable.
+         */
+        put: operations["putSiteVisibility"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/releases": {
         parameters: {
             query?: never;
@@ -729,7 +778,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "internal_error";
             detail?: string;
         };
         User: {
@@ -1997,6 +2046,90 @@ export interface operations {
             };
             /** @description The preview server is not configured on this server (`preview_unavailable`). */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    closePreviewLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description Build task UUID. */
+                buildId: components["parameters"]["BuildId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview closed (or already closed). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The preview service is not configured (`preview_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    putSiteVisibility: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    visibility: "public" | "private";
+                };
+            };
+        };
+        responses: {
+            /** @description The refreshed site. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Site"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The database switched but the entry re-apply failed (`edge_apply_failed`); retry or contact the operator. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

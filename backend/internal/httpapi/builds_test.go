@@ -84,6 +84,16 @@ func (l *latePreviews) set(p PreviewIssuer) {
 	l.mu.Unlock()
 }
 
+func (l *latePreviews) CloseOrigin(siteID, buildID uuid.UUID) error {
+	l.mu.Lock()
+	p := l.p
+	l.mu.Unlock()
+	if p == nil {
+		return errors.New("preview server not wired yet")
+	}
+	return p.CloseOrigin(siteID, buildID)
+}
+
 func (l *latePreviews) Issue(siteID, buildID uuid.UUID) (string, time.Time, error) {
 	l.mu.Lock()
 	p := l.p

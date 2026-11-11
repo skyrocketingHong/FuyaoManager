@@ -102,6 +102,21 @@ func (s *SiteStore) Create(ctx context.Context, params NewSiteParams, owner uuid
 	return s.GetForUser(ctx, id, owner)
 }
 
+// UpdateVisibility switches a site's public/private visibility. The caller is
+// responsible for re-applying the edge configuration so the entry binding
+// actually follows.
+func (s *SiteStore) UpdateVisibility(ctx context.Context, siteID uuid.UUID, visibility string) error {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE sites SET visibility = $2, updated_at = now() WHERE id = $1`, siteID, visibility)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MarkProvisioned transitions the provisioning state. An empty failure marks
 // the site ready; a non-empty failure records the exact stage that broke (and
 // never downgrades an already-ready site).

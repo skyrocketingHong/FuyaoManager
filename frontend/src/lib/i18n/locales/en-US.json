@@ -149,5 +149,9 @@
 	"builds.status": "Status",
 	"error.releaseBuildConflict": "This build already backs a release; roll back to it instead.",
 	"releases.candidate": "Candidate build",
-	"releases.candidatePublished": "Already released"
+	"releases.candidatePublished": "Already released",
+	"builds.previewClose": "Close preview",
+	"builds.previewCloseConfirm": "Closing revokes every preview link of this build and releases its resources. A later preview mints a fresh link.",
+	"builds.previewClosed": "Preview closed.",
+	"error.edgeApplyFailed": "The database switched but the site entry update failed; retry or contact the operator."
 }

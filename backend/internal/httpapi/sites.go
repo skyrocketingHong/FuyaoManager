@@ -457,6 +457,59 @@ func (a *API) provisionSite(r *http.Request, rec store.SiteRecord, userID uuid.U
 	return rec, failure
 }
 
+// handlePutVisibility switches a site between public and private. Changing
+// visibility re-binds the site's edge entry (private entries answer only on
+// the private-network address, public entries on all interfaces) by
+// re-applying the managed reverse-proxy configuration; the database switch
+// commits first, so a failing re-apply stays repairable and is reported.
+func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	siteID, ok := parseSiteID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		Visibility string `json:"visibility"`
+	}
+	if !decodeJSON(w, r, &body, false) {
+		return
+	}
+	if body.Visibility != model.SiteVisibilityPrivate && body.Visibility != model.SiteVisibilityPublic {
+		writeProblem(w, http.StatusBadRequest, "validation_error", "visibility must be one of: private, public.")
+		return
+	}
+	rec, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID)
+	if err != nil {
+		writeSiteLookupError(w, err)
+		return
+	}
+	if rec.Role != model.RoleOwner && rec.Role != model.RoleEditor {
+		writeProblem(w, http.StatusForbidden, "forbidden", "Only owners and editors may change site visibility.")
+		return
+	}
+	if rec.Site.Visibility == body.Visibility {
+		writeJSON(w, http.StatusOK, toSiteDTO(rec))
+		return
+	}
+	if err := a.store.Sites.UpdateVisibility(r.Context(), siteID, body.Visibility); err != nil {
+		a.logger.Error("update visibility", "siteId", siteID, "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to change visibility.")
+		return
+	}
+	if a.edge != nil {
+		if err := a.edge.Reconcile(r.Context()); err != nil {
+			a.logger.Error("edge apply after visibility change", "siteId", siteID, "error", err)
+			writeProblem(w, http.StatusConflict, "edge_apply_failed", "Visibility changed in the database but the entry update failed; retry or contact the operator.")
+			return
+		}
+	}
+	refreshed, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID)
+	if err != nil {
+		writeSiteLookupError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toSiteDTO(refreshed))
+}
+
 // isUniqueViolation reports whether err is a PostgreSQL unique-constraint
 // violation (SQLSTATE 23505).
 func isUniqueViolation(err error) bool {

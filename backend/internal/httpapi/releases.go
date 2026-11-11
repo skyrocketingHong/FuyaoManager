@@ -228,7 +228,17 @@ func (a *API) handleGetCurrentRelease(w http.ResponseWriter, r *http.Request, au
 		return
 	}
 	originURL := ""
-	if a.publishedOrigins != nil {
+	if a.store.NetworkEntries != nil && a.edge != nil {
+		// The managed edge entry (operator-approved IP:port) wins when the
+		// site has one; the loopback published origin remains the local
+		// development fallback.
+		if site, siteErr := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); siteErr == nil {
+			if entry, entryErr := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); entryErr == nil {
+				originURL = a.edge.EntryURL(site.Site.Visibility, entry.Port)
+			}
+		}
+	}
+	if originURL == "" && a.publishedOrigins != nil {
 		if url, err := a.publishedOrigins.OriginURL(r.Context(), siteID); err == nil {
 			originURL = url
 		}

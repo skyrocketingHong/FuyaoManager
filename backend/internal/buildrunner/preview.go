@@ -3,6 +3,7 @@ package buildrunner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"mime"
@@ -10,11 +11,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 )
 
 // PreviewTarget resolves what a preview origin serves: the succeeded build's
@@ -24,13 +28,30 @@ type PreviewTarget interface {
 	GetPreviewTarget(ctx context.Context, buildID uuid.UUID) (artifactPath, spaFallback string, err error)
 }
 
+// PortSource allocates and releases platform port assignments for preview
+// origins. store.NetworkEntryStore implements it.
+type PortSource interface {
+	EnsurePreviewEntry(ctx context.Context, siteID, buildID uuid.UUID, minPort, maxPort int) (store.NetworkEntry, bool, error)
+	ReleasePreview(ctx context.Context, buildID uuid.UUID) error
+}
+
 // PreviewConfig assembles the private preview service. BuildsRoot is the
-// per-task root; artifact paths must resolve inside it.
+// per-task root; artifact paths must resolve inside it. BindAddr is the
+// address preview listeners bind (loopback for local development, the
+// private-network address for remote access); ExternalBase is the URL base
+// handed to browsers (never a 127.0.0.1 literal when remote clients exist).
+// Ports, PortMin/PortMax enable persistent platform port allocation; without
+// Ports the origins use OS-assigned ports on the bind address.
 type PreviewConfig struct {
-	Target     PreviewTarget
-	BuildsRoot string
-	TTL        time.Duration
-	MaxOrigins int
+	Target       PreviewTarget
+	BuildsRoot   string
+	TTL          time.Duration
+	MaxOrigins   int
+	BindAddr     string
+	ExternalBase string // e.g. "http://100.117.154.115"
+	Ports        PortSource
+	PortMin      int
+	PortMax      int
 }
 
 // previewCookiePrefix starts the per-origin authorization cookie name.
@@ -56,6 +77,7 @@ type previewOrigin struct {
 	mu          sync.Mutex
 	tokens      map[string]time.Time
 	ln          net.Listener
+	port        int
 	httpSrv     *http.Server
 	artifactDir string
 	spaFallback string
@@ -78,6 +100,10 @@ func NewPreviewServer(cfg PreviewConfig) *PreviewServer {
 	if cfg.MaxOrigins <= 0 {
 		cfg.MaxOrigins = 100
 	}
+	if cfg.BindAddr == "" {
+		cfg.BindAddr = "127.0.0.1"
+	}
+	cfg.ExternalBase = strings.TrimRight(cfg.ExternalBase, "/")
 	return &PreviewServer{cfg: cfg, origins: make(map[uuid.UUID]*previewOrigin)}
 }
 
@@ -123,7 +149,38 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 	origin.mu.Lock()
 	origin.tokens[token] = expiresAt
 	origin.mu.Unlock()
-	return "http://" + origin.ln.Addr().String() + "/__preview__/" + token, expiresAt, nil
+	// The URL always carries the externally reachable base; the listener's
+	// own address (loopback or private bind) is never leaked to browsers.
+	base := p.cfg.ExternalBase
+	if base == "" {
+		base = "http://" + p.cfg.BindAddr
+	}
+	return base + ":" + strconv.Itoa(origin.port) + "/__preview__/" + token, expiresAt, nil
+}
+
+// CloseOrigin tears down one build's preview: every issued token is revoked,
+// the listener stops, and the platform port assignment is released. It is
+// idempotent — closing an already-closed (or never-opened) preview succeeds —
+// and never touches other builds' or sites' previews.
+func (p *PreviewServer) CloseOrigin(siteID, buildID uuid.UUID) error {
+	p.mu.Lock()
+	origin, ok := p.origins[buildID]
+	if ok {
+		delete(p.origins, buildID)
+	}
+	p.mu.Unlock()
+	if ok {
+		origin.mu.Lock()
+		origin.tokens = make(map[string]time.Time)
+		origin.mu.Unlock()
+		_ = origin.httpSrv.Close()
+	}
+	if p.cfg.Ports != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return p.cfg.Ports.ReleasePreview(ctx, buildID)
+	}
+	return nil
 }
 
 // Close shuts every origin's listener down.
@@ -153,9 +210,28 @@ func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFal
 		return nil, errors.New("preview origin limit reached; restart the service to clear")
 	}
 	// Fixed loopback bind: never an empty host, never a non-loopback address.
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	port := 0
+	bindAddr := p.cfg.BindAddr
+	if p.cfg.Ports != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		entry, _, err := p.cfg.Ports.EnsurePreviewEntry(ctx, siteID, buildID, p.cfg.PortMin, p.cfg.PortMax)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		port = entry.Port
+	}
+	ln, err := net.Listen("tcp", net.JoinHostPort(bindAddr, strconv.Itoa(port)))
 	if err != nil {
+		// Port 0 asks the OS for any free port; a persistent allocation binds
+		// its exact platform port.
+		if port != 0 {
+			return nil, fmt.Errorf("bind preview port %d on %s: %w", port, bindAddr, err)
+		}
 		return nil, err
+	}
+	if port == 0 {
+		port = ln.Addr().(*net.TCPAddr).Port
 	}
 	origin := &previewOrigin{
 		server:      p,
@@ -163,6 +239,7 @@ func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFal
 		buildID:     buildID,
 		tokens:      make(map[string]time.Time),
 		ln:          ln,
+		port:        port,
 		artifactDir: artifactDir,
 		spaFallback: spaFallback,
 	}

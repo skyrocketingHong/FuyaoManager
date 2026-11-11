@@ -66,6 +66,16 @@ export async function provisionSite(siteId: string): Promise<Site> {
 	return data;
 }
 
+export async function putSiteVisibility(
+	siteId: string,
+	visibility: 'public' | 'private'
+): Promise<Site> {
+	const { data } = await api<Site>('PUT', `/api/v1/sites/${siteId}/visibility`, {
+		body: { visibility }
+	});
+	return data;
+}
+
 export async function getSite(siteId: string): Promise<Site> {
 	const { data } = await api<Site>('GET', `/api/v1/sites/${siteId}`);
 	return data;
@@ -146,6 +156,11 @@ export async function createPreviewLink(siteId: string, buildId: string): Promis
 		{ body: {} }
 	);
 	return data;
+}
+
+/** Closes the build's preview server-side: tokens revoked, listener and port released. */
+export async function closePreviewLink(siteId: string, buildId: string): Promise<void> {
+	await api<void>('POST', `/api/v1/sites/${siteId}/builds/${buildId}/preview-close`, { body: {} });
 }
 
 // --- releases ---

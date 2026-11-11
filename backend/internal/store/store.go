@@ -29,33 +29,35 @@ var (
 
 // Store aggregates the individual record stores.
 type Store struct {
-	Pool       *pgxpool.Pool
-	Users      *UserStore
-	Passkeys   *PasskeyStore
-	Sessions   *SessionStore
-	AuthStates *AuthStateStore
-	Permits    *PermitStore
-	AuthCodes  *AuthCodeStore
-	Sites      *SiteStore
-	Themes     *ThemeStore
-	Builds     *BuildStore
-	Releases   *ReleaseStore
+	Pool           *pgxpool.Pool
+	Users          *UserStore
+	Passkeys       *PasskeyStore
+	Sessions       *SessionStore
+	AuthStates     *AuthStateStore
+	Permits        *PermitStore
+	AuthCodes      *AuthCodeStore
+	Sites          *SiteStore
+	Themes         *ThemeStore
+	Builds         *BuildStore
+	Releases       *ReleaseStore
+	NetworkEntries *NetworkEntryStore
 }
 
 // New wires a Store around the given pool.
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
-		Pool:       pool,
-		Users:      &UserStore{pool: pool},
-		Passkeys:   &PasskeyStore{pool: pool},
-		Sessions:   &SessionStore{pool: pool},
-		AuthStates: &AuthStateStore{pool: pool},
-		Permits:    &PermitStore{pool: pool},
-		AuthCodes:  &AuthCodeStore{pool: pool},
-		Sites:      &SiteStore{pool: pool},
-		Themes:     &ThemeStore{pool: pool},
-		Builds:     &BuildStore{pool: pool},
-		Releases:   &ReleaseStore{pool: pool},
+		Pool:           pool,
+		Users:          &UserStore{pool: pool},
+		Passkeys:       &PasskeyStore{pool: pool},
+		Sessions:       &SessionStore{pool: pool},
+		AuthStates:     &AuthStateStore{pool: pool},
+		Permits:        &PermitStore{pool: pool},
+		AuthCodes:      &AuthCodeStore{pool: pool},
+		Sites:          &SiteStore{pool: pool},
+		Themes:         &ThemeStore{pool: pool},
+		Builds:         &BuildStore{pool: pool},
+		Releases:       &ReleaseStore{pool: pool},
+		NetworkEntries: &NetworkEntryStore{pool: pool},
 	}
 }
 

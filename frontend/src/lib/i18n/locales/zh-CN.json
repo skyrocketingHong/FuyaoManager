@@ -149,5 +149,9 @@
 	"builds.status": "状态",
 	"error.releaseBuildConflict": "此构建已对应一个发布；请改为回滚。",
 	"releases.candidate": "候选构建",
-	"releases.candidatePublished": "已发布"
+	"releases.candidatePublished": "已发布",
+	"builds.previewClose": "关闭预览",
+	"builds.previewCloseConfirm": "关闭将撤销此构建的所有预览链接并释放其资源。之后可重新开启，使用新链接。",
+	"builds.previewClosed": "预览已关闭。",
+	"error.edgeApplyFailed": "数据库已切换但站点入口更新失败，请重试或联系运维。"
 }

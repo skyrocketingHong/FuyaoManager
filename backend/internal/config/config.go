@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -24,7 +25,15 @@ const (
 	EnvPermitTTL         = "FUYAO_ADMIN_PERMIT_TTL"
 	EnvAuthCodeTTL       = "FUYAO_ADMIN_AUTH_CODE_TTL"
 	EnvThemeContractsDir = "FUYAO_ADMIN_THEME_CONTRACTS"
-	EnvPreviewAddr       = "FUYAO_ADMIN_PREVIEW_ADDR"
+	EnvPreviewBind       = "FUYAO_ADMIN_PREVIEW_BIND"
+	EnvPreviewBase       = "FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE"
+	EnvEdgeSnippetDir    = "FUYAO_ADMIN_EDGE_SNIPPET_DIR"
+	EnvEdgeApplyCmd      = "FUYAO_ADMIN_EDGE_APPLY_CMD"
+	EnvEdgePrivateBind   = "FUYAO_ADMIN_EDGE_PRIVATE_BIND"
+	EnvEdgePublicBind    = "FUYAO_ADMIN_EDGE_PUBLIC_BIND"
+	EnvEdgePublicHost    = "FUYAO_ADMIN_EDGE_PUBLIC_HOST"
+	EnvPortMin           = "FUYAO_ADMIN_PORT_MIN"
+	EnvPortMax           = "FUYAO_ADMIN_PORT_MAX"
 	EnvRepoRoot          = "FUYAO_ADMIN_REPO_ROOT"
 	EnvSitesRoot         = "FUYAO_ADMIN_SITES_ROOT"
 	EnvAdminUIDir        = "FUYAO_ADMIN_UI_DIR"
@@ -39,41 +48,63 @@ const (
 // deployment topology), and cookies are marked Secure unless every origin is
 // a loopback HTTP origin.
 type Config struct {
-	DatabaseURL       string
-	Addr              string
-	TrustedHosts      []string
-	RPID              string
-	RPDisplayName     string
-	RPOrigins         []string
-	SessionTTL        time.Duration
-	ChallengeTTL      time.Duration
-	PermitTTL         time.Duration
-	AuthCodeTTL       time.Duration
-	CookieSecure      bool
-	ThemeContractsDir string
-	RepoRoot          string
-	SitesRoot         string
-	AdminUIDir        string
-	BuildMode         string
-	RequireCaps       []string
-	RequireURLs       []string
+	DatabaseURL         string
+	Addr                string
+	TrustedHosts        []string
+	RPID                string
+	RPDisplayName       string
+	RPOrigins           []string
+	SessionTTL          time.Duration
+	ChallengeTTL        time.Duration
+	PermitTTL           time.Duration
+	AuthCodeTTL         time.Duration
+	CookieSecure        bool
+	ThemeContractsDir   string
+	RepoRoot            string
+	SitesRoot           string
+	AdminUIDir          string
+	PreviewBind         string
+	PreviewExternalBase string
+	EdgeSnippetDir      string
+	EdgeApplyCmd        []string
+	EdgePrivateBind     string
+	EdgePublicBind      string
+	EdgePublicHost      string
+	PortMin             int
+	PortMax             int
+	BuildMode           string
+	RequireCaps         []string
+	RequireURLs         []string
 }
 
 // Load reads the environment and validates it.
 func Load() (Config, error) {
 	cfg := Config{
-		DatabaseURL:       os.Getenv(EnvDatabaseURL),
-		Addr:              envDefault(EnvAddr, "127.0.0.1:8787"),
-		TrustedHosts:      csvEnv(EnvTrustedHosts, ""),
-		RPID:              envDefault(EnvRPID, "localhost"),
-		RPDisplayName:     envDefault(EnvRPName, "Fuyao Admin"),
-		ThemeContractsDir: envDefault(EnvThemeContractsDir, ""),
-		RepoRoot:          envDefault(EnvRepoRoot, ""),
-		SitesRoot:         envDefault(EnvSitesRoot, ""),
-		AdminUIDir:        envDefault(EnvAdminUIDir, ""),
-		BuildMode:         envDefault(EnvBuildMode, "ci"),
-		RequireCaps:       csvEnv(EnvRequireCaps, "blog"),
-		RequireURLs:       csvEnv(EnvRequireURLs, "posts,blog-rss,sitemap"),
+		DatabaseURL:         os.Getenv(EnvDatabaseURL),
+		Addr:                envDefault(EnvAddr, "127.0.0.1:8787"),
+		TrustedHosts:        csvEnv(EnvTrustedHosts, ""),
+		RPID:                envDefault(EnvRPID, "localhost"),
+		RPDisplayName:       envDefault(EnvRPName, "Fuyao Admin"),
+		ThemeContractsDir:   envDefault(EnvThemeContractsDir, ""),
+		RepoRoot:            envDefault(EnvRepoRoot, ""),
+		SitesRoot:           envDefault(EnvSitesRoot, ""),
+		AdminUIDir:          envDefault(EnvAdminUIDir, ""),
+		PreviewBind:         envDefault(EnvPreviewBind, "127.0.0.1"),
+		PreviewExternalBase: envDefault(EnvPreviewBase, ""),
+		EdgeSnippetDir:      envDefault(EnvEdgeSnippetDir, ""),
+		EdgePrivateBind:     envDefault(EnvEdgePrivateBind, "127.0.0.1"),
+		EdgePublicBind:      envDefault(EnvEdgePublicBind, ""),
+		EdgePublicHost:      envDefault(EnvEdgePublicHost, ""),
+		PortMin:             20000,
+		PortMax:             20100,
+		BuildMode:           envDefault(EnvBuildMode, "ci"),
+		RequireCaps:         csvEnv(EnvRequireCaps, "blog"),
+		RequireURLs:         csvEnv(EnvRequireURLs, "posts,blog-rss,sitemap"),
+	}
+
+	applyCmdRaw := envDefault(EnvEdgeApplyCmd, "sudo -n /usr/local/sbin/fuyao-caddy-apply")
+	for _, part := range strings.Fields(applyCmdRaw) {
+		cfg.EdgeApplyCmd = append(cfg.EdgeApplyCmd, part)
 	}
 
 	origins := envDefault(EnvRPOrigins, "http://localhost:5174")
@@ -98,11 +129,40 @@ func Load() (Config, error) {
 	if ttlErr != nil {
 		return Config{}, ttlErr
 	}
+	var intErr error
+	setInt := func(envName string, dst *int, fallback int) {
+		if intErr != nil {
+			return
+		}
+		*dst, intErr = envInt(envName, fallback)
+	}
+	setInt(EnvPortMin, &cfg.PortMin, 20000)
+	setInt(EnvPortMax, &cfg.PortMax, 20100)
+	if intErr != nil {
+		return Config{}, intErr
+	}
+	if ttlErr != nil {
+		return Config{}, ttlErr
+	}
 
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+// envInt parses an integer setting. A present-but-invalid value is a
+// configuration error, never a silent fallback.
+func envInt(key string, fallback int) (int, error) {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0, fmt.Errorf("%s %q is not a valid integer", key, v)
+	}
+	return n, nil
 }
 
 func (c *Config) validate() error {
@@ -111,6 +171,9 @@ func (c *Config) validate() error {
 	}
 	if err := c.validateAddr(c.Addr); err != nil {
 		return err
+	}
+	if c.PortMin < 1024 || c.PortMax > 65535 || c.PortMin > c.PortMax {
+		return fmt.Errorf("%s/%s must define a port range within 1024-65535 with min <= max", EnvPortMin, EnvPortMax)
 	}
 	if c.RPID == "" {
 		return fmt.Errorf("%s must not be empty", EnvRPID)

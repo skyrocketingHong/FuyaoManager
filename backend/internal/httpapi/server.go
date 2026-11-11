@@ -4,6 +4,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"log/slog"
@@ -38,11 +39,19 @@ type Config struct {
 	Publisher        Publisher
 	PublishedOrigins PublishedOrigins
 	Provisioner      SiteProvisioner
+	Edge             EdgeManager
 }
 
 // SiteProvisioner provisions the per-site on-disk tree at site creation.
 type SiteProvisioner interface {
 	Provision(site model.Site, settings model.SiteSettings) error
+}
+
+// EdgeManager renders published-site entry URLs and re-applies the managed
+// reverse-proxy configuration. edge.Manager implements it.
+type EdgeManager interface {
+	EntryURL(visibility string, port int) string
+	Reconcile(ctx context.Context) error
 }
 
 // API wires the stores, WebAuthn instance, and HTTP handlers.
@@ -58,6 +67,7 @@ type API struct {
 	publisher        Publisher
 	publishedOrigins PublishedOrigins
 	provisioner      SiteProvisioner
+	edge             EdgeManager
 	exchangeLimiter  *exchangeLimiter
 }
 
@@ -97,6 +107,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPost, "/api/v1/sites", "createSite", a.requireAuth(a.withCSRF(a.handleCreateSite))},
 		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireAuth(a.handleGetSite)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireAuth(a.withCSRF(a.handleProvisionSite))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireAuth(a.withCSRF(a.handlePutVisibility))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireAuth(a.handleGetSettings)},
 		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireAuth(a.withCSRF(a.handlePatchSettings))},
 
@@ -113,6 +124,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireAuth(a.handleListBuilds)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireAuth(a.handleGetBuild)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-links", "createPreviewLink", a.requireAuth(a.withCSRF(a.handleCreatePreviewLink))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-close", "closePreviewLink", a.requireAuth(a.withCSRF(a.handleClosePreviewLink))},
 
 		// Releases: publish freezes a succeeded build's artifacts into a
 		// release directory and atomically switches the site's live version;
@@ -141,6 +153,7 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		publisher:        cfg.Publisher,
 		publishedOrigins: cfg.PublishedOrigins,
 		provisioner:      cfg.Provisioner,
+		edge:             cfg.Edge,
 		exchangeLimiter:  newExchangeLimiter(),
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))

@@ -23,6 +23,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/config"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
@@ -218,13 +219,47 @@ func runServe(ctx context.Context) error {
 	}
 	defer runner.Stop()
 
-	// Preview origins are per-build loopback listeners created on demand by
-	// Issue; Close tears them all down with the service.
+	// Preview origins are per-build listeners created on demand by Issue;
+	// Close tears them all down with the service. Ports come from the
+	// platform allocation table so a port never silently switches builds,
+	// and the bind address reaches remote (private-network) browsers in
+	// deployment while staying loopback in local development.
 	previews := buildrunner.NewPreviewServer(buildrunner.PreviewConfig{
-		Target:     st.Builds,
-		BuildsRoot: buildsRoot,
+		Target:       st.Builds,
+		BuildsRoot:   buildsRoot,
+		BindAddr:     cfg.PreviewBind,
+		ExternalBase: cfg.PreviewExternalBase,
+		Ports:        st.NetworkEntries,
+		PortMin:      cfg.PortMin,
+		PortMax:      cfg.PortMax,
 	})
 	defer previews.Close()
+
+	releasesRoot := filepath.Join(siteWork, ".fuyao", "admin-releases")
+
+	// The published-site edge: per-site current pointers plus the managed
+	// reverse-proxy snippet. Always constructed (EntryURL rendering works
+	// without snippet management); snippet application activates only when
+	// the operator configured a snippet directory.
+	edgeMgr := edge.New(edge.Config{
+		Pool:         pool,
+		Entries:      st.NetworkEntries,
+		SnippetDir:   cfg.EdgeSnippetDir,
+		ApplyCmd:     cfg.EdgeApplyCmd,
+		PrivateBind:  cfg.EdgePrivateBind,
+		PublicBind:   cfg.EdgePublicBind,
+		PublicHost:   cfg.EdgePublicHost,
+		ReleasesRoot: releasesRoot,
+		SitesRoot:    sitesRoot,
+		PortMin:      cfg.PortMin,
+		PortMax:      cfg.PortMax,
+		Logger:       logger,
+	})
+	go func() {
+		if err := edgeMgr.Reconcile(context.Background()); err != nil {
+			logger.Error("edge reconcile at startup", "error", err)
+		}
+	}()
 
 	// The publish pipeline seals succeeded builds into per-site release
 	// directories and atomically switches the live release; published origins
@@ -234,7 +269,6 @@ func runServe(ctx context.Context) error {
 	var publisher httpapi.Publisher
 	var publishedOrigins httpapi.PublishedOrigins
 	if set, ok := themeContracts.(*themecontract.Set); ok {
-		releasesRoot := filepath.Join(siteWork, ".fuyao", "admin-releases")
 		manager := publish.NewManager(publish.Config{
 			Pool:         pool,
 			Releases:     st.Releases,
@@ -243,6 +277,7 @@ func runServe(ctx context.Context) error {
 			ReleasesRoot: releasesRoot,
 			Contracts:    set,
 			Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
+			Edge:         edgeMgr,
 			Logger:       logger,
 		})
 		publisher = manager
@@ -263,6 +298,7 @@ func runServe(ctx context.Context) error {
 		Publisher:        publisher,
 		PublishedOrigins: publishedOrigins,
 		Provisioner:      provisioner,
+		Edge:             edgeMgr,
 	}, logger)
 
 	if cfg.AdminUIDir != "" {
