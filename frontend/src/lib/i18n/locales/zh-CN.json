@@ -252,5 +252,16 @@
 	"footprints.mapUnavailableBody": "高德脚本未随该站点 Key 加载。请检查站点资料中是否配置了浏览器 Key、该 Key 的域名白名单是否包含当前管理台地址；坐标输入不受影响。",
 	"footprints.removeCityConfirm": "移除该城市及其地点？",
 	"footprints.removePlaceConfirm": "移除该地点？",
-	"error.photoInUse": "此照片仍被生效或可回滚的发布引用。"
+	"error.photoInUse": "此照片仍被生效或可回滚的发布引用。",
+	"nav.themesCatalog": "主题目录",
+	"themes.themeColumn": "主题",
+	"themes.adapterColumn": "适配器",
+	"themes.capabilitiesColumn": "能力",
+	"themes.requirementsColumn": "URL 约定",
+	"themes.artifacts": "产物",
+	"themes.configColumn": "配置",
+	"themes.schemaDeclared": "有 schema",
+	"themes.emptyConfigOnly": "仅空对象",
+	"themes.emptyCatalog": "暂无注册主题；使用 fuyao-admin register-theme 登记。",
+	"themes.registerHint": "登记由运维执行：fuyao-admin register-theme --contracts <目录> <主题根>"
 }

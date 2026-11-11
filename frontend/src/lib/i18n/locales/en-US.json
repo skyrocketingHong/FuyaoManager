@@ -252,5 +252,16 @@
 	"footprints.mapUnavailableBody": "The AMap script did not load with this site key. Check that a browser key is configured in the site profile and that this admin origin is allowed by the key whitelist; coordinate inputs keep working.",
 	"footprints.removeCityConfirm": "Remove this city and its places?",
 	"footprints.removePlaceConfirm": "Remove this place?",
-	"error.photoInUse": "This photo is still referenced by a live or rollback-able release."
+	"error.photoInUse": "This photo is still referenced by a live or rollback-able release.",
+	"nav.themesCatalog": "Theme catalog",
+	"themes.themeColumn": "Theme",
+	"themes.adapterColumn": "Adapter",
+	"themes.capabilitiesColumn": "Capabilities",
+	"themes.requirementsColumn": "URL conventions",
+	"themes.artifacts": "artifacts",
+	"themes.configColumn": "Config",
+	"themes.schemaDeclared": "schema",
+	"themes.emptyConfigOnly": "empty object",
+	"themes.emptyCatalog": "No registered themes; register one with fuyao-admin register-theme.",
+	"themes.registerHint": "Registration is operator-driven: fuyao-admin register-theme --contracts <dir> <theme-root>"
 }

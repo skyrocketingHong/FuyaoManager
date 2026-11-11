@@ -7,6 +7,7 @@ import { initTheme } from './lib/theme';
 import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
 import LoginPage from './pages/LoginPage';
 import SitesPage from './pages/SitesPage';
+import ThemesCatalogPage from './pages/ThemesCatalogPage';
 import SiteDetailPage from './pages/sites/SiteDetailPage';
 import SettingsPage from './pages/sites/SettingsPage';
 import ThemePage from './pages/sites/ThemePage';
@@ -36,6 +37,7 @@ export default function App() {
 			<Route path="/" element={<Navigate to="/sites" replace />} />
 			<Route path="/login" element={<LoginPage />} />
 			<Route path="/sites" element={<SitesPage />} />
+			<Route path="/themes" element={<ThemesCatalogPage />} />
 			<Route path="/sites/:siteId" element={<SiteDetailPage />} />
 			<Route path="/sites/:siteId/settings" element={<SettingsPage />} />
 			<Route path="/sites/:siteId/config" element={<SiteConfigPage />} />

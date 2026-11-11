@@ -135,7 +135,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		? scope.section === 'overview'
 			? `/sites/${scope.siteId}`
 			: `/sites/${scope.siteId}/${scope.section}`
-		: '/sites';
+		: scope.titleKey === ('nav.themesCatalog' as MessageKey)
+			? '/themes'
+			: '/sites';
 
 	return (
 		<Layout style={{ minHeight: '100vh' }}>
