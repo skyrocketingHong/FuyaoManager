@@ -16,6 +16,13 @@ export type CreationOptions = components['schemas']['PublicKeyCredentialCreation
 export type RequestOptions = components['schemas']['PublicKeyCredentialRequestOptions'];
 export type CreationOptionsEnvelope = components['schemas']['CreationOptionsEnvelope'];
 export type AssertionOptionsEnvelope = components['schemas']['AssertionOptionsEnvelope'];
+export type Theme = components['schemas']['Theme'];
+export type SiteThemeSelection = components['schemas']['SiteThemeSelection'];
+export type SiteThemeSelectionPut = components['schemas']['SiteThemeSelectionPut'];
+export type BuildTask = components['schemas']['BuildTask'];
+export type PreviewLink = components['schemas']['PreviewLink'];
+export type Release = components['schemas']['Release'];
+export type ReleaseCreate = components['schemas']['ReleaseCreate'];
 
 export function siteRole(site: Site): 'owner' | 'editor' | 'viewer' {
 	return site.role;
@@ -96,4 +103,93 @@ export async function updateSettings(
 	);
 	if (newEtag === null) throw new Error('settings response missing ETag');
 	return { settings: data, etag: newEtag };
+}
+
+// --- themes ---
+
+export async function listThemes(): Promise<Theme[]> {
+	const { data } = await api<{ themes: Theme[] }>('GET', '/api/v1/themes');
+	return data.themes;
+}
+
+export async function getSiteTheme(
+	siteId: string
+): Promise<{ selection: SiteThemeSelection; etag: string }> {
+	const { data, etag } = await api<SiteThemeSelection>('GET', `/api/v1/sites/${siteId}/theme`);
+	if (etag === null) throw new Error('theme selection response missing ETag');
+	return { selection: data, etag };
+}
+
+export async function putSiteTheme(
+	siteId: string,
+	body: SiteThemeSelectionPut,
+	etag: string
+): Promise<{ selection: SiteThemeSelection; etag: string }> {
+	const { data, etag: newEtag } = await api<SiteThemeSelection>(
+		'PUT',
+		`/api/v1/sites/${siteId}/theme`,
+		{ body, etag }
+	);
+	if (newEtag === null) throw new Error('theme selection response missing ETag');
+	return { selection: data, etag: newEtag };
+}
+
+// --- build-preview tasks ---
+
+export async function createBuild(siteId: string): Promise<BuildTask> {
+	const { data } = await api<BuildTask>('POST', `/api/v1/sites/${siteId}/builds`, { body: {} });
+	return data;
+}
+
+export async function listBuilds(siteId: string): Promise<BuildTask[]> {
+	const { data } = await api<{ builds: BuildTask[] }>('GET', `/api/v1/sites/${siteId}/builds`);
+	return data.builds;
+}
+
+export async function getBuild(siteId: string, buildId: string): Promise<BuildTask> {
+	const { data } = await api<BuildTask>('GET', `/api/v1/sites/${siteId}/builds/${buildId}`);
+	return data;
+}
+
+export async function createPreviewLink(siteId: string, buildId: string): Promise<PreviewLink> {
+	const { data } = await api<PreviewLink>(
+		'POST',
+		`/api/v1/sites/${siteId}/builds/${buildId}/preview-links`,
+		{ body: {} }
+	);
+	return data;
+}
+
+// --- releases ---
+
+export async function createRelease(
+	siteId: string,
+	body: ReleaseCreate
+): Promise<Release> {
+	const { data } = await api<Release>('POST', `/api/v1/sites/${siteId}/releases`, { body });
+	return data;
+}
+
+export async function listReleases(siteId: string): Promise<Release[]> {
+	const { data } = await api<{ releases: Release[] }>('GET', `/api/v1/sites/${siteId}/releases`);
+	return data.releases;
+}
+
+export async function getCurrentRelease(
+	siteId: string
+): Promise<{ release: Release; originUrl: string }> {
+	const { data } = await api<{ release: Release; originUrl: string }>(
+		'GET',
+		`/api/v1/sites/${siteId}/release`
+	);
+	return data;
+}
+
+export async function rollbackRelease(siteId: string, releaseId: string): Promise<Release> {
+	const { data } = await api<Release>(
+		'POST',
+		`/api/v1/sites/${siteId}/releases/${releaseId}/rollback`,
+		{ body: {} }
+	);
+	return data;
 }

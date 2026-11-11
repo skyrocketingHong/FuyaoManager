@@ -2,7 +2,7 @@
 
 English | [简体中文](./README_ZH.md)
 
-The SvelteKit + Svelte 5 + TypeScript admin console of the FuyaoHomepage management system. This package implements the minimal usable loop only: first-run passkey enrollment, passkey login/logout, the site list, site detail, and site settings editing with optimistic-concurrency conflict handling. There are deliberately no menus or pages for articles, modules, or key/build operations yet; see [admin/ROADMAP.md](../ROADMAP.md).
+The React 18 + TypeScript + Vite + Ant Design admin console of the FuyaoHomepage management system (brand icons via Simple Icons). The console covers: first-run passkey enrollment, passkey login/logout, the site list, site detail, site settings editing with optimistic-concurrency conflict handling, per-site theme selection, build-preview tasks with private preview links, and the publish/rollback release history. There are deliberately no pages for articles, modules, or key/source operations yet; see [admin/ROADMAP.md](../ROADMAP.md).
 
 ## First-Time Setup
 
@@ -45,8 +45,8 @@ never moves (see First-Time Setup below).
 ```bash
 # from the repository root
 npm run admin:dev            # start the dev server on http://localhost:5174 (pinned port, loopback only)
-npm run admin:check          # svelte-check (types)
-npm run admin:test           # vitest unit tests (API client, editor state machine, i18n, Crossfade rule)
+npm run admin:check          # tsc --noEmit (types)
+npm run admin:test           # vitest unit tests (API client, editor state machine, theme selection, i18n, mounted views)
 npm run admin:build          # production build to build/
 npm run admin:api:generate   # regenerate src/lib/api/schema.d.ts from contracts/openapi/management.yaml
 npm run admin:api:check      # fail if the committed schema.d.ts drifted from the contract
@@ -63,36 +63,38 @@ break.
 
 ```text
 admin/frontend/src/
-├── app.css                       # global design tokens (light/dark) and primitives
-├── lib/
+├── App.tsx                       # route table; hierarchy mirrors paths
+├── main.tsx                      # ConfigProvider (antd locale + day/night algorithm) and router
+├── app.css                       # layout shell + prefers-reduced-motion overrides
+├── lib/                          # framework-agnostic business modules (no JSX)
 │   ├── api/
 │   │   ├── client.ts             # same-origin fetch wrapper: CSRF, If-Match, problem+json, ETag
 │   │   ├── management.ts         # typed endpoints over the generated schema
 │   │   ├── passkey.ts            # WebAuthn ceremonies via @simplewebauthn/browser (no casts)
 │   │   └── schema.d.ts           # generated from contracts/openapi/management.yaml
-│   ├── sites/                    # site business modules (no markup)
-│   │   ├── site-detail.svelte.ts # race-safe site loading
-│   │   └── settings-editor.svelte.ts  # editor state machine: dirty fields, 412 sync, save semantics
-│   ├── i18n/                     # zh-CN / en-US dictionaries with Crossfade switching
-│   ├── theme/                    # day/night theme state
-│   ├── stores/session.svelte.ts  # session state
-│   └── components/
-│       ├── ui/                   # Crossfade, Button, Field, StatusMessage (generic UI)
-│       └── sites/                # page compositions bound to the business modules
-└── routes/                       # thin route files keyed on siteId; hierarchy mirrors paths
-    ├── +page.svelte              # entry router (login vs. sites)
-    ├── login/                    # passkey login
-    ├── bootstrap/                # first-run permit enrollment
+│   ├── sites/                    # site-detail loading; settings-editor state machine
+│   ├── themes/                   # theme-selection store (catalog, If-Match save, 412 sync)
+│   ├── i18n/                     # zh-CN / en-US dictionaries + external store
+│   ├── theme/                    # day/night theme state (antd algorithm)
+│   └── session/                  # session state
+├── components/
+│   ├── layout/AppShell.tsx       # top bar: locale, day/night, user, GitHub mark (Simple Icons)
+│   └── sites/SiteNav.tsx         # per-site sub-navigation
+└── pages/                        # route pages keyed on siteId; hierarchy mirrors paths
+    ├── LoginPage.tsx             # passkey login
+    ├── BootstrapPage.tsx         # first-run permit enrollment
+    ├── SitesPage.tsx             # site list (membership-scoped)
     └── sites/
-        ├── +page.svelte          # site list (membership-scoped)
-        └── [siteId]/
-            ├── +page.svelte      # site detail
-            └── settings/+page.svelte  # settings editor page
+        ├── SiteDetailPage.tsx    # site overview
+        ├── SettingsPage.tsx      # settings editor
+        ├── ThemePage.tsx         # theme selection + configuration
+        ├── BuildsPage.tsx        # build tasks, polling, private preview links
+        └── ReleasesPage.tsx      # current release, history, publish, rollback
 ```
 
 ## Behavior Notes
 
 - Settings editing is guarded by the strong ETag from `GET .../settings`: saves send `If-Match` and submit only the fields the user actually changed, so concurrent edits to other fields are never clobbered. On `412`, syncing adopts the server values for untouched fields, keeps genuinely edited fields dirty (with an explicit conflict notice), and never discards unsaved input. Values typed while a save is in flight stay marked unsaved. Viewer-role members get a read-only form.
 - Site pages key their whole composition on `siteId` and loads are race-guarded, so switching between sites (including rapid back-and-forth or out-of-order responses) can never show or write another site's data.
-- All UI text comes from the i18n dictionaries and switches with the project-standard Crossfade; day/night themes adapt via `data-theme`.
+- All UI text comes from the i18n dictionaries; day/night themes switch the antd algorithm, and `prefers-reduced-motion` collapses every animation and transition (including antd's).
 - Passkeys are the only login method; there is no password, development admin, or anonymous write access anywhere in the stack.

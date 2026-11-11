@@ -22,7 +22,7 @@ vi.mock('../src/lib/api/management', async (importOriginal) => {
 });
 
 import { getSite, getSettings, updateSettings } from '../src/lib/api/management';
-import { createSettingsEditor } from '../src/lib/sites/settings-editor.svelte';
+import { SettingsEditor } from '../src/lib/sites/settings-editor';
 
 const site = (overrides: Partial<Site> = {}): Site => ({
 	siteId: '11111111-1111-1111-1111-111111111111',
@@ -53,7 +53,7 @@ async function flushed(): Promise<void> {
 }
 
 function makeEditor() {
-	return createSettingsEditor({ onUnauthenticated: vi.fn() });
+	return new SettingsEditor({ onUnauthenticated: vi.fn() });
 }
 
 async function readyEditor() {
@@ -74,14 +74,14 @@ beforeEach(() => {
 describe('settings editor', () => {
 	it('loads the site and settings into the form', async () => {
 		const editor = await readyEditor();
-		expect(editor.state.phase.kind).toBe('ready');
-		expect(editor.state.name).toBe('Baseline Name');
+		expect(editor.getSnapshot().phase.kind).toBe('ready');
+		expect(editor.getSnapshot().name).toBe('Baseline Name');
 		expect(editor.dirtyFields()).toEqual([]);
 	});
 
 	it('submits only the field the user actually changed', async () => {
 		const editor = await readyEditor();
-		editor.state.name = 'New Name';
+		editor.setField('name', 'New Name');
 		expect(editor.dirtyFields()).toEqual(['name']);
 
 		vi.mocked(updateSettings).mockResolvedValue({
@@ -92,7 +92,7 @@ describe('settings editor', () => {
 		await flushed();
 
 		expect(updateSettings).toHaveBeenCalledWith(site().siteId, { name: 'New Name' }, '"e-r3"');
-		expect(editor.state.phase).toEqual({ kind: 'saved', revision: 4 });
+		expect(editor.getSnapshot().phase).toEqual({ kind: 'saved', revision: 4 });
 	});
 
 	it('refuses to save when nothing is dirty', async () => {
@@ -103,7 +103,7 @@ describe('settings editor', () => {
 
 	it('keeps typing during a save visible as unsaved afterwards', async () => {
 		const editor = await readyEditor();
-		editor.state.name = 'New Name';
+		editor.setField('name', 'New Name');
 
 		let resolveSave!: (v: { settings: SiteSettings; etag: string }) => void;
 		vi.mocked(updateSettings).mockReturnValue(
@@ -112,31 +112,31 @@ describe('settings editor', () => {
 			})
 		);
 		const saving = editor.save();
-		expect(editor.state.phase.kind).toBe('saving');
+		expect(editor.getSnapshot().phase.kind).toBe('saving');
 
 		// The user keeps typing while the request is in flight.
-		editor.state.description = 'Typed during flight';
+		editor.setField('description', 'Typed during flight');
 		resolveSave({ settings: settings({ name: 'New Name', revision: 4 }), etag: '"e-r4"' });
 		await saving;
 		await flushed();
 
 		// Baseline adopted the server merge; the typed description stays in
 		// the form and is correctly reported as an unsaved edit.
-		expect(editor.state.phase).toEqual({ kind: 'saved', revision: 4 });
-		expect(editor.state.description).toBe('Typed during flight');
+		expect(editor.getSnapshot().phase).toEqual({ kind: 'saved', revision: 4 });
+		expect(editor.getSnapshot().description).toBe('Typed during flight');
 		expect(editor.dirtyFields()).toEqual(['description']);
 	});
 
 	it('on 412, sync adopts server values for untouched fields and keeps user edits dirty', async () => {
 		const editor = await readyEditor();
-		editor.state.name = 'My Rename';
+		editor.setField('name', 'My Rename');
 
 		vi.mocked(updateSettings).mockRejectedValue(
 			new ApiError(412, 'precondition_failed', 'stale', '"e-r5"')
 		);
 		await editor.save();
 		await flushed();
-		expect(editor.state.phase.kind).toBe('conflict');
+		expect(editor.getSnapshot().phase.kind).toBe('conflict');
 
 		// Meanwhile someone else changed the description server-side.
 		vi.mocked(getSettings).mockResolvedValue({
@@ -150,7 +150,7 @@ describe('settings editor', () => {
 		await editor.syncAfterConflict();
 		await flushed();
 
-		const phase = editor.state.phase;
+		const phase = editor.getSnapshot().phase;
 		expect(phase.kind).toBe('conflict');
 		if (phase.kind === 'conflict') {
 			expect(phase.synced).toBe(true);
@@ -159,7 +159,7 @@ describe('settings editor', () => {
 
 		// Untouched field converged to the server value; the user's edit
 		// stays dirty. The stale description must NOT be re-sent.
-		expect(editor.state.description).toBe('Changed elsewhere');
+		expect(editor.getSnapshot().description).toBe('Changed elsewhere');
 		expect(editor.dirtyFields()).toEqual(['name']);
 
 		vi.mocked(updateSettings).mockResolvedValue({
@@ -173,7 +173,7 @@ describe('settings editor', () => {
 
 	it('keeps a same-field conflict explicitly dirty after sync', async () => {
 		const editor = await readyEditor();
-		editor.state.name = 'My Rename';
+		editor.setField('name', 'My Rename');
 
 		vi.mocked(updateSettings).mockRejectedValue(
 			new ApiError(412, 'precondition_failed', 'stale', '"e-r5"')
@@ -191,7 +191,7 @@ describe('settings editor', () => {
 
 		// The user's diverging edit survives and is the only dirty field; the
 		// next save explicitly overwrites after the user saw the conflict.
-		expect(editor.state.name).toBe('My Rename');
+		expect(editor.getSnapshot().name).toBe('My Rename');
 		expect(editor.dirtyFields()).toEqual(['name']);
 	});
 
@@ -225,15 +225,15 @@ describe('settings editor', () => {
 		await loadA;
 		await flushed();
 
-		expect(editor.state.site?.siteId).toBe(siteB.siteId);
-		expect(editor.state.name).toBe('Baseline Name');
+		expect(editor.getSnapshot().site?.siteId).toBe(siteB.siteId);
+		expect(editor.getSnapshot().name).toBe('Baseline Name');
 		expect(editor.dirtyFields()).toEqual([]);
 	});
 
 	it('routes a 401 load to the unauthenticated handler', async () => {
 		vi.mocked(getSite).mockRejectedValue(new ApiError(401, 'unauthenticated', '', null));
 		const onUnauthenticated = vi.fn();
-		const editor = createSettingsEditor({
+		const editor = new SettingsEditor({
 			onUnauthenticated: async () => {
 				onUnauthenticated();
 			}

@@ -1,12 +1,8 @@
-import { sveltekit } from '@sveltejs/kit/vite';
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-	plugins: [sveltekit()],
-	// Vitest runs the SSR pipeline by default, which resolves Svelte to the
-	// server runtime where $effect is a no-op. Force the browser build for
-	// tests so reactive derivations behave exactly as in the app.
-	resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
+	plugins: [react()],
 	server: {
 		// Same-origin development topology: the browser only talks to
 		// http://localhost:5174, and /api is proxied to the loopback backend.
@@ -29,11 +25,9 @@ export default defineConfig({
 		}
 	},
 	test: {
-		// Node by default; the mounted-view suite opts into jsdom via its
-		// per-file `@vitest-environment jsdom` pragma, which keeps the shared
-		// SvelteKit plugin chain (runes compilation, $lib aliases) active for
-		// every test.
-		include: ['tests/**/*.test.ts'],
+		// Node by default; mounted-view suites opt into jsdom via their
+		// per-file `@vitest-environment jsdom` pragma.
+		include: ['tests/**/*.test.tsx', 'tests/**/*.test.ts'],
 		environment: 'node'
 	}
 });
