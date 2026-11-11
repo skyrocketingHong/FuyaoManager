@@ -64,6 +64,8 @@
 
 平台在任何主题构建前冻结只读快照；适配器不得写入快照，构建过程没有管理密钥，也没有数据库连接。
 
+冻结消费（`prepare-build-inputs.js --frozen=<snapshot>` 或 `FUYAO_FROZEN_INPUT`）对快照只读校验，且必须使用独立目录：冻结根与任何可重建工作目录（`site/.fuyao/`、`site/build/`）相交时，在任何清理动作之前即被拒绝，因为后续工作目录删除会破坏输入。
+
 ```text
 <snapshot-root>
 ├── public/                 # 对外可读输入（Web 服务器可读）
@@ -80,6 +82,8 @@
 ```
 
 `input.json` 记录 `preparedAt`、`mode`（`ci`、`development`、`preview`、`production`）、快照面向的 `theme`（`id`、`version`）、可选的 `themeConfig` 取值，以及 `inputs` 摘要。三个摘要（`contentDigest`、`siteConfigDigest`、`themeConfigDigest`）分别为三项独立管理的输入定版：平台内容、站点配置、主题配置。
+
+摘要算法（规范性；参考实现为 `site/scripts/lib/theme-input.js` 的 `computeContentDigest`）：每个条目按 `u8(domain) + u32be(labelUtf8Length) + label + u64be(contentLength) + content` 送入 SHA-256。域 1 覆盖 `public/` 下的普通文件，label 为快照内相对路径；域 2 覆盖为内容映射定版的私有文件（当前为 `content-config.json`），label 为 `private/<basename>`。各域内部按 label 的 UTF-8 字节序排序，公开条目在前。长度前缀使文件边界不可伪造。`siteConfigDigest` 为 `private/site-config.json` 文件字节的 SHA-256；`themeConfigDigest` 为 `themeConfig` 对象按递归排序键序序列化后的 SHA-256（缺省配置等价于空对象）。
 
 ## 发布元数据
 

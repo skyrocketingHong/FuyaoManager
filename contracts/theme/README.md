@@ -64,6 +64,8 @@ Compatibility rule: when a site requires a capability or URL convention the them
 
 The platform freezes a read-only snapshot before any theme build; adapters must not write into it and builds run without management keys or database connections.
 
+Frozen consumption (`prepare-build-inputs.js --frozen=<snapshot>` / `FUYAO_FROZEN_INPUT`) verifies the snapshot read-only and must be given an independent directory: a frozen root that intersects any rebuildable work directory (`site/.fuyao/`, `site/build/`) is rejected before any cleanup, since later work-dir deletion would destroy the input.
+
 ```text
 <snapshot-root>
 ├── public/                 # World-readable inputs (web-server readable)
@@ -80,6 +82,8 @@ The platform freezes a read-only snapshot before any theme build; adapters must 
 ```
 
 `input.json` records `preparedAt`, `mode` (`ci`, `development`, `preview`, `production`), the `theme` (`id`, `version`) the snapshot is prepared for, the optional `themeConfig` values, and `inputs` digests. The three digests (`contentDigest`, `siteConfigDigest`, `themeConfigDigest`) version the three independently managed inputs: platform content, site configuration, and theme configuration.
+
+Digest algorithm (normative; the reference implementation is `computeContentDigest` in `site/scripts/lib/theme-input.js`): each entry feeds SHA-256 as `u8(domain) + u32be(labelUtf8Length) + label + u64be(contentLength) + content`. Domain 1 covers regular files under `public/` with their snapshot-relative paths; domain 2 covers private files that version the content mapping (currently `content-config.json`) with labels `private/<basename>`. Entries are sorted by label in UTF-8 byte order within each domain, public entries first. The length prefixes make file boundaries unforgeivable. `siteConfigDigest` is the SHA-256 of the `private/site-config.json` file bytes; `themeConfigDigest` is the SHA-256 of the `themeConfig` object serialized with recursively sorted keys (an absent config equals the empty object).
 
 ## Release metadata
 
