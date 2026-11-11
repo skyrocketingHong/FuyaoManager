@@ -296,6 +296,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/builds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the site's build tasks
+         * @description Returns the caller's site builds, newest first. Any site member
+         *     (including viewers) may read; non-members get 404. Task rows carry the
+         *     frozen version view, the persisted failure record (if any), and the
+         *     input digests (on success) — never filesystem locations.
+         */
+        get: operations["listBuilds"];
+        put?: never;
+        /**
+         * Enqueue a build-preview task
+         * @description Creates a persistent build task for the site. The creation transaction
+         *     freezes the exact version view — the current site settings snapshot
+         *     with its revision and the current theme selection with its revision —
+         *     into the task row; later edits never leak into a running build. The
+         *     task starts `queued`; the executor (a single cluster-wide advisory-lock
+         *     holder) claims it and persists every state transition, so the result
+         *     stays queryable through this API regardless of server restarts.
+         *
+         *     Only `owner` and `editor` members may trigger builds; viewers get 403
+         *     and non-members get 404. The request needs the session cookie, the
+         *     CSRF token header, and an allowed Origin, but no body.
+         */
+        post: operations["createBuild"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/builds/{buildId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one build task
+         * @description Returns one task's persisted state for re-query (for example while it
+         *     is queued or running, or after a restart). Any site member may read;
+         *     non-members and foreign build ids get 404 (`build_not_found`).
+         */
+        get: operations["getBuild"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/builds/{buildId}/preview-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a private preview link
+         * @description Issues a short-lived preview URL for a succeeded build. The URL lives
+         *     on the build's own loopback-only origin — separate from both the
+         *     management API origin and every other build — and carries a one-time
+         *     token that the preview origin exchanges for an HttpOnly cookie. The
+         *     preview origin never sees the management session cookie, so theme
+         *     scripts cannot read management responses.
+         *
+         *     Any site member (including viewers) may preview. Links exist only for
+         *     builds in `succeeded` state whose artifacts are still available;
+         *     anything else is 409 `build_not_succeeded`.
+         */
+        post: operations["createPreviewLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -346,9 +434,16 @@ export interface components {
             siteSettingsRevision: number;
             /** Format: int64 */
             themeSelectionRevision: number;
-            failure?: components["schemas"]["BuildFailure"];
-            /** @description The three input digests recorded by the theme preparation flow on success (content, site config, theme config). */
-            inputDigests?: Record<string, never>;
+            /** @description Present (non-null) only for `failed` tasks; null while queued, running, or succeeded. */
+            failure?: components["schemas"]["BuildFailure"] | null;
+            /**
+             * @description The three input digests recorded by the theme preparation flow
+             *     (content, site config, theme config) as an object with
+             *     `contentDigest`, `siteConfigDigest`, and `themeConfigDigest`
+             *     SHA-256 string fields. Present only for `succeeded` tasks; null
+             *     otherwise.
+             */
+            inputDigests?: Record<string, never> | null;
             /** @description Aggregate SHA-256 over the task's private source copy (every copied file's path and digest, sorted) once the copy is materialized; broader than the manifest digest, which covers theme.json only. */
             sourceDigest?: string | null;
             /** @description Number of source files the task's private copy recorded. */
@@ -682,6 +777,8 @@ export interface components {
     parameters: {
         /** @description Site UUID. */
         SiteId: string;
+        /** @description Build task UUID. */
+        BuildId: string;
         /** @description CSRF token bound to the session. */
         CSRFTokenHeader: string;
         /**
@@ -1239,6 +1336,198 @@ export interface operations {
                 };
             };
             /** @description Theme contract validation is not configured on the server (`theme_contracts_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    listBuilds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Build list, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        builds: components["schemas"]["BuildTask"][];
+                    };
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createBuild: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task accepted and queued; the task state is returned, not the build result. */
+            202: {
+                headers: {
+                    /** @description Absolute path of the created task resource. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildTask"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The site has no theme selection yet (`no_theme_selected`); save one first. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The build executor is not configured on this server (`build_runner_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getBuild: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description Build task UUID. */
+                buildId: components["parameters"]["BuildId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task's current persisted state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BuildTask"];
+                };
+            };
+            /** @description The siteId or buildId path segment is not a UUID (`invalid_site_id` or `invalid_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            /** @description Task not found on this site for this caller (`build_not_found`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    createPreviewLink: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                /** @description Build task UUID. */
+                buildId: components["parameters"]["BuildId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Preview link created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewLink"];
+                };
+            };
+            /** @description The siteId or buildId path segment is not a UUID (`invalid_site_id` or `invalid_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description Task not found on this site for this caller (`build_not_found`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The build has not succeeded or its artifacts are no longer available (`build_not_succeeded`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The preview server is not configured on this server (`preview_unavailable`). */
             503: {
                 headers: {
                     [name: string]: unknown;

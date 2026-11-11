@@ -25,6 +25,11 @@ info:
       registered by the operator-driven `fuyao-admin register-theme` CLI;
       the HTTP surface never accepts file paths, shell commands, or Git
       addresses, and the catalog never exposes server-side source paths.
+    - Persistent build-preview tasks: creation freezes the site settings and
+      theme selection version view, the executor runs the trusted adapter
+      sequence against the registered theme source, and succeeded builds get
+      short-lived private preview links on per-build loopback origins.
+      Filesystem locations and executor internals are never exposed.
 
     Not implemented in this package (and therefore not described here):
     Tailscale private-network exposure, the 30-minute public gate, articles,
@@ -46,6 +51,8 @@ tags:
     description: Site listing, detail, and settings.
   - name: Themes
     description: Theme catalog and per-site theme selection.
+  - name: Builds
+    description: Build-preview tasks and private preview links.
 
 security:
   - sessionCookie: []
@@ -711,6 +718,229 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/builds:
+    post:
+      operationId: createBuild
+      tags: [Builds]
+      summary: Enqueue a build-preview task
+      description: |
+        Creates a persistent build task for the site. The creation transaction
+        freezes the exact version view — the current site settings snapshot
+        with its revision and the current theme selection with its revision —
+        into the task row; later edits never leak into a running build. The
+        task starts `queued`; the executor (a single cluster-wide advisory-lock
+        holder) claims it and persists every state transition, so the result
+        stays queryable through this API regardless of server restarts.
+
+        Only `owner` and `editor` members may trigger builds; viewers get 403
+        and non-members get 404. The request needs the session cookie, the
+        CSRF token header, and an allowed Origin, but no body.
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '202':
+          description: Task accepted and queued; the task state is returned, not the build result.
+          headers:
+            Location:
+              description: Absolute path of the created task resource.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildTask'
+              examples:
+                queuedTask:
+                  value:
+                    {
+                      'id': '0192ab3c-4d5e-6f70-8192-ab3c4d5e6f71',
+                      'siteId': '018f3c1e-7a2b-4c3d-9e4f-0a1b2c3d4e5f',
+                      'status': 'queued',
+                      'requestedBy': '018f3c1e-7a2b-4c3d-9e4f-0a1b2c3d4e10',
+                      'theme':
+                        {
+                          'themeId': 'fuyao-homepage',
+                          'version': '27.1.1',
+                          'manifestDigest': '9f2c7c14ad5b3e6f8192ab3c4d5e6f701234567890abcdef12345678abcdef12'
+                        },
+                      'themeConfig': {},
+                      'siteSettings':
+                        {
+                          'site':
+                            {
+                              'name': 'Fuyao',
+                              'description': 'Personal site',
+                              'defaultLocale': 'zh-CN'
+                            }
+                        },
+                      'siteSettingsRevision': 3,
+                      'themeSelectionRevision': 1,
+                      'failure': null,
+                      'inputDigests': null,
+                      'createdAt': '2026-11-11T09:00:00Z'
+                    }
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The site has no theme selection yet (`no_theme_selected`); save one first.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: The build executor is not configured on this server (`build_runner_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+    get:
+      operationId: listBuilds
+      tags: [Builds]
+      summary: List the site's build tasks
+      description: |
+        Returns the caller's site builds, newest first. Any site member
+        (including viewers) may read; non-members get 404. Task rows carry the
+        frozen version view, the persisted failure record (if any), and the
+        input digests (on success) — never filesystem locations.
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Build list, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [builds]
+                properties:
+                  builds:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BuildTask'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/builds/{buildId}:
+    get:
+      operationId: getBuild
+      tags: [Builds]
+      summary: Read one build task
+      description: |
+        Returns one task's persisted state for re-query (for example while it
+        is queued or running, or after a restart). Any site member may read;
+        non-members and foreign build ids get 404 (`build_not_found`).
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/BuildId'
+      responses:
+        '200':
+          description: The task's current persisted state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildTask'
+        '400':
+          description: The siteId or buildId path segment is not a UUID (`invalid_site_id` or `invalid_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: Task not found on this site for this caller (`build_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/builds/{buildId}/preview-links:
+    post:
+      operationId: createPreviewLink
+      tags: [Builds]
+      summary: Mint a private preview link
+      description: |
+        Issues a short-lived preview URL for a succeeded build. The URL lives
+        on the build's own loopback-only origin — separate from both the
+        management API origin and every other build — and carries a one-time
+        token that the preview origin exchanges for an HttpOnly cookie. The
+        preview origin never sees the management session cookie, so theme
+        scripts cannot read management responses.
+
+        Any site member (including viewers) may preview. Links exist only for
+        builds in `succeeded` state whose artifacts are still available;
+        anything else is 409 `build_not_succeeded`.
+      security:
+        - sessionCookie: []
+        - csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/BuildId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '201':
+          description: Preview link created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewLink'
+              examples:
+                freshLink:
+                  value:
+                    {
+                      'url': 'http://127.0.0.1:41231/enter#one-time-token',
+                      'expiresAt': '2026-11-11T09:15:00Z'
+                    }
+        '400':
+          description: The siteId or buildId path segment is not a UUID (`invalid_site_id` or `invalid_id`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Task not found on this site for this caller (`build_not_found`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: The build has not succeeded or its artifacts are no longer available (`build_not_succeeded`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: The preview server is not configured on this server (`preview_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
 components:
   securitySchemes:
     sessionCookie:
@@ -735,6 +965,14 @@ components:
       in: path
       required: true
       description: Site UUID.
+      schema:
+        type: string
+        format: uuid
+    BuildId:
+      name: buildId
+      in: path
+      required: true
+      description: Build task UUID.
       schema:
         type: string
         format: uuid
@@ -842,7 +1080,19 @@ components:
         A persistent build-preview task. The identity block (theme, themeConfig,
         siteSettings, both revisions) is frozen at creation and is the only
         input the executor consumes. Filesystem locations are never exposed.
-      required: [id, siteId, status, requestedBy, theme, themeConfig, siteSettings, siteSettingsRevision, themeSelectionRevision, createdAt]
+      required:
+        [
+          id,
+          siteId,
+          status,
+          requestedBy,
+          theme,
+          themeConfig,
+          siteSettings,
+          siteSettingsRevision,
+          themeSelectionRevision,
+          createdAt
+        ]
       properties:
         id: { type: string, format: uuid }
         siteId: { type: string, format: uuid }
@@ -875,10 +1125,20 @@ components:
         siteSettingsRevision: { type: integer, format: int64 }
         themeSelectionRevision: { type: integer, format: int64 }
         failure:
-          $ref: '#/components/schemas/BuildFailure'
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/BuildFailure'
+          description: Present (non-null) only for `failed` tasks; null while queued, running, or succeeded.
         inputDigests:
           type: object
-          description: The three input digests recorded by the theme preparation flow on success (content, site config, theme config).
+          nullable: true
+          description: |
+            The three input digests recorded by the theme preparation flow
+            (content, site config, theme config) as an object with
+            `contentDigest`, `siteConfigDigest`, and `themeConfigDigest`
+            SHA-256 string fields. Present only for `succeeded` tasks; null
+            otherwise.
         sourceDigest:
           type: string
           nullable: true
@@ -900,7 +1160,6 @@ components:
           type: string
           description: Entry URL carrying a one-time token exchanged for an HttpOnly cookie on the preview origin.
         expiresAt: { type: string, format: date-time }
-
 
     Problem:
       type: object

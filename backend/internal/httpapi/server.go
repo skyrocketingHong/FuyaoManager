@@ -49,6 +49,54 @@ type API struct {
 	previews       PreviewIssuer
 }
 
+// routeSpec is one registered management route with the OpenAPI operation it
+// implements. The table is the single Go-side source of truth: registration
+// loops over it and contract tests compare it against
+// contracts/openapi/management.yaml.
+type routeSpec struct {
+	Method      string
+	Pattern     string
+	OperationID string
+	Handler     http.HandlerFunc
+}
+
+// routes returns every management route. Middleware per route class:
+// WebAuthn ceremonies carry their own permit/challenge protection; mutating
+// authenticated routes additionally require the CSRF header.
+func (a *API) routes() []routeSpec {
+	return []routeSpec{
+		// WebAuthn ceremonies (no prior session; protected by permit,
+		// challenge, and Origin checks).
+		{http.MethodPost, "/api/v1/auth/register/options", "startPasskeyEnrollment", a.handleRegisterOptions},
+		{http.MethodPost, "/api/v1/auth/register/verify", "verifyPasskeyEnrollment", a.handleRegisterVerify},
+		{http.MethodPost, "/api/v1/auth/login/options", "startPasskeyLogin", a.handleLoginOptions},
+		{http.MethodPost, "/api/v1/auth/login/verify", "verifyPasskeyLogin", a.handleLoginVerify},
+
+		{http.MethodGet, "/api/v1/session", "getSession", a.handleSession},
+		{http.MethodPost, "/api/v1/auth/logout", "logout", a.requireAuth(a.withCSRF(a.handleLogout))},
+
+		// Sites.
+		{http.MethodGet, "/api/v1/sites", "listSites", a.requireAuth(a.handleListSites)},
+		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireAuth(a.handleGetSite)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireAuth(a.handleGetSettings)},
+		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireAuth(a.withCSRF(a.handlePatchSettings))},
+
+		// Theme catalog and per-site theme selection. Registration itself is
+		// operator-driven (fuyao-admin register-theme); the HTTP surface only
+		// reads the catalog and saves selections.
+		{http.MethodGet, "/api/v1/themes", "listThemes", a.requireAuth(a.handleListThemes)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/theme", "getSiteTheme", a.requireAuth(a.handleGetSiteTheme)},
+		{http.MethodPut, "/api/v1/sites/{siteId}/theme", "putSiteTheme", a.requireAuth(a.withCSRF(a.handlePutSiteTheme))},
+
+		// Build-preview tasks: creation freezes the version view; the runner
+		// executes and persists state transitions that stay queryable here.
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireAuth(a.withCSRF(a.handleCreateBuild))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireAuth(a.handleListBuilds)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireAuth(a.handleGetBuild)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-links", "createPreviewLink", a.requireAuth(a.withCSRF(a.handleCreatePreviewLink))},
+	}
+}
+
 // New assembles the handler with its middleware chain.
 func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Logger) http.Handler {
 	if logger == nil {
@@ -69,35 +117,9 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 	}
 
 	mux := http.NewServeMux()
-	// WebAuthn ceremonies (no prior session; protected by permit, challenge,
-	// and Origin checks).
-	mux.HandleFunc("POST /api/v1/auth/register/options", api.handleRegisterOptions)
-	mux.HandleFunc("POST /api/v1/auth/register/verify", api.handleRegisterVerify)
-	mux.HandleFunc("POST /api/v1/auth/login/options", api.handleLoginOptions)
-	mux.HandleFunc("POST /api/v1/auth/login/verify", api.handleLoginVerify)
-
-	mux.HandleFunc("GET /api/v1/session", api.handleSession)
-	mux.HandleFunc("POST /api/v1/auth/logout", api.requireAuth(api.withCSRF(api.handleLogout)))
-
-	// Sites.
-	mux.HandleFunc("GET /api/v1/sites", api.requireAuth(api.handleListSites))
-	mux.HandleFunc("GET /api/v1/sites/{siteId}", api.requireAuth(api.handleGetSite))
-	mux.HandleFunc("GET /api/v1/sites/{siteId}/settings", api.requireAuth(api.handleGetSettings))
-	mux.HandleFunc("PATCH /api/v1/sites/{siteId}/settings", api.requireAuth(api.withCSRF(api.handlePatchSettings)))
-
-	// Theme catalog and per-site theme selection. Registration itself is
-	// operator-driven (fuyao-admin register-theme); the HTTP surface only
-	// reads the catalog and saves selections.
-	mux.HandleFunc("GET /api/v1/themes", api.requireAuth(api.handleListThemes))
-	mux.HandleFunc("GET /api/v1/sites/{siteId}/theme", api.requireAuth(api.handleGetSiteTheme))
-	mux.HandleFunc("PUT /api/v1/sites/{siteId}/theme", api.requireAuth(api.withCSRF(api.handlePutSiteTheme)))
-
-	// Build-preview tasks: creation freezes the version view; the runner
-	// executes and persists state transitions that stay queryable here.
-	mux.HandleFunc("POST /api/v1/sites/{siteId}/builds", api.requireAuth(api.withCSRF(api.handleCreateBuild)))
-	mux.HandleFunc("GET /api/v1/sites/{siteId}/builds", api.requireAuth(api.handleListBuilds))
-	mux.HandleFunc("GET /api/v1/sites/{siteId}/builds/{buildId}", api.requireAuth(api.handleGetBuild))
-	mux.HandleFunc("POST /api/v1/sites/{siteId}/builds/{buildId}/preview-links", api.requireAuth(api.withCSRF(api.handleCreatePreviewLink)))
+	for _, route := range api.routes() {
+		mux.HandleFunc(route.Method+" "+route.Pattern, route.Handler)
+	}
 
 	var h http.Handler = mux
 	h = api.originGuard(h)
