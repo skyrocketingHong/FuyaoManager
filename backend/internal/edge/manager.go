@@ -266,6 +266,14 @@ func (m *Manager) render(rows []entryRow) ([]byte, error) {
 		thumbsRoot := filepath.Join(m.cfg.SitesRoot, row.SiteID.String(), "content", "albums", "thumbnails")
 		fmt.Fprintf(&b, "\nhttp://%s {\n", address)
 		fmt.Fprintf(&b, "\troot * %s\n", quotePath(releaseRoot))
+		// Static content (indexes, data YAML, fonts, images) is served as
+		// files; only HTML routes fall back to the SPA shell — mirroring the
+		// operator's production site matcher.
+		fmt.Fprintf(&b, "\t@static {\n")
+		fmt.Fprintf(&b, "\t\tpath *.js *.css *.png *.jpg *.jpeg *.gif *.svg *.ico *.woff *.woff2 *.webp *.json *.xml *.txt *.yaml *.webmanifest\n")
+		fmt.Fprintf(&b, "\t\tpath /fonts/* /posts/* /data/*\n")
+		fmt.Fprintf(&b, "\t}\n")
+		fmt.Fprintf(&b, "\thandle @static {\n\t\tfile_server\n\t}\n")
 		fmt.Fprintf(&b, "\ttry_files {path}/index.html {path}index.html {path}.html /200.html\n")
 		fmt.Fprintf(&b, "\tencode gzip zstd\n")
 		fmt.Fprintf(&b, "\t@mutable path /release.json /service-worker.js /posts/* /data/* /albums/* /favicon/* /images/* /blog/rss.xml /sitemap.xml\n")
