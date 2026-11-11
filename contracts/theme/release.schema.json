@@ -29,7 +29,8 @@
 			"minLength": 1,
 			"maxLength": 128,
 			"pattern": "^[A-Za-z0-9._-]+$",
-			"description": "Unique release directory name."
+			"not": { "pattern": "^\\.\\.?$" },
+			"description": "Unique release directory name. '.' and '..' are rejected as directory-traversal names."
 		},
 		"createdAt": {
 			"$ref": "#/$defs/dateTime",
@@ -114,7 +115,9 @@
 		},
 		"dateTime": {
 			"type": "string",
-			"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$"
+			"pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$",
+			"format": "date-time",
+			"description": "RFC 3339 timestamp. The pattern checks the shape; format: date-time (enforced by the Go validator via AssertFormat) rejects impossible calendar dates."
 		},
 		"safeRelativePath": {
 			"type": "string",

@@ -139,7 +139,8 @@ func TestBuildInputFixtures(t *testing.T) {
 		"unknown-mode.json":      "one of",
 		"bad-digest.json":        "pattern",
 		"bad-theme-version.json": "pattern",
-		"bad-datetime.json":      "pattern",
+		"bad-datetime.json":      "date-time",
+		"bad-calendar-date.json": "date-time",
 		"extra-field.json":       "operator",
 	})
 }
@@ -150,9 +151,12 @@ func TestReleaseFixtures(t *testing.T) {
 	runInvalidFixtures(t, set, filepath.Join("examples", "release", "invalid"), set.ValidateRelease, map[string]string{
 		"bad-schema-version.json": "schemaVersion",
 		"bad-release-id.json":     "pattern",
+		"dot-release-id.json":     "'not' failed",
+		"dotdot-release-id.json":  "'not' failed",
 		"bad-reason.json":         "one of",
 		"bad-theme-digest.json":   "pattern",
 		"bad-spa-fallback.json":   "none matched",
+		"bad-calendar-date.json":  "date-time",
 		"missing-routes.json":     "routes",
 		"extra-field.json":        "rollbackTo",
 	})
@@ -265,5 +269,46 @@ func TestConfigSchemaFile(t *testing.T) {
 	}
 	if _, _, err := ConfigSchemaFile([]byte("{")); err == nil {
 		t.Fatal("malformed manifest must fail ConfigSchemaFile")
+	}
+}
+
+func TestValidateThemeConfigSchema(t *testing.T) {
+	set := loadSetForTest(t)
+	valid := readFixture(t, filepath.Join("examples", "theme-config", "fuyao-homepage.config.schema.json"))
+	if err := set.ValidateThemeConfigSchema(valid); err != nil {
+		t.Fatalf("valid schema rejected: %v", err)
+	}
+
+	for name, doc := range map[string]string{
+		"invalid JSON":    "{",
+		"not an object":   "[]",
+		"wrong dialect":   `{"$schema":"http://json-schema.org/draft-07/schema#","type":"object"}`,
+		"unknown keyword": `{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"not-a-type"}`,
+	} {
+		if err := set.ValidateThemeConfigSchema([]byte(doc)); err == nil {
+			t.Errorf("%s: expected schema rejection, got none", name)
+		}
+	}
+}
+
+func TestValidateEmptyThemeConfig(t *testing.T) {
+	set := loadSetForTest(t)
+	if err := set.ValidateEmptyThemeConfig([]byte("{}")); err != nil {
+		t.Fatalf("empty object rejected: %v", err)
+	}
+	for name, want := range map[string]string{
+		"unknown option": "only {}",
+		"array":          "must be an object",
+		"invalid JSON":   "invalid JSON",
+	} {
+		doc := map[string]string{
+			"unknown option": `{"accentColor":"#006F6B"}`,
+			"array":          `[]`,
+			"invalid JSON":   "{",
+		}[name]
+		err := set.ValidateEmptyThemeConfig([]byte(doc))
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: error %v does not contain %q", name, err, want)
+		}
 	}
 }

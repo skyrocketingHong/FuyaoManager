@@ -106,7 +106,7 @@ Each schema version is identified by its `contract` constant (or the legacy `sch
 # Unit and fixture tests (positive and negative, no database needed)
 cd admin/backend && go test ./internal/themecontract/ ./internal/cli/
 
-# Validate a theme root from the command line
+# Validate a theme root from the command line (flags must precede the root)
 cd admin/backend && go run ./cmd/fuyao-admin validate-theme \
-  --contracts ../../contracts/theme <theme-root> [--config <theme-config.json>]
+  --contracts ../../contracts/theme [--config <theme-config.json>] <theme-root>
 ```

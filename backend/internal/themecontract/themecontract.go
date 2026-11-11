@@ -33,6 +33,7 @@ type Set struct {
 // manifest.schema.json, build-input.schema.json, and release.schema.json.
 func Load(dir string) (*Set, error) {
 	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat() // enforce format: date-time as a real calendar check
 	set := &Set{}
 	for _, entry := range []struct {
 		file   string
@@ -66,28 +67,21 @@ func (s *Set) ValidateRelease(data []byte) error {
 	return validateJSON(s.release, "release.json", data)
 }
 
+// ValidateThemeConfigSchema verifies that schemaDoc is a well-formed JSON
+// Schema 2020-12 document that compiles. It validates the declared schema
+// itself, not any concrete configuration value.
+func (s *Set) ValidateThemeConfigSchema(schemaDoc []byte) error {
+	_, err := compileThemeConfigSchema(schemaDoc)
+	return err
+}
+
 // ValidateThemeConfig compiles schemaDoc as a JSON Schema 2020-12 document
 // and validates configData against it. The dialect restriction matches the
 // manifest configSchema.format constant.
 func (s *Set) ValidateThemeConfig(schemaDoc, configData []byte) error {
-	var schemaValue any
-	if err := json.Unmarshal(schemaDoc, &schemaValue); err != nil {
-		return fmt.Errorf("theme config schema: invalid JSON: %w", err)
-	}
-	root, ok := schemaValue.(map[string]any)
-	if !ok {
-		return fmt.Errorf("theme config schema: top level must be an object")
-	}
-	if root["$schema"] != configSchemaDialect {
-		return fmt.Errorf("theme config schema: $schema must be %q", configSchemaDialect)
-	}
-	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource(configResourceName, schemaValue); err != nil {
-		return fmt.Errorf("theme config schema: %w", err)
-	}
-	schema, err := compiler.Compile(configResourceName)
+	schema, err := compileThemeConfigSchema(schemaDoc)
 	if err != nil {
-		return fmt.Errorf("theme config schema: %w", err)
+		return err
 	}
 	var configValue any
 	if err := json.Unmarshal(configData, &configValue); err != nil {
@@ -97,6 +91,47 @@ func (s *Set) ValidateThemeConfig(schemaDoc, configData []byte) error {
 		return fmt.Errorf("theme config: %w", err)
 	}
 	return nil
+}
+
+// ValidateEmptyThemeConfig validates a theme configuration for a manifest that
+// declares no configSchema: per the contract, only an empty object is valid.
+func (s *Set) ValidateEmptyThemeConfig(configData []byte) error {
+	var value any
+	if err := json.Unmarshal(configData, &value); err != nil {
+		return fmt.Errorf("theme config: invalid JSON: %w", err)
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		return fmt.Errorf("theme config: top level must be an object")
+	}
+	if len(object) != 0 {
+		return fmt.Errorf("theme config: manifest declares no configSchema, only {} is valid")
+	}
+	return nil
+}
+
+func compileThemeConfigSchema(schemaDoc []byte) (*jsonschema.Schema, error) {
+	var schemaValue any
+	if err := json.Unmarshal(schemaDoc, &schemaValue); err != nil {
+		return nil, fmt.Errorf("theme config schema: invalid JSON: %w", err)
+	}
+	root, ok := schemaValue.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("theme config schema: top level must be an object")
+	}
+	if root["$schema"] != configSchemaDialect {
+		return nil, fmt.Errorf("theme config schema: $schema must be %q", configSchemaDialect)
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+	if err := compiler.AddResource(configResourceName, schemaValue); err != nil {
+		return nil, fmt.Errorf("theme config schema: %w", err)
+	}
+	schema, err := compiler.Compile(configResourceName)
+	if err != nil {
+		return nil, fmt.Errorf("theme config schema: %w", err)
+	}
+	return schema, nil
 }
 
 func validateJSON(schema *jsonschema.Schema, label string, data []byte) error {

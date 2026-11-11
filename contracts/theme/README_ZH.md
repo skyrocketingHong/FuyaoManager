@@ -106,7 +106,7 @@
 # 单元与 fixture 测试（正负例，无需数据库）
 cd admin/backend && go test ./internal/themecontract/ ./internal/cli/
 
-# 命令行校验一个主题根目录
+# 命令行校验一个主题根目录（flag 必须位于根目录之前）
 cd admin/backend && go run ./cmd/fuyao-admin validate-theme \
-  --contracts ../../contracts/theme <theme-root> [--config <theme-config.json>]
+  --contracts ../../contracts/theme [--config <theme-config.json>] <theme-root>
 ```
