@@ -81,7 +81,7 @@ jobs:
       - name: OpenAPI semantic lint
         working-directory: admin/frontend
         run: npm run api:lint
-      - name: svelte-check
+      - name: typecheck
         working-directory: admin/frontend
         run: npm run check
       - name: vitest

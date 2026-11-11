@@ -56,6 +56,10 @@ HTTP 契约位于仓库根目录 `contracts/openapi/management.yaml`，只描述
 | `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn 挑战有效期。                                                                                                                                                        |
 | `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | 登记许可有效期。                                                                                                                                                             |
 | `FUYAO_ADMIN_THEME_CONTRACTS` | 未设置                  | 仓库内 `contracts/theme` 路径。设置后启动时编译契约 schema，主题配置保存按各主题自身 schema 校验；未设置时保存主题选择返回 `503 theme_contracts_unavailable`，绝不跳过校验。 |
+| `FUYAO_ADMIN_REPO_ROOT`      | 工作目录                | 仓库根目录，锚定 `<repo>/site/.fuyao` 下的构建工作区与发布根目录。从其他目录启动 `serve` 时应显式设置。                                                                                                             |
+| `FUYAO_ADMIN_BUILD_MODE`     | `ci`                    | 平台构建的内容来源：`ci` 使用仓库 fixture 内容；`production` 需要受信任的内容根目录设置。                                                                                                                           |
+| `FUYAO_ADMIN_REQUIRE_CAPABILITIES` | `blog`            | 受信任站点需求：主题构建与发布前必须满足的能力。默认值仅保证博客能力兼容；实际启用首主题全部页面的站点必须设置为 `blog,albums,footprint,friends,pay,favicon`。                                                      |
+| `FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS` | `posts,blog-rss,sitemap` | 同上，针对 URL 约定；首主题全部功能还需 `release.json,data,media-albums,blog-search`。                                                                                                                            |
 
 ## 同源联调拓扑
 

@@ -13,23 +13,69 @@ cd admin/frontend
 npm ci
 ```
 
-随后在两个终端分别启动后端与前端：
+### 1. 创建专用开发数据库
+
+使用你自有的 PostgreSQL 实例，创建专用于本地开发的数据库（不要复用集成
+测试数据库；`.fuyao/cms-mvp/` 下的临时任务描述符仅供测试使用，不是长期
+部署配置）：
 
 ```bash
-# 终端 1：后端监听 127.0.0.1:8787（需要 FUYAO_ADMIN_DATABASE_URL；
-# migrate/bootstrap 见 admin/backend/README_ZH.md）
-cd admin/backend && go run ./cmd/fuyao-admin serve
+createdb fuyao_admin_dev   # 示例；任意本地 PostgreSQL 均可
+export FUYAO_ADMIN_DATABASE_URL='postgres://user@localhost:5432/fuyao_admin_dev'
+```
+
+### 2. 迁移、登记首位管理员、登记主题
+
+```bash
+cd admin/backend
+go run ./cmd/fuyao-admin migrate
+go run ./cmd/fuyao-admin bootstrap-admin --username admin
+#   打印一次性登记许可；留给浏览器步骤使用
+go run ./cmd/fuyao-admin register-theme \
+  -contracts "$PWD/../../contracts/theme" "$PWD/../../site"
+```
+
+### 3. 启动后端与管理台
+
+两个终端（后端需要第 1 步的环境变量，以及契约与仓库根目录设置）：
+
+```bash
+# 终端 1：后端监听 127.0.0.1:8787
+cd admin/backend
+FUYAO_ADMIN_DATABASE_URL=... \
+FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
+FUYAO_ADMIN_REPO_ROOT="$PWD/../.." \
+FUYAO_ADMIN_REQUIRE_CAPABILITIES='blog,albums,footprint,friends,pay,favicon' \
+FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS='release.json,posts,data,media-albums,sitemap,blog-rss,blog-search' \
+go run ./cmd/fuyao-admin serve
 
 # 终端 2：前端运行在 http://localhost:5174（在仓库根目录执行）
 npm run admin:dev
 ```
+
+`FUYAO_ADMIN_THEME_CONTRACTS` 启用主题校验与发布管线；`FUYAO_ADMIN_REPO_ROOT`
+将构建与发布目录锚定在 `<repo>/site/.fuyao` 下。两个 `FUYAO_ADMIN_REQUIRE_*`
+变量可选：默认值仅保证博客能力兼容——站点实际启用首主题全部页面时应设置
+上面的完整清单。
+
+### 4. 首次登录与首个站点
+
+1. 打开 `http://localhost:5174`——必须用 `localhost`，不要用 `127.0.0.1`
+   （WebAuthn 绑定 origin `http://localhost:5174`）。
+2. 进入"首次使用"，输入第 2 步的许可，登记你的 Passkey。
+3. 创建首个站点（CLI，在 `admin/backend` 目录并已导出 DSN）：
+   `go run ./cmd/fuyao-admin create-site --slug blog --name "我的站点"`。
+4. 在管理台内：选择主题、构建、预览、发布、回滚。
+
+### 默认地址、失败判断与停止
 
 - 默认地址 `http://localhost:5174`（端口固定、仅回环）。端口被占用时开发
   服务器报 "Port 5174 is already in use" 退出；请先释放端口，不要放任
   origin 漂移。
 - 前端提示网络错误说明后端不可达：检查终端 1、`FUYAO_ADMIN_DATABASE_URL`
   以及 `fuyao-admin serve` 是否监听 127.0.0.1:8787。
-- 两个终端分别按 Ctrl-C 停止。
+- 两个终端分别按 Ctrl-C 停止。若后端以 `nohup ... &` 启动，按端口停止：
+  `kill $(lsof -tnP -iTCP:8787 -sTCP:LISTEN)`。
 
 ## 联调拓扑
 

@@ -14,16 +14,64 @@ cd admin/frontend
 npm ci
 ```
 
-Then run the backend and the console in two terminals:
+### 1. Create a dedicated development database
+
+Use a PostgreSQL instance you control and create a database dedicated to
+local development (do not reuse the integration-test database; the throwaway
+task descriptor under `.fuyao/cms-mvp/` exists for tests only and is not a
+deployment configuration):
 
 ```bash
-# terminal 1: backend on 127.0.0.1:8787 (requires FUYAO_ADMIN_DATABASE_URL;
-# see admin/backend/README.md for migrate/bootstrap)
-cd admin/backend && go run ./cmd/fuyao-admin serve
+createdb fuyao_admin_dev   # example; any local PostgreSQL works
+export FUYAO_ADMIN_DATABASE_URL='postgres://user@localhost:5432/fuyao_admin_dev'
+```
+
+### 2. Migrate, enroll the first administrator, register the theme
+
+```bash
+cd admin/backend
+go run ./cmd/fuyao-admin migrate
+go run ./cmd/fuyao-admin bootstrap-admin --username admin
+#   prints a single-use enrollment permit; keep it for the browser step
+go run ./cmd/fuyao-admin register-theme   -contracts "$PWD/../../contracts/theme" "$PWD/../../site"
+```
+
+### 3. Run the backend and the console
+
+Two terminals (the backend needs the environment variables from step 1 plus
+the contract and repository-root settings):
+
+```bash
+# terminal 1: backend on 127.0.0.1:8787
+cd admin/backend
+FUYAO_ADMIN_DATABASE_URL=... \
+FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
+FUYAO_ADMIN_REPO_ROOT="$PWD/../.." \
+FUYAO_ADMIN_REQUIRE_CAPABILITIES='blog,albums,footprint,friends,pay,favicon' \
+FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS='release.json,posts,data,media-albums,sitemap,blog-rss,blog-search' \
+go run ./cmd/fuyao-admin serve
 
 # terminal 2: console on http://localhost:5174 (from the repository root)
 npm run admin:dev
 ```
+
+`FUYAO_ADMIN_THEME_CONTRACTS` enables theme validation and the publish
+pipeline; `FUYAO_ADMIN_REPO_ROOT` anchors build and release directories under
+`<repo>/site/.fuyao`. The two `FUYAO_ADMIN_REQUIRE_*` variables are optional:
+their defaults only guarantee the blog surface — set the full lists above
+when the site actually serves the whole first theme.
+
+### 4. First login and first site
+
+1. Open `http://localhost:5174` — must be `localhost`, not `127.0.0.1`
+   (WebAuthn binds to the origin `http://localhost:5174`).
+2. Follow "first time", enter the permit from step 2, and enroll your
+   passkey.
+3. Create the first site (CLI, in `admin/backend` with the DSN exported):
+   `go run ./cmd/fuyao-admin create-site --slug blog --name "My Site"`.
+4. In the console: select the theme, build, preview, publish, roll back.
+
+### Default URL, failures, and stopping
 
 - Default URL is `http://localhost:5174` (pinned port, loopback only). If the
   port is occupied the dev server exits with "Port 5174 is already in use";
@@ -31,7 +79,9 @@ npm run admin:dev
 - If the console reports a network error, the backend is not reachable:
   check terminal 1, `FUYAO_ADMIN_DATABASE_URL`, and that `fuyao-admin serve`
   is listening on 127.0.0.1:8787.
-- Stop both services with Ctrl-C in their terminals.
+- Stop both services with Ctrl-C in their terminals. When the backend was
+  started with `nohup ... &`, stop it by port instead:
+  `kill $(lsof -tnP -iTCP:8787 -sTCP:LISTEN)`.
 
 ## Topology
 
