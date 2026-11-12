@@ -446,6 +446,7 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	themeCopy := filepath.Join(wsRoot, "site")
 	manifest, err := copyThemeSource(themeCopy, themeRoot)
 	if err != nil {
+		r.logger.Error("task source copy failed", "buildId", build.ID, "themeRoot", themeRoot, "error", err)
 		return fail("workspace", "Failed to materialize the task source copy.")
 	}
 	depRoot := FindWorkspaceRoot(themeRoot)
