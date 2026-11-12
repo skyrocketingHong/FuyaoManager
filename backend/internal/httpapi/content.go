@@ -291,8 +291,16 @@ func (a *API) handleGetSiteConfig(w http.ResponseWriter, r *http.Request, auth s
 		writeContentError(w, err, "Failed to read the site configuration.")
 		return
 	}
+	effectiveOrigin := ""
+	if a.edge != nil && a.store.NetworkEntries != nil {
+		if site, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err == nil {
+			if entry, err := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); err == nil {
+				effectiveOrigin = a.edge.EntryURL(site.Site.Visibility, entry.Port)
+			}
+		}
+	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"config": doc, "amapSecurityCodeSet": securitySet, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"config": doc, "amapSecurityCodeSet": securitySet, "effectiveOrigin": effectiveOrigin, "digest": digest})
 }
 
 // handlePutSiteConfig saves site.yaml under If-Match semantics. The amap

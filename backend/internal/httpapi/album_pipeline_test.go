@@ -107,7 +107,7 @@ func TestAlbumPipelineRealMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
-	if err := provisioner.Provision(site.Site, site.Settings); err != nil {
+	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatal(err)
 	}
 	registerFirstTheme(t, env)

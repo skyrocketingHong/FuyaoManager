@@ -1162,6 +1162,8 @@ export interface components {
         SiteConfigEnvelope: {
             config: components["schemas"]["SiteConfig"];
             amapSecurityCodeSet?: boolean;
+            /** @description The site's real managed entry (http://host:port); empty before the entry exists. Visibility switches change this host and require a rebuild to re-emit canonical/RSS/Sitemap URLs. */
+            effectiveOrigin?: string;
             digest: string;
             /** @description Write-only secret channel; never present in responses. */
             secrets?: {

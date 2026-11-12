@@ -3147,6 +3147,9 @@ components:
           $ref: '#/components/schemas/SiteConfig'
         amapSecurityCodeSet:
           type: boolean
+        effectiveOrigin:
+          type: string
+          description: The site's real managed entry (http://host:port); empty before the entry exists. Visibility switches change this host and require a rebuild to re-emit canonical/RSS/Sitemap URLs.
         digest:
           type: string
         secrets:

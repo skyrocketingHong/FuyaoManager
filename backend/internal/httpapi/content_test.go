@@ -42,7 +42,7 @@ func contentWorld(t *testing.T) (*testEnv, *tclient, string) {
 		t.Fatalf("provisioner: %v", err)
 	}
 	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
-	if err := provisioner.Provision(site.Site, site.Settings); err != nil {
+	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
 	return env, env.clientFor(token, csrf), site.Site.ID.String()
@@ -381,7 +381,7 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 		t.Fatalf("provisioner: %v", err)
 	}
 	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
-	if err := provisioner.Provision(site.Site, site.Settings); err != nil {
+	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
 	registerFirstTheme(t, env)

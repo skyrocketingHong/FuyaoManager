@@ -60,9 +60,11 @@ func (p *Provisioner) FaviconRoot(siteID uuid.UUID) string {
 }
 
 // Provision idempotently creates the full directory tree and scaffold files
-// for the site. Existing files are never overwritten, so retrying a failed
-// provisioning or re-running on an existing tree is safe.
-func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings) error {
+// for the site. baseURL seeds site.yaml's site.url with the site's real
+// entry (http://<host>:<port>); existing files are never overwritten, so
+// retrying a failed provisioning or re-running on an existing tree is safe
+// and never clobbers a user-edited configuration.
+func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings, baseURL string) error {
 	id := site.ID
 	dirs := []string{
 		filepath.Join(p.ContentRoot(id), "posts"),
@@ -91,7 +93,7 @@ func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings) er
 		filepath.Join(p.ContentRoot(id), "albums", "metadata", "index.json"): emptyAlbumIndex(),
 		filepath.Join(p.ConfigRoot(id), "content.yaml"):                      []byte(contentYAML),
 	}
-	siteYAML, err := renderSiteYAML(settings, site.Slug)
+	siteYAML, err := renderSiteYAML(settings, site.Slug, baseURL)
 	if err != nil {
 		return err
 	}
@@ -173,7 +175,7 @@ func emptyAlbumIndex() []byte {
 // every mode and example/placeholder values in production mode
 // (site/src/lib/config/schema.ts), so every default here is non-empty and
 // placeholder-free; all values stay editable through the site config surface.
-func renderSiteYAML(settings model.SiteSettings, slug string) ([]byte, error) {
+func renderSiteYAML(settings model.SiteSettings, slug, baseURL string) ([]byte, error) {
 	name := settings.Name
 	if name == "" {
 		name = slug
@@ -186,7 +188,14 @@ func renderSiteYAML(settings model.SiteSettings, slug string) ([]byte, error) {
 	fmt.Fprintf(&b, "schemaVersion: 1\n")
 	fmt.Fprintf(&b, "site:\n")
 	fmt.Fprintf(&b, "  name: %s\n", yamlString(name))
-	fmt.Fprintf(&b, "  url: https://%s.fuyao.local\n", yamlString(slug))
+	url := baseURL
+	if url == "" {
+		// No managed entry is known (CLI-created site before the platform
+		// allocates one): seed with the loopback placeholder-free form; the
+		// platform rewrites it with the real entry on first provisioning.
+		url = "http://127.0.0.1"
+	}
+	fmt.Fprintf(&b, "  url: %s\n", yamlString(url))
 	fmt.Fprintf(&b, "  startDate: '0001-01-01'\n")
 	fmt.Fprintf(&b, "  startYear: %d\n", time.Now().Year())
 	fmt.Fprintf(&b, "  defaultLocale: %s\n", settings.DefaultLocale)

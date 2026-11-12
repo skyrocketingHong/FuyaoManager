@@ -49,8 +49,9 @@ type Config struct {
 }
 
 // SiteProvisioner provisions the per-site on-disk tree at site creation.
+// baseURL is the site's real managed entry used to seed site.yaml.
 type SiteProvisioner interface {
-	Provision(site model.Site, settings model.SiteSettings) error
+	Provision(site model.Site, settings model.SiteSettings, baseURL string) error
 }
 
 // EdgeManager renders published-site entry URLs and re-applies the managed
@@ -75,6 +76,7 @@ type ContentStore interface {
 	SaveSocialLinks(siteID uuid.UUID, links []content.SocialLink, expectedDigest string) ([]content.SocialLink, string, error)
 	GetSiteConfig(siteID uuid.UUID) (doc content.SiteConfigDoc, securitySet bool, digest string, err error)
 	SaveSiteConfig(siteID uuid.UUID, doc content.SiteConfigDoc, securityCode *string, expectedDigest string) (content.SiteConfigDoc, string, error)
+	UpdateSiteBaseURL(siteID uuid.UUID, url string) error
 	GetAlbumIndex(siteID uuid.UUID) (content.AlbumIndex, string, error)
 	GetAlbumYear(siteID uuid.UUID, year string) (content.AlbumYear, string, error)
 	SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest string, edit func(*content.AlbumYear) error) (content.AlbumYear, string, error)

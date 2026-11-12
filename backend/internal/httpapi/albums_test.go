@@ -176,7 +176,7 @@ func TestAlbumUploadProcessEditDelete(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provisioner: %v", err)
 	}
-	if err := provisioner.Provision(site.Site, site.Settings); err != nil {
+	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
 

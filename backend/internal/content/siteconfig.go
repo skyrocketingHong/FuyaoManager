@@ -165,3 +165,29 @@ func validateSiteConfig(doc *SiteConfigDoc) error {
 	}
 	return nil
 }
+
+// UpdateSiteBaseURL rewrites only site.yaml's site.url (used when the
+// managed entry changes, e.g. a visibility switch) under the config lock.
+// The rewrite is skipped when the file already carries the target URL.
+func (s *Store) UpdateSiteBaseURL(siteID uuid.UUID, url string) error {
+	return s.withFileLock(siteID, "config", "site.yaml", func() error {
+		data, _, err := s.ReadFile(siteID, RootConfig, "site.yaml")
+		if err != nil {
+			return err
+		}
+		var doc SiteConfigDoc
+		if err := yaml.Unmarshal(data, &doc); err != nil {
+			return fmt.Errorf("site.yaml is not valid YAML: %w", err)
+		}
+		if doc.Site.URL == url {
+			return nil
+		}
+		doc.Site.URL = url
+		out, err := yaml.Marshal(&doc)
+		if err != nil {
+			return err
+		}
+		_, err = s.WriteFile(siteID, RootConfig, "site.yaml", out)
+		return err
+	})
+}

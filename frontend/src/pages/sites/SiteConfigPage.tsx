@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Card, Input, Space, Spin, message } from 'antd';
+import { Alert, Button, Card, Input, Space, Spin, Typography, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
 import {
 	getSite,
@@ -49,6 +49,7 @@ export default function SiteConfigPage() {
 	const [linksDigest, setLinksDigest] = useState('');
 	const [digest, setDigest] = useState('');
 	const [securitySet, setSecuritySet] = useState(false);
+	const [effectiveOrigin, setEffectiveOrigin] = useState('');
 	const [form, setForm] = useState<ConfigForm | null>(null);
 	const [securityInput, setSecurityInput] = useState('');
 	const [dirty, setDirty] = useState(false);
@@ -91,6 +92,7 @@ export default function SiteConfigPage() {
 			setConfig(cfgEnv.config);
 			setDigest(cfgEnv.digest);
 			setSecuritySet(cfgEnv.amapSecurityCodeSet);
+			setEffectiveOrigin(cfgEnv.effectiveOrigin);
 			setForm(toForm(cfgEnv.config));
 			setLinks(linkEnv.links);
 			setLinksDigest(linkEnv.digest);
@@ -273,6 +275,18 @@ export default function SiteConfigPage() {
 			{errorKey !== null ? (
 				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
+			<Card size="small" title={t('config.originSection')} style={{ marginBottom: 12 }}>
+				{effectiveOrigin ? (
+					<>
+						<div>{effectiveOrigin}</div>
+						<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+							{t('config.originHint')}
+						</Typography.Text>
+					</>
+				) : (
+					<Typography.Text type="secondary">{t('config.originPending')}</Typography.Text>
+				)}
+			</Card>
 			<Card size="small" title={t('config.profileSection')} style={{ marginBottom: 12 }}>
 				<Space size={12} style={{ display: 'flex' }} align="start">
 					<div style={{ flex: 1 }}>{field(t('config.profileName'), 'profileName')}</div>

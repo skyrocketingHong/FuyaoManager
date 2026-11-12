@@ -268,5 +268,8 @@
 	"albums.detachConfirm": "Remove this photo from the next build only? Files stay for releases still referencing them.",
 	"albums.detached": "Photo detached from future builds.",
 	"posts.discardLocal": "Discard my edits",
-	"posts.newerEditsKept": "Saved; newer unsaved edits kept in the editor."
+	"posts.newerEditsKept": "Saved; newer unsaved edits kept in the editor.",
+	"config.originSection": "Site address",
+	"config.originHint": "The managed entry follows the visibility setting; switching public/private changes the host and requires a rebuild for canonical/RSS/Sitemap URLs.",
+	"config.originPending": "The managed entry appears after the first publish."
 }

@@ -440,10 +440,20 @@ func (a *API) handleProvisionSite(w http.ResponseWriter, r *http.Request, auth s
 
 // provisionSite runs the directory provisioning and persists the resulting
 // state, returning the refreshed record and the failure that was recorded
-// (nil on success).
+// (nil on success). The site's network entry is allocated first so the
+// scaffold site.yaml seeds the real entry URL (http://<host>:<port>) — never
+// an invented domain.
 func (a *API) provisionSite(r *http.Request, rec store.SiteRecord, userID uuid.UUID) (store.SiteRecord, model.ProvisionFailure) {
 	failure := model.ProvisionFailure{}
-	if err := a.provisioner.Provision(rec.Site, rec.Settings); err != nil {
+	baseURL := ""
+	if a.store.NetworkEntries != nil && a.edge != nil {
+		if entry, _, err := a.store.NetworkEntries.EnsureSiteEntry(r.Context(), rec.Site.ID, 20000, 20100); err == nil {
+			baseURL = a.edge.EntryURL(rec.Site.Visibility, entry.Port)
+		} else {
+			a.logger.Error("allocate site entry at provisioning", "siteId", rec.Site.ID, "error", err)
+		}
+	}
+	if err := a.provisioner.Provision(rec.Site, rec.Settings, baseURL); err != nil {
 		failure = model.ProvisionFailure{Stage: "directories", Message: err.Error()}
 		a.logger.Error("provision site", "siteId", rec.Site.ID, "error", err)
 	}
@@ -505,6 +515,15 @@ func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth s
 			a.logger.Error("edge apply after visibility change", "siteId", siteID, "error", err)
 			writeProblem(w, http.StatusConflict, "edge_apply_failed", "The visibility is recorded in the database but the site entry update failed; retry to re-apply.")
 			return
+		}
+		// The entry host changed with the visibility: keep site.yaml's
+		// canonical URL aligned so RSS/Sitemap/canonical outputs of the next
+		// build use the real entry (a rebuild is required to re-emit them).
+		if entry, err := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); err == nil {
+			newURL := a.edge.EntryURL(body.Visibility, entry.Port)
+			if err := a.content.UpdateSiteBaseURL(siteID, newURL); err != nil {
+				a.logger.Error("rewrite site base url after visibility change", "siteId", siteID, "error", err)
+			}
 		}
 	}
 	refreshed, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID)

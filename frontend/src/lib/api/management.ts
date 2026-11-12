@@ -306,13 +306,17 @@ export async function putSocialLinks(
 	return data;
 }
 
-export async function getSiteConfig(
-	siteId: string
-): Promise<{ config: SiteConfig; amapSecurityCodeSet: boolean; digest: string }> {
+export async function getSiteConfig(siteId: string): Promise<{
+	config: SiteConfig;
+	amapSecurityCodeSet: boolean;
+	effectiveOrigin: string;
+	digest: string;
+}> {
 	const { data } = await api<SiteConfigEnvelope>('GET', `/api/v1/sites/${siteId}/site-config`);
 	return {
 		config: data.config,
 		amapSecurityCodeSet: data.amapSecurityCodeSet ?? false,
+		effectiveOrigin: data.effectiveOrigin ?? '',
 		digest: data.digest
 	};
 }

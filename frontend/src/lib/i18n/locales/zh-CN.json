@@ -268,5 +268,8 @@
 	"albums.detachConfirm": "仅从下一次构建移除这张照片？仍引用它的发布继续保留文件。",
 	"albums.detached": "照片已移出后续构建。",
 	"posts.discardLocal": "放弃我的修改",
-	"posts.newerEditsKept": "已保存；请求期间的新编辑仍保留在编辑器中。"
+	"posts.newerEditsKept": "已保存；请求期间的新编辑仍保留在编辑器中。",
+	"config.originSection": "站点地址",
+	"config.originHint": "入口随可见性设置变化；公开/私有切换会变更主机，需重新构建以更新 canonical/RSS/Sitemap 地址。",
+	"config.originPending": "首次发布后显示受管入口。"
 }

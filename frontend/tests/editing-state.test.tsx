@@ -13,6 +13,7 @@ import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-libra
 import FriendsPage from '../src/pages/sites/FriendsPage';
 import PostsPage from '../src/pages/sites/PostsPage';
 import * as api from '../src/lib/api/management';
+import type { Site } from '../src/lib/api/management';
 import { initLocale, t } from '../src/lib/i18n';
 import { ApiError } from '../src/lib/api/client';
 
@@ -26,15 +27,15 @@ vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	putPost: vi.fn()
 }));
 
-const site = {
+const site: Site = {
 	siteId: '11111111-1111-1111-1111-111111111111',
 	slug: 'blog',
 	name: 'Blog',
 	description: '',
-	defaultLocale: 'en-US',
-	visibility: 'private' as const,
-	provisionState: 'ready' as const,
-	role: 'owner' as const,
+	defaultLocale: 'en-US' as 'en-US' | 'zh-CN',
+	visibility: 'private',
+	provisionState: 'ready',
+	role: 'owner',
 	settingsRevision: 1,
 	createdAt: '2026-01-01',
 	updatedAt: '2026-01-01'
@@ -106,7 +107,7 @@ describe('editing state (R5)', () => {
 		vi.mocked(api.putFriends).mockImplementation(
 			() =>
 				new Promise((resolve) => {
-					resolveSave = resolve;
+					resolveSave = resolve as (x: unknown) => void;
 				})
 		);
 		mount(<FriendsPage />, 'friends');
@@ -181,7 +182,7 @@ describe('editing state (R5)', () => {
 			.mockImplementationOnce(
 				() =>
 					new Promise((resolve) => {
-						resolveA = resolve;
+						resolveA = resolve as (x: unknown) => void;
 					})
 			)
 			.mockResolvedValue({
