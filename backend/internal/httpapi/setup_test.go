@@ -192,6 +192,11 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 		RegistrationTTL: 30 * time.Minute,
 		ThemeContracts:  contracts,
 		Provisioner:     provisioner,
+		// Tests exercise the deployment-capable surface explicitly; the
+		// run-isolation default has its own suite below.
+		DeploymentEnabled: true,
+		PortMin:           20000,
+		PortMax:           20100,
 	}
 	if applyEnv != nil && applyEnv.mutateConfig != nil {
 		applyEnv.mutateConfig(&cfg)

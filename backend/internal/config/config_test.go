@@ -92,3 +92,50 @@ func TestLoadTrustedHTTPHostKeepsCookieUsable(t *testing.T) {
 		t.Fatal("plain-HTTP origins (loopback or trusted) must not mark cookies Secure; browsers would drop the session")
 	}
 }
+
+// The deployment switch defaults to off and accepts only explicit boolean
+// literals; a present-but-invalid value is a configuration error.
+func TestLoadDeploymentSwitchDefaultsToOff(t *testing.T) {
+	setTestEnv(t, "127.0.0.1:8787", "http://localhost:5174")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if cfg.DeploymentEnabled {
+		t.Fatal("run isolation must be the default")
+	}
+}
+
+func TestLoadDeploymentSwitchAcceptsLiterals(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"1", true}, {"true", true}, {"yes", true}, {"on", true},
+		{"TRUE", true}, {"On", true},
+		{"0", false}, {"false", false}, {"no", false}, {"off", false},
+		{"OFF", false},
+	} {
+		t.Run(tc.value, func(t *testing.T) {
+			setTestEnv(t, "127.0.0.1:8787", "http://localhost:5174")
+			t.Setenv(EnvDeploymentEnabled, tc.value)
+			cfg, err := Load()
+			if err != nil {
+				t.Fatalf("load %q: %v", tc.value, err)
+			}
+			if cfg.DeploymentEnabled != tc.want {
+				t.Fatalf("%q parsed as %v, want %v", tc.value, cfg.DeploymentEnabled, tc.want)
+			}
+		})
+	}
+}
+
+func TestLoadDeploymentSwitchRejectsInvalidValue(t *testing.T) {
+	for _, value := range []string{"maybe", "enabled ", "2"} {
+		setTestEnv(t, "127.0.0.1:8787", "http://localhost:5174")
+		t.Setenv(EnvDeploymentEnabled, value)
+		if _, err := Load(); err == nil {
+			t.Fatalf("invalid deployment switch %q must abort startup", value)
+		}
+	}
+}

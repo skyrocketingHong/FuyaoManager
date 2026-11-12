@@ -447,7 +447,7 @@ func (a *API) provisionSite(r *http.Request, rec store.SiteRecord, userID uuid.U
 	failure := model.ProvisionFailure{}
 	baseURL := ""
 	if a.store.NetworkEntries != nil && a.edge != nil {
-		if entry, _, err := a.store.NetworkEntries.EnsureSiteEntry(r.Context(), rec.Site.ID, 20000, 20100); err == nil {
+		if entry, _, err := a.store.NetworkEntries.EnsureSiteEntry(r.Context(), rec.Site.ID, a.portMin, a.portMax); err == nil {
 			baseURL = a.edge.EntryURL(rec.Site.Visibility, entry.Port)
 		} else {
 			a.logger.Error("allocate site entry at provisioning", "siteId", rec.Site.ID, "error", err)

@@ -197,17 +197,18 @@ func TestEdgePublishVisibilityAndReconcile(t *testing.T) {
 			t.Fatalf("apply migrations: %v", err)
 		}
 		edgeMgr = edge.New(edge.Config{
-			Pool:         e.pool,
-			Entries:      store.New(e.pool).NetworkEntries,
-			SnippetDir:   snippetDir,
-			ApplyCmd:     []string{"true"},
-			PrivateBind:  "192.0.2.1",
-			PublicBind:   "",
-			PublicHost:   "203.0.113.1",
-			ReleasesRoot: releasesRoot,
-			SitesRoot:    sitesRoot,
-			PortMin:      21020,
-			PortMax:      21030,
+			Pool:              e.pool,
+			Entries:           store.New(e.pool).NetworkEntries,
+			SnippetDir:        snippetDir,
+			ApplyCmd:          []string{"true"},
+			PrivateBind:       "192.0.2.1",
+			PublicBind:        "",
+			PublicHost:        "203.0.113.1",
+			ReleasesRoot:      releasesRoot,
+			SitesRoot:         sitesRoot,
+			PortMin:           21020,
+			PortMax:           21030,
+			DeploymentEnabled: true,
 		})
 		e.mutateConfig = func(cfg *Config) { cfg.Edge = edgeMgr }
 	})
@@ -357,15 +358,16 @@ func TestEdgeApplyFailureRestoresSnippet(t *testing.T) {
 			t.Fatalf("apply migrations: %v", err)
 		}
 		edgeMgr = edge.New(edge.Config{
-			Pool:         e.pool,
-			Entries:      store.New(e.pool).NetworkEntries,
-			SnippetDir:   snippetDir,
-			ApplyCmd:     []string{"false"}, // validate/reload always fails
-			PrivateBind:  "192.0.2.1",
-			ReleasesRoot: releasesRoot,
-			SitesRoot:    sitesRoot,
-			PortMin:      21040,
-			PortMax:      21050,
+			Pool:              e.pool,
+			Entries:           store.New(e.pool).NetworkEntries,
+			SnippetDir:        snippetDir,
+			ApplyCmd:          []string{"false"}, // validate/reload always fails
+			PrivateBind:       "192.0.2.1",
+			ReleasesRoot:      releasesRoot,
+			SitesRoot:         sitesRoot,
+			PortMin:           21040,
+			PortMax:           21050,
+			DeploymentEnabled: true,
 		})
 	})
 	ctx := context.Background()

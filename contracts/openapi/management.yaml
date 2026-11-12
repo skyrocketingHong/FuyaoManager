@@ -1581,7 +1581,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '503':
-          description: Edge management is not configured (`edge_unavailable`).
+          description: Edge management is not configured (`edge_unavailable`), or the deployment switch is off (`deployment_disabled`).
           content:
             application/problem+json:
               schema:
@@ -2419,6 +2419,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        '503':
+          description: The deployment switch is off (`deployment_disabled`); visibility changes cannot be applied.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           $ref: '#/components/responses/Problem'
 
@@ -2545,7 +2551,7 @@ paths:
                       'supersededAt': null
                     }
         '503':
-          description: The publish pipeline or theme contracts are not configured (`publish_unavailable`).
+          description: The publish pipeline or theme contracts are not configured (`publish_unavailable`), or the deployment switch is off (`deployment_disabled`).
           content:
             application/problem+json:
               schema:
@@ -2721,7 +2727,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '503':
-          description: The publish pipeline is not configured (`publish_unavailable`).
+          description: The publish pipeline is not configured (`publish_unavailable`) or the deployment switch is off (`deployment_disabled`).
           content:
             application/problem+json:
               schema:
@@ -3105,7 +3111,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -3136,6 +3142,7 @@ components:
             - build_not_succeeded
             - build_not_found
             - publish_unavailable
+            - deployment_disabled
             - build_not_publishable
             - release_build_conflict
             - release_not_found
@@ -3157,6 +3164,7 @@ components:
             - photo_in_use
             - reference_scan_failed
             - edge_unavailable
+            - deployment_disabled
             - internal_error
         detail:
           type: string
@@ -3391,16 +3399,29 @@ components:
 
     SiteEdgeState:
       type: object
-      required: [site, inSync]
+      required: [site, enabled, isolated, inSync]
       properties:
         site:
           type: object
+          required: [currentOk]
           properties:
             siteId: { type: string }
             slug: { type: string }
             visibility: { type: string, enum: [public, private] }
             port: { type: integer }
             originUrl: { type: string }
+            releaseDir:
+              type: string
+              description: Server-side fact; always empty in API responses and kept only for contract compatibility.
+            currentOk:
+              type: boolean
+              description: The on-disk current pointer matches the database's live release. A reserved port or a rendered URL never implies this; while isolated, it stays false.
+        enabled:
+          type: boolean
+          description: Snippet management is configured (operator-approved snippet directory present).
+        isolated:
+          type: boolean
+          description: Run isolation — the deployment switch is off, so no publish server exists and the edge is never reconciled or applied; ports and URLs are reservations only.
         inSync:
           type: boolean
           description: The managed snippet on disk matches the desired render.

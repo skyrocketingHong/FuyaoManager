@@ -42,6 +42,7 @@ func edgeConsistencyWorld(t *testing.T) (*testEnv, *edge.Manager, string, string
 			PrivateBind: "192.0.2.1", PublicHost: "203.0.113.1",
 			ReleasesRoot: root, SitesRoot: t.TempDir(),
 			PortMin: 28010, PortMax: 28030,
+			DeploymentEnabled: true,
 		})
 		e.mutateConfig = func(cfg *Config) { cfg.Edge = em }
 	})

@@ -43,7 +43,25 @@ const (
 	EnvBuildMode         = "FUYAO_ADMIN_BUILD_MODE"
 	EnvRequireCaps       = "FUYAO_ADMIN_REQUIRE_CAPABILITIES"
 	EnvRequireURLs       = "FUYAO_ADMIN_REQUIRE_URL_CONVENTIONS"
+	EnvDeploymentEnabled = "FUYAO_ADMIN_DEPLOYMENT_ENABLED"
 )
+
+// envBool reads a boolean setting. Only the literal strings "1", "true",
+// "yes", and "on" enable; a present-but-invalid value is a configuration
+// error, never a silent fallback.
+func envBool(key string) (bool, error) {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	switch v {
+	case "":
+		return false, nil
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("%s %q is not a valid boolean", key, os.Getenv(key))
+	}
+}
 
 // Config is the fully validated runtime configuration. CookieSecure is
 // derived from the origin schemes: only an https origin marks cookies
@@ -81,6 +99,13 @@ type Config struct {
 	BuildMode           string
 	RequireCaps         []string
 	RequireURLs         []string
+	// DeploymentEnabled gates the publish pipeline and the managed edge:
+	// false (the default) keeps the server in run-isolation — sites, content,
+	// real builds, and private previews work, but no publish server starts,
+	// the edge is never reconciled or applied, and the publish, rollback,
+	// visibility, and edge-reapply APIs answer 503 deployment_disabled.
+	// Historical release data stays readable.
+	DeploymentEnabled bool
 }
 
 // Load reads the environment and validates it.
@@ -153,6 +178,12 @@ func Load() (Config, error) {
 	if ttlErr != nil {
 		return Config{}, ttlErr
 	}
+
+	deploymentEnabled, err := envBool(EnvDeploymentEnabled)
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.DeploymentEnabled = deploymentEnabled
 
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

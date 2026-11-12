@@ -10,7 +10,10 @@ import (
 
 // handleGetSiteEdge returns the managed-entry view for one site: the
 // effective address, apply health, and the snippet's desired-vs-applied
-// state. Read-only; the reapply endpoint is the recovery path.
+// state, plus the deployment facts (enabled/isolated). Read-only; the
+// reapply endpoint is the recovery path. currentOk comes only from the
+// manager's on-disk-pointer check — a reserved port or a rendered URL never
+// counts as the entry actually running the live release.
 func (a *API) handleGetSiteEdge(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	siteID, ok := parseSiteID(w, r)
 	if !ok {
@@ -31,6 +34,16 @@ func (a *API) handleGetSiteEdge(w http.ResponseWriter, r *http.Request, auth sto
 		Slug:       rec.Site.Slug,
 		Visibility: rec.Site.Visibility,
 	}
+	// The manager's per-site state is the only source for currentOk: it
+	// compares the on-disk current pointer against the database's live
+	// release, so a merely reserved port or URL never reports running. The
+	// release directory itself stays server-side — it is never copied into
+	// the response.
+	for _, site := range full.Sites {
+		if site.SiteID == siteID {
+			entry.CurrentOK = site.CurrentOK
+		}
+	}
 	if e, err := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); err == nil {
 		entry.Port = e.Port
 		entry.OriginURL = a.edge.EntryURL(rec.Site.Visibility, e.Port)
@@ -39,6 +52,8 @@ func (a *API) handleGetSiteEdge(w http.ResponseWriter, r *http.Request, auth sto
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"site":          entry,
+		"enabled":       full.Enabled,
+		"isolated":      full.Isolated,
 		"inSync":        full.InSync,
 		"lastAppliedAt": full.LastApplied,
 		"lastError":     full.LastError,

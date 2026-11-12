@@ -43,6 +43,12 @@ var ErrEdgeDisabled = errors.New("edge management is not configured")
 // previous snippet is restored and the running config keeps serving.
 var ErrApplyFailed = errors.New("edge apply failed")
 
+// ErrDeploymentDisabled marks every mutating entry point while the
+// deployment switch is off: run isolation rejects the call before any disk,
+// command, or database change — no pointer switch, no snippet write, no
+// apply, no entry allocation.
+var ErrDeploymentDisabled = errors.New("deployment is disabled")
+
 // Config assembles the edge manager.
 type Config struct {
 	Pool         *pgxpool.Pool
@@ -57,6 +63,10 @@ type Config struct {
 	PortMin      int
 	PortMax      int
 	Logger       *slog.Logger
+	// DeploymentEnabled mirrors the deployment switch: while false the
+	// manager reports run isolation and the CLI never drives Reconcile or
+	// the publish pipeline against it.
+	DeploymentEnabled bool
 }
 
 // entryRow is one rendered edge entry: the database view of a published site.
@@ -71,7 +81,12 @@ type entryRow struct {
 // State is the observed edge health of the manager, exposed for the config
 // surface and diagnostics.
 type State struct {
-	Enabled     bool        `json:"enabled"`
+	Enabled bool `json:"enabled"` // snippet management is configured
+	// Isolated reports run isolation: the deployment switch is off, so the
+	// publish server never started and the edge is never reconciled or
+	// applied; ports and URLs in this state are reservations, not serving
+	// origins.
+	Isolated    bool        `json:"isolated"`
 	InSync      bool        `json:"inSync"`                // the snippet file matches the desired render
 	LastApplied *time.Time  `json:"lastApplied,omitempty"` // last successful apply
 	LastError   string      `json:"lastError,omitempty"`
@@ -115,6 +130,11 @@ func New(cfg Config) *Manager {
 // Enabled reports whether snippet management is active.
 func (m *Manager) Enabled() bool { return m.cfg.SnippetDir != "" }
 
+// Isolated reports run isolation: the deployment switch is off, so nothing
+// serves or applies — the snippet path, bind hosts, and per-site URLs below
+// are reservations only.
+func (m *Manager) Isolated() bool { return !m.cfg.DeploymentEnabled }
+
 // EntryURL renders the externally reachable URL of a site entry.
 func (m *Manager) EntryURL(visibility string, port int) string {
 	host := m.cfg.PublicHost
@@ -141,6 +161,9 @@ func (m *Manager) EntryURL(visibility string, port int) string {
 // callback must not move `current` backwards — it only re-applies the
 // snippet, which renders from the database (the newer state) anyway.
 func (m *Manager) OnLive(ctx context.Context, siteID uuid.UUID, release model.Release) error {
+	if m.Isolated() {
+		return ErrDeploymentDisabled
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -208,6 +231,9 @@ func (m *Manager) switchCurrentLocked(siteID uuid.UUID, releaseDir string) error
 // pointers, and the rendered snippet. Safe to run at startup and on demand;
 // a visibility change re-runs it to make the desired state actually live.
 func (m *Manager) Reconcile(ctx context.Context) error {
+	if m.Isolated() {
+		return ErrDeploymentDisabled
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -237,6 +263,9 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 // ApplyAll re-renders and applies the managed snippet for every published
 // site. The previous snippet is restored when validation or reload fails.
 func (m *Manager) ApplyAll(ctx context.Context) error {
+	if m.Isolated() {
+		return ErrDeploymentDisabled
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.applyAllLocked(ctx)
@@ -296,6 +325,7 @@ func (m *Manager) State(ctx context.Context) State {
 
 	st := State{
 		Enabled:     m.Enabled(),
+		Isolated:    m.Isolated(),
 		LastError:   m.lastError,
 		LastApplied: m.lastApplied,
 	}

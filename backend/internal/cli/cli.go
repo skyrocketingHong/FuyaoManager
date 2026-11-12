@@ -271,26 +271,30 @@ func runServe(ctx context.Context) error {
 	// The published-site edge: per-site current pointers plus the managed
 	// reverse-proxy snippet. Always constructed (EntryURL rendering works
 	// without snippet management); snippet application activates only when
-	// the operator configured a snippet directory.
+	// the operator configured a snippet directory AND the deployment switch
+	// is on — run isolation (the default) never reconciles or applies Caddy.
 	edgeMgr := edge.New(edge.Config{
-		Pool:         pool,
-		Entries:      st.NetworkEntries,
-		SnippetDir:   cfg.EdgeSnippetDir,
-		ApplyCmd:     cfg.EdgeApplyCmd,
-		PrivateBind:  cfg.EdgePrivateBind,
-		PublicBind:   cfg.EdgePublicBind,
-		PublicHost:   cfg.EdgePublicHost,
-		ReleasesRoot: releasesRoot,
-		SitesRoot:    sitesRoot,
-		PortMin:      cfg.PortMin,
-		PortMax:      cfg.PortMax,
-		Logger:       logger,
+		Pool:              pool,
+		Entries:           st.NetworkEntries,
+		SnippetDir:        cfg.EdgeSnippetDir,
+		ApplyCmd:          cfg.EdgeApplyCmd,
+		PrivateBind:       cfg.EdgePrivateBind,
+		PublicBind:        cfg.EdgePublicBind,
+		PublicHost:        cfg.EdgePublicHost,
+		ReleasesRoot:      releasesRoot,
+		SitesRoot:         sitesRoot,
+		PortMin:           cfg.PortMin,
+		PortMax:           cfg.PortMax,
+		Logger:            logger,
+		DeploymentEnabled: cfg.DeploymentEnabled,
 	})
-	go func() {
-		if err := edgeMgr.Reconcile(context.Background()); err != nil {
-			logger.Error("edge reconcile at startup", "error", err)
-		}
-	}()
+	if cfg.DeploymentEnabled {
+		go func() {
+			if err := edgeMgr.Reconcile(context.Background()); err != nil {
+				logger.Error("edge reconcile at startup", "error", err)
+			}
+		}()
+	}
 
 	// Asynchronous media processing (album EXIF + thumbnails) reuses the
 	// site theme's own Node scripts against the site content tree.
@@ -317,44 +321,51 @@ func runServe(ctx context.Context) error {
 	// directories and atomically switches the live release; published origins
 	// are per-site loopback listeners serving the current release. Publishing
 	// requires the theme contracts (release.json validation), mirroring the
-	// theme-selection save behavior.
+	// theme-selection save behavior, and only starts when the deployment
+	// switch is on: run isolation keeps builds and previews working while no
+	// publish server exists and no edge application ever runs.
 	var publisher httpapi.Publisher
 	var publishedOrigins httpapi.PublishedOrigins
-	if set, ok := themeContracts.(*themecontract.Set); ok {
-		manager := publish.NewManager(publish.Config{
-			Pool:         pool,
-			Releases:     st.Releases,
-			Builds:       st.Builds,
-			Themes:       st.Themes,
-			ReleasesRoot: releasesRoot,
-			Contracts:    set,
-			Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
-			Edge:         edgeMgr,
-			Logger:       logger,
-		})
-		publisher = manager
-		origins := publish.NewServer(st.Releases, releasesRoot)
-		publishedOrigins = origins
-		defer origins.Close()
+	if cfg.DeploymentEnabled {
+		if set, ok := themeContracts.(*themecontract.Set); ok {
+			manager := publish.NewManager(publish.Config{
+				Pool:         pool,
+				Releases:     st.Releases,
+				Builds:       st.Builds,
+				Themes:       st.Themes,
+				ReleasesRoot: releasesRoot,
+				Contracts:    set,
+				Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
+				Edge:         edgeMgr,
+				Logger:       logger,
+			})
+			publisher = manager
+			origins := publish.NewServer(st.Releases, releasesRoot)
+			publishedOrigins = origins
+			defer origins.Close()
+		}
 	}
 
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
-		RPID:             cfg.RPID,
-		RPOrigins:        cfg.RPOrigins,
-		CookieSecure:     cfg.CookieSecure,
-		SessionTTL:       cfg.SessionTTL,
-		ChallengeTTL:     cfg.ChallengeTTL,
-		RegistrationTTL:  cfg.RegistrationTTL,
-		ThemeContracts:   themeContracts,
-		BuildEnqueuer:    runner,
-		Previews:         previews,
-		Publisher:        publisher,
-		PublishedOrigins: publishedOrigins,
-		Provisioner:      provisioner,
-		Edge:             edgeMgr,
-		Content:          contentStore,
-		MediaTasks:       st.MediaTasks,
-		ReleasesRoot:     releasesRoot,
+		RPID:              cfg.RPID,
+		RPOrigins:         cfg.RPOrigins,
+		CookieSecure:      cfg.CookieSecure,
+		SessionTTL:        cfg.SessionTTL,
+		ChallengeTTL:      cfg.ChallengeTTL,
+		RegistrationTTL:   cfg.RegistrationTTL,
+		ThemeContracts:    themeContracts,
+		BuildEnqueuer:     runner,
+		Previews:          previews,
+		Publisher:         publisher,
+		PublishedOrigins:  publishedOrigins,
+		Provisioner:       provisioner,
+		Edge:              edgeMgr,
+		Content:           contentStore,
+		MediaTasks:        st.MediaTasks,
+		ReleasesRoot:      releasesRoot,
+		DeploymentEnabled: cfg.DeploymentEnabled,
+		PortMin:           cfg.PortMin,
+		PortMax:           cfg.PortMax,
 	}, logger)
 
 	if cfg.AdminUIDir != "" {

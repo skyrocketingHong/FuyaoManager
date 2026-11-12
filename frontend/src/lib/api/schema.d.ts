@@ -1177,10 +1177,10 @@ export interface components {
             title: string;
             status: number;
             /**
-             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
+             * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "edge_unavailable" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "deployment_disabled" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "edge_unavailable" | "deployment_disabled" | "internal_error";
             detail?: string;
         };
         User: {
@@ -1306,7 +1306,15 @@ export interface components {
                 visibility?: "public" | "private";
                 port?: number;
                 originUrl?: string;
+                /** @description Server-side fact; always empty in API responses and kept only for contract compatibility. */
+                releaseDir?: string;
+                /** @description The on-disk current pointer matches the database's live release. A reserved port or a rendered URL never implies this; while isolated, it stays false. */
+                currentOk: boolean;
             };
+            /** @description Snippet management is configured (operator-approved snippet directory present). */
+            enabled: boolean;
+            /** @description Run isolation — the deployment switch is off, so no publish server exists and the edge is never reconciled or applied; ports and URLs are reservations only. */
+            isolated: boolean;
             /** @description The managed snippet on disk matches the desired render. */
             inSync: boolean;
             lastAppliedAt?: string;
@@ -3179,7 +3187,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Edge management is not configured (`edge_unavailable`). */
+            /** @description Edge management is not configured (`edge_unavailable`), or the deployment switch is off (`deployment_disabled`). */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4005,6 +4013,15 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description The deployment switch is off (`deployment_disabled`); visibility changes cannot be applied. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             default: components["responses"]["Problem"];
         };
     };
@@ -4098,7 +4115,7 @@ export interface operations {
                     "application/json": components["schemas"]["Release"];
                 };
             };
-            /** @description The publish pipeline or theme contracts are not configured (`publish_unavailable`). */
+            /** @description The publish pipeline or theme contracts are not configured (`publish_unavailable`), or the deployment switch is off (`deployment_disabled`). */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4249,7 +4266,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The publish pipeline is not configured (`publish_unavailable`). */
+            /** @description The publish pipeline is not configured (`publish_unavailable`) or the deployment switch is off (`deployment_disabled`). */
             503: {
                 headers: {
                     [name: string]: unknown;

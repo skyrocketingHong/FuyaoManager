@@ -36,6 +36,7 @@ func TestSiteURLFollowsManagedEntry(t *testing.T) {
 			PrivateBind: "192.0.2.1", PublicHost: "203.0.113.1",
 			ReleasesRoot: t.TempDir(), SitesRoot: t.TempDir(),
 			PortMin: 28110, PortMax: 28130,
+			DeploymentEnabled: true,
 		})
 		e.mutateConfig = func(cfg *Config) {
 			cfg.Edge = em

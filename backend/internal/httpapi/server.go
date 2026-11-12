@@ -48,6 +48,14 @@ type Config struct {
 	Content          ContentStore
 	MediaTasks       *store.MediaTaskStore
 	ReleasesRoot     string
+	// DeploymentEnabled gates the publish, rollback, visibility, and edge
+	// reapply APIs: false (the run-isolation default) answers them with
+	// 503 deployment_disabled, while reads keep working.
+	DeploymentEnabled bool
+	// PortMin/PortMax bound the platform port allocation used at site
+	// provisioning; they mirror the deployment-wide range.
+	PortMin int
+	PortMax int
 }
 
 var _ = edge.State{} // keep the edge import next to the interface above
@@ -110,6 +118,9 @@ type API struct {
 	content          ContentStore
 	mediaTasks       *store.MediaTaskStore
 	releasesRoot     string
+	deployEnabled    bool
+	portMin          int
+	portMax          int
 	exchangeLimiter  *exchangeLimiter
 }
 
@@ -156,7 +167,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPost, "/api/v1/sites", "createSite", a.requireFullScope(a.withCSRF(a.handleCreateSite))},
 		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireFullScope(a.handleGetSite)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireFullScope(a.withCSRF(a.handleProvisionSite))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireFullScope(a.withCSRF(a.handlePutVisibility))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handlePutVisibility)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireFullScope(a.handleGetSettings)},
 		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireFullScope(a.withCSRF(a.handlePatchSettings))},
 
@@ -179,7 +190,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/content/social-links", "getSocialLinks", a.requireFullScope(a.contentRoute(a.handleGetSocialLinks))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/content/social-links", "putSocialLinks", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutSocialLinks)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/edge", "getSiteEdge", a.requireFullScope(a.handleGetSiteEdge)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/edge/reapply", "reapplySiteEdge", a.requireFullScope(a.withCSRF(a.handleReapplySiteEdge))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/edge/reapply", "reapplySiteEdge", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handleReapplySiteEdge)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireFullScope(a.contentRoute(a.handleGetSiteConfig))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
 
@@ -207,11 +218,11 @@ func (a *API) routes() []routeSpec {
 		// Releases: publish freezes a succeeded build's artifacts into a
 		// release directory and atomically switches the site's live version;
 		// rollback re-points at an existing release without rebuilding.
-		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireFullScope(a.withCSRF(a.handleCreateRelease))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handleCreateRelease)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireFullScope(a.handleListReleases)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/releases/{releaseId}", "getRelease", a.requireFullScope(a.handleGetRelease)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireFullScope(a.handleGetCurrentRelease)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireFullScope(a.withCSRF(a.handleRollbackRelease))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handleRollbackRelease)))},
 	}
 }
 
@@ -235,6 +246,9 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		content:          cfg.Content,
 		mediaTasks:       cfg.MediaTasks,
 		releasesRoot:     cfg.ReleasesRoot,
+		deployEnabled:    cfg.DeploymentEnabled,
+		portMin:          cfg.PortMin,
+		portMax:          cfg.PortMax,
 		exchangeLimiter:  newExchangeLimiter(),
 	}
 	api.origins = make(map[string]struct{}, len(cfg.RPOrigins))
@@ -262,6 +276,20 @@ func (a *API) contentRoute(h authedHandler) authedHandler {
 	return func(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 		if a.content == nil {
 			writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "The content store is not configured on this server.")
+			return
+		}
+		h(w, r, auth)
+	}
+}
+
+// deploymentRoute gates the deployment-mutating endpoints (publish, rollback,
+// visibility, edge reapply) on the deployment switch. In run isolation the
+// response names deployment_disabled explicitly; reads stay available.
+func (a *API) deploymentRoute(h authedHandler) authedHandler {
+	return func(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+		if !a.deployEnabled {
+			writeProblem(w, http.StatusServiceUnavailable, "deployment_disabled",
+				"Site deployment is disabled on this server: publishing, rollback, visibility changes, and edge applies are inactive. Enable the deployment switch to use this endpoint.")
 			return
 		}
 		h(w, r, auth)
