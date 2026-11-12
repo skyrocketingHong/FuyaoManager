@@ -7,6 +7,35 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 project uses `MAJOR.MINOR` marketing versions (`MAJOR.MINOR.PATCH`
 internally).
 
+## Unreleased
+
+### Added
+
+- Self-service account rename: `PATCH /api/v1/account/profile` renames the
+  caller's own account atomically (a collision answers 409
+  `username_taken`); an account-settings page is reached from the account
+  dropdown, and passkeys and login codes keep working across the rename.
+- Run-isolated deployment default: with `FUYAO_ADMIN_DEPLOYMENT_ENABLED`
+  off (the default), sites, content, builds, and private previews work
+  while publishing, rollback, visibility changes, and Caddy applies answer
+  `503 deployment_disabled`; the edge status reports enabled/isolated
+  facts and the live-pointer state.
+- Deterministic runtime roots: the repository root is discovered upward
+  from the working directory (or configured explicitly), the three runtime
+  roots must resolve to independent real directories, and provisioning
+  never overwrites existing site files.
+
+### Changed
+
+- Session handling: a business-request 401 expires the stale session at
+  the client boundary so routing reaches the login screen; ceremony
+  failures and network errors never sign the user out, and generation
+  guards keep stale responses from overwriting a newer login.
+- Console surfaces were aligned with the shared console patterns (panel
+  anatomy, table and control density, single-surface tables), and the
+  public static page is retitled "Fuyao Manager - 访问说明" with a
+  same-origin favicon.
+
 ## 0.1.0 - 2026-11-12
 
 ### Added

@@ -72,10 +72,12 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/lib/theme/         # day/night state + semantic token assembly
 │   ├── src/lib/session/       # session state: anonymous/restricted/full/error
 │   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
-│   │                          # TablePanel, PageLoading, StatusTag, layout/ shell
-│   ├── src/styles/            # base / shell / pages CSS (semantic variables)
-│   ├── src/pages/             # login, passkey binding, themes catalog, sites,
-│   │                          # per-site surfaces
+│   │                          # TablePanel, PageLoading, StatusTag, layout/
+│   │                          # (AppShell, SidebarNav/SidebarActions)
+│   ├── src/styles/            # base / shell / sidebar / pages CSS (semantic
+│   │                          # variables)
+│   ├── src/pages/             # login, passkey binding, account settings,
+│   │                          # themes catalog, sites, per-site surfaces
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/
 │   ├── openapi/management.yaml  # authoritative management HTTP contract
@@ -86,8 +88,8 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 ├── deploy/
 │   └── fuyao-admin/          # server deployment: bilingual README, systemd unit,
 │                             # config sample, Caddy apply helper, public static
-│                             # page (static-page/), public Caddy vhost template
-│                             # (caddy/)
+│                             # page (static-page/, favicon.svg + same-origin
+│                             # branding), public Caddy vhost template (caddy/)
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer

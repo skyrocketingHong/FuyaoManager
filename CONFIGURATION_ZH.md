@@ -25,11 +25,11 @@
 
 | 变量                          | 默认值                            | 含义                                               |
 | ----------------------------- | --------------------------------- | -------------------------------------------------- |
-| `FUYAO_ADMIN_REPO_ROOT`       | 工作目录                          | 锚定下列默认值与内置契约目录。                     |
+| `FUYAO_ADMIN_REPO_ROOT`       | 按标志向上发现                    | 锚定下列默认值与内置契约目录。显式值由运维自定：任何已存在目录均可（仅二进制安装无需本仓标志）；未设置时从工作目录向上发现，无法发现则启动报错。 |
 | `FUYAO_ADMIN_THEME_CONTRACTS` | 存在时取 `<repo>/contracts/theme` | 权威主题契约。显式配置但损坏的目录会导致启动失败。 |
 | `FUYAO_ADMIN_SITES_ROOT`      | `<repo>/data/sites`               | 逐站 `content/`、`config/`、`favicon/` 目录树。    |
 | `FUYAO_ADMIN_BUILDS_ROOT`     | `<repo>/data/builds`              | 逐任务目录（快照 + 产物 + 日志）。                 |
-| `FUYAO_ADMIN_RELEASES_ROOT`   | `<repo>/data/releases`            | 密封的逐站 release 目录。                          |
+| `FUYAO_ADMIN_RELEASES_ROOT`   | `<repo>/data/releases`            | 密封的逐站 release 目录。三个根必须解析为三个相互独立的真实目录；供应写入绝不覆盖既有站点文件。 |
 
 ## 构建、预览、边缘
 
@@ -41,7 +41,8 @@
 | `FUYAO_ADMIN_PREVIEW_BIND`                      | `127.0.0.1`                                 | 预览监听绑定地址。                                                                            |
 | `FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE`             | 空                                          | 预览交给浏览器的 URL base（有远程客户端时绝不能是 127.0.0.1 字面量）。                        |
 | `FUYAO_ADMIN_PORT_MIN` / `FUYAO_ADMIN_PORT_MAX` | `20000` / `20100`                           | 站点入口与预览的平台分配端口范围。                                                            |
-| `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | 空                                          | 启用受管 Caddy 片段（由数据库状态渲染）。                                                     |
+| `FUYAO_ADMIN_DEPLOYMENT_ENABLED`                | `false`                                     | 默认运行隔离：建站、内容、构建与预览可用，但不启动发布服务器、不应用 Caddy 片段，发布/回滚/可见性/边缘重应用返回 `503 deployment_disabled`。历史发布仍可读。 |
+| `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | 空                                          | 启用受管 Caddy 片段（由数据库状态渲染）；发布开关关闭时不生效。                                |
 | `FUYAO_ADMIN_EDGE_APPLY_CMD`                    | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | 运维控制的校验 + reload 命令（固定参数）。                                                    |
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND`                 | `127.0.0.1`                                 | 私有站点入口的精确绑定地址。                                                                  |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                  | 空                                          | 公开入口绑定（空 = 全接口）。                                                                 |

@@ -56,6 +56,36 @@ superseded where they conflict with this section.
 
 ## Next (in order, one package at a time)
 
-- **M6 — Console refinement and isolated management** (in progress): implement the user's eight requested areas through short GLM-5.3-Flash Start Plan work packages: reuse the robot platform's generic shell and page patterns; clarify platform-home versus site-overview navigation; terminate private previews and report live state; keep development isolated from running websites; repair directory and Caddy integration boundaries; add the favicon and `Fuyao Manager - <page>` titles; support self-service username changes; and provide user administration and audit logs. Codex reviews and verifies rather than writing implementation code. The favicon/title package is committed as `3b8bdcb` (frontend check and 22 focused tests passed). Preview lifecycle now reports live state, closes its owned window after server-side revocation, isolates reused ports by origin instance, resumes probes after bfcache, and rejects service-worker registration. Focused frontend tests (14), Go preview tests with the race detector, and the real-theme build/preview loop passed; browser behavior remains pending manual acceptance. No production deployment or live-site integration is authorized by this package. Product version remains unchanged while implementation and the required version assessment are pending.
+- **M6 — Console refinement and isolated management** (in progress): the
+  generic-shell reuse, deployment isolation, directory repair, session-race,
+  and self-rename packages are committed and verified; user administration
+  and audit logs remain outstanding. Committed packages: the favicon and
+  `Fuyao Manager - <page>` titles (`3b8bdcb`); the preview lifecycle (live
+  state, owned-window close on server-side revocation, origin-instance port
+  isolation, bfcache probe resume, service-worker registration rejection);
+  run isolation as the deployment default (`FUYAO_ADMIN_DEPLOYMENT_ENABLED`,
+  default off — publish/rollback/visibility/edge-reapply answer 503
+  `deployment_disabled`, GET edge reports enabled/isolated/currentOk, and
+  the Caddy apply paths are guarded at the manager level) with
+  `FUYAO_ADMIN_REPO_ROOT` marker-based discovery and non-overwriting
+  provisioning; session handling (a business 401 expires the stale session
+  through the client boundary, ceremony 401s and network failures do not,
+  and generation guards keep stale load/sign-out/401 responses from
+  overwriting a newer login); self-service username changes
+  (PATCH /api/v1/account/profile with atomic rename, unique-constraint 409,
+  and credentials untouched); the generic shell and shared surfaces reuse
+  (robot-platform sidebar/forms/tables/controls adapted to this console's
+  tokens, the single-surface table fix, `/account` reached from the account
+  dropdown only, and the public static page retitled with a same-origin
+  favicon). Evidence: full `go test ./...` including the real-theme build
+  loop (exit 0; httpapi 167.176s), `go vet`/`go build` (exit 0),
+  `api:check`/`api:lint` (exit 0); each frontend package ran its focused
+  vitest suites (exit 0) and the final full frontend run happens at
+  package close. Outstanding: the user-administration/audit-log storage
+  work is prepared but paused pending a local security-scanner
+  configuration decision (no code merged), and the HTTP/UI layers for it
+  are not started. No production deployment or live-site integration is
+  authorized by this package. Product version remains unchanged while
+  implementation and the required version assessment are pending.
 
 - **Manual acceptance**: complete the real authenticator binding/sign-in and visual review, and confirm browser behavior after disconnecting and reconnecting Tailscale. Production deployment and program cleanup are recorded in M5 above.

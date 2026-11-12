@@ -56,7 +56,12 @@ platform development history preserved; see
   lock, retry-safe failures, rollback without rebuilding.
 - **Managed edge**: rendered Caddy snippet from database state, per-site
   public/private visibility with explicit interface binding, apply through a
-  fixed operator command with last-good restore.
+  fixed operator command with last-good restore. Run-isolated by default:
+  with `FUYAO_ADMIN_DEPLOYMENT_ENABLED` off (the default) the edge is never
+  applied and the deployment APIs answer `503 deployment_disabled`.
+- **Account settings**: self-service username rename from the account
+  dropdown (`PATCH /api/v1/account/profile`); passkeys and login codes keep
+  working across the rename.
 - **Console**: React 18 + official Ant Design 6, zh-CN/en-US, day/night
   themes, grouped desktop-app shell (sidebar scopes, top-bar page slots).
 

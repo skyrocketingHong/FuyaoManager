@@ -65,9 +65,11 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── src/lib/theme/         # 日夜状态 + 语义令牌装配
 │   ├── src/lib/session/       # 会话状态：匿名/受限/完整/错误
 │   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
-│   │                          # TablePanel、PageLoading、StatusTag、layout/ 外壳
-│   ├── src/styles/            # base / shell / pages 样式（语义变量）
-│   ├── src/pages/             # 登录、通行密钥绑定、主题目录、站点与各业务页
+│   │                          # TablePanel、PageLoading、StatusTag、layout/
+│   │                          # （AppShell、SidebarNav/SidebarActions）
+│   ├── src/styles/            # base / shell / sidebar / pages 样式（语义变量）
+│   ├── src/pages/             # 登录、通行密钥绑定、账号设置、主题目录、站点
+│   │                          # 与各业务页
 │   └── tests/                 # vitest 测试（jsdom）
 ├── contracts/
 │   ├── openapi/management.yaml  # 权威管理 HTTP 契约
@@ -77,8 +79,8 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │       └── examples/            # 公开安全的正负例 fixtures
 ├── deploy/
 │   └── fuyao-admin/          # 服务器部署：双语 README、systemd 单元、配置样例、
-│                             # Caddy apply 脚本、公网静态页（static-page/）、
-│                             # 公网 Caddy vhost 模板（caddy/）
+│                             # Caddy apply 脚本、公网静态页（static-page/，含同源
+│                             # favicon.svg）、公网 Caddy vhost 模板（caddy/）
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针

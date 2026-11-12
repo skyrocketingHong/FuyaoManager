@@ -27,11 +27,11 @@ the server template. Real DSNs and secrets never enter the repository.
 
 | Variable                      | Default                               | Meaning                                                                                     |
 | ----------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `FUYAO_ADMIN_REPO_ROOT`       | working directory                     | Anchors the defaults below and the bundled contract directory.                              |
+| `FUYAO_ADMIN_REPO_ROOT`       | discovered upward by markers          | Anchors the defaults below and the bundled contract directory. An explicit value is operator-owned: any existing directory works (a binary-only installation needs no markers). Without one, the root is discovered upward from the working directory; an undiscoverable root aborts startup instead of guessing. |
 | `FUYAO_ADMIN_THEME_CONTRACTS` | `<repo>/contracts/theme` when present | Authoritative theme contracts. An explicitly configured but broken directory fails startup. |
 | `FUYAO_ADMIN_SITES_ROOT`      | `<repo>/data/sites`                   | Per-site `content/`, `config/`, `favicon/` trees.                                           |
 | `FUYAO_ADMIN_BUILDS_ROOT`     | `<repo>/data/builds`                  | Per-task directories (snapshot + artifacts + logs).                                         |
-| `FUYAO_ADMIN_RELEASES_ROOT`   | `<repo>/data/releases`                | Sealed per-site release directories.                                                        |
+| `FUYAO_ADMIN_RELEASES_ROOT`   | `<repo>/data/releases`                | Sealed per-site release directories. The three roots must resolve to three independent real directories; provisioning never overwrites existing site files. |
 
 ## Builds, previews, edge
 
@@ -43,7 +43,8 @@ the server template. Real DSNs and secrets never enter the repository.
 | `FUYAO_ADMIN_PREVIEW_BIND`                      | `127.0.0.1`                                 | Preview listener bind address.                                                                                                 |
 | `FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE`             | empty                                       | URL base handed to browsers for previews (never a 127.0.0.1 literal when remote clients exist).                                |
 | `FUYAO_ADMIN_PORT_MIN` / `FUYAO_ADMIN_PORT_MAX` | `20000` / `20100`                           | Platform-allocated port range for site entries and previews.                                                                   |
-| `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | empty                                       | Enables the managed Caddy snippet (rendered from database state).                                                              |
+| `FUYAO_ADMIN_DEPLOYMENT_ENABLED`                | `false`                                     | Run isolation by default: sites, content, builds, and previews work, but no publish server starts, the Caddy snippet is never applied, and publish/rollback/visibility/edge-reapply answer `503 deployment_disabled`. Historical releases stay readable. |
+| `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | empty                                       | Enables the managed Caddy snippet (rendered from database state); has no effect while the deployment switch is off.            |
 | `FUYAO_ADMIN_EDGE_APPLY_CMD`                    | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | Operator-controlled validate + reload command (fixed arguments).                                                               |
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND`                 | `127.0.0.1`                                 | Exact bind address for private site entries.                                                                                   |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                  | empty                                       | Bind for public entries (empty = all interfaces).                                                                              |
