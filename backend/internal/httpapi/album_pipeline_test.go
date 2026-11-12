@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -256,14 +257,17 @@ func TestAlbumPipelineRealMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := make([]byte, len(tinyJPEGBytes))
-	n, _ := mediaResp.Body.Read(body)
+	// A single Read may legally return a short count; drain the body fully.
+	body, err := io.ReadAll(mediaResp.Body)
 	mediaResp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !strings.HasPrefix(mediaResp.Header.Get("Content-Type"), "image/") {
 		t.Fatalf("preview photo returned %d %s", mediaResp.StatusCode, mediaResp.Header.Get("Content-Type"))
 	}
-	if n != len(tinyJPEGBytes) || !bytes.Equal(body[:n], tinyJPEGBytes) {
-		t.Fatalf("preview photo bytes mismatch: got %d bytes, want %d", n, len(tinyJPEGBytes))
+	if !bytes.Equal(body, tinyJPEGBytes) {
+		t.Fatalf("preview photo bytes mismatch: got %d bytes, want %d", len(body), len(tinyJPEGBytes))
 	}
 	// Missing media is a real 404, not the SPA shell.
 	missResp, err := pc.Get(parsed.Scheme + "://" + parsed.Host + "/media/albums/photos/" + year + "/01/01/missing.jpeg")

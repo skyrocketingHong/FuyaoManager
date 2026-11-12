@@ -6,6 +6,8 @@ Agile ledger for the content management platform. Each work package lands a runn
 
 ## Done
 
+19. **M4 — Passkey authentication restoration, console shell alignment, navigation rebuild, public static page and Tailscale admin entrance** (this repository, 2026-11-12): authentication is restored to "CLI one-time code proves identity → bind a passkey → enter the console". Migration 0012 adds `passkeys.rp_id` (legacy rows backfilled `localhost` — verifiably the only RP that ever served ceremonies), `sessions.kind` (`full`/`restricted`), and `auth_states` kind `bind` with a session binding. `ExchangeCode` is RP-aware: an account without a credential for the current RP gets only a short-lived restricted registration session (`FUYAO_ADMIN_REGISTRATION_SESSION_TTL`, default 30m) that may read the auth state, run the new session-bound `POST /api/v1/auth/passkey/register/options|verify`, and log out — business APIs answer 403 `passkey_binding_required`. Binding persists the credential tagged with the RP ID and, in one transaction, mints the full session and revokes the carrying one; other restricted sessions are not upgraded. Discoverable passkey login is the routine entry; `login-code` is the recovery path; the legacy permit enrollment keeps its first-admin restriction. The console gains the WebAuthn module (capability detection, base64url conversion, complete serialization, mapped failures), a login page with the passkey-first entry plus code recovery (init guidance AND the redeem form before initialization), the binding page, and anonymous/restricted/full guards with an explicit error state. Navigation now has a single metadata source (`src/lib/navigation`) driving routes, the grouped sidebar menu, and selection; the site context boundary renders not-found/no-permission/load-failure distinctly. The shell follows the reference platform: semantic day/night tokens computed once and fed to both the antd 6 ConfigProvider and CSS variables, 208px sidebar (brand → site scope with switch-back → grouped menu → footer), 44px top bar with the PageHeader slot provider (scope-isolated registrations) carrying page filters/actions/tabs, shared Panel/TablePanel/PageLoading/StatusTag components, unsaved-changes guards through the data router, and all twelve pages rewired onto them. antd was upgraded 5 → 6 as directed. Deployment: the public vhost for `manager.fuyaoskyrocket.ing` serves only the standalone static page in `deploy/fuyao-admin/static-page/` (API/preview paths explicitly 404, no SPA fallback) via `deploy/fuyao-admin/caddy/manager.public.caddy.example`; the production env template moves to `ADDR=127.0.0.1:8787` with the domain RP and HTTPS origins; the private vhost, split-DNS setup, deploy script, and the full cutover runbook stay local under `.fuyao/m4-deploy/` per the config-publicity boundary. Verified: backend suite green on `fuyao_mvp_test` including the new restricted-session, binding, rotation, replay, cross-session, duplicate, concurrency, zero-key recovery, and foreign-RP cases (one pre-existing short-read flake in `TestAlbumPipelineRealMedia` fixed by draining the body); full suite also green with `FUYAO_TEST_THEME_ROOT` on the real FuyaoHomepage checkout (six real Node/SvelteKit builds); frontend check/test (85 tests)/build green; OpenAPI + routeSpec + generated types aligned. Caddy adapt/validate and every live-network item (public vs. Tailscale reachability, real authenticator ceremonies, visual acceptance) remain with the operator — nothing was deployed.
+
 ## Review 2026-11-12 (Codex acceptance, changes required)
 
 The N1-N5 delivery claims below were audited against independent probes
@@ -52,59 +54,9 @@ superseded where they conflict with this section.
 
 ## Next (in order, one package at a time)
 
-Product constraints carried over from the N rounds, amended by the M4
-decisions: the primary browser authentication is passkey (the one-time CLI
-code remains the identity-proofing and recovery entry); the production
-management surface moves to `https://manager.fuyaoskyrocket.ing` with the
-public internet seeing only a standalone static page and authorized
-Tailscale clients reaching the real console through the same domain; the
-console keeps the official Ant Design stack (upgraded to antd 6).
-
-- **M4 — Passkey authentication restoration, console shell alignment,
-  navigation rebuild, public static page and Tailscale admin entrance**
-  (in progress, approved 2026-11-12; this repository plus local-only
-  deployment artifacts):
-
-  1. Authentication: restore "CLI one-time code proves identity → bind a
-     passkey → enter the console". Code redemption for an account without a
-     current-RP credential now issues a short-lived restricted registration
-     session (read auth state, complete the passkey ceremony, log out —
-     nothing else); the new session-bound
-     `POST /api/v1/auth/passkey/register/options|verify` endpoints bind the
-     challenge to user + session, persist the credential with its RP ID,
-     and rotate into a full session in one transaction. Discoverable
-     passkey login is the routine entry; `login-code` stays the recovery
-     path. Migration 0012 adds `passkeys.rp_id` (legacy rows backfilled
-     `localhost`, verifiable as the only RP that ever served ceremonies),
-     `sessions.kind`, and `auth_states` kind `bind` + session binding; the
-     legacy permit enrollment surface keeps its first-admin restriction.
-  2. Navigation: a single navigation metadata source drives routes, the
-     sidebar menu, selection, and page positioning (platform scope: sites,
-     theme catalog; site scope: overview, content, settings, build &
-     release groups); unified anonymous/restricted/full guards and a site
-     context boundary replace the scattered redirect branches.
-  3. Console alignment: semantic tokens (day/night) synced into antd 6
-     ConfigProvider, grouped sidebar with scope block, 44px top bar with a
-     PageHeader slot provider carrying page filters/actions/tabs, shared
-     Panel/TablePanel/PageLoading/StatusTag/feedback components, and a
-     page-by-page tidy that reuses the existing editing/ETag stores.
-  4. Public/private boundary: the public vhost serves only an independent
-     static page (no console bundle, no API proxy, explicit 404 for API
-     paths); the Tailscale-bound vhost reverse-proxies the same domain to
-     `127.0.0.1:8787`. Public-side assets live in `deploy/fuyao-admin/`;
-     the private entrance, split-DNS and the full cutover runbook stay
-     local under `.fuyao/m4-deploy/` (not pushed to GitHub).
-  5. Deployment preparation: production env sample
-     (`RP_ID=manager.fuyaoskyrocket.ing`, HTTPS origins, loopback addr),
-     Caddy templates kept outside the managed snippet, migration/rollback
-     notes, and the verification matrix.
-
-  Acceptance checklist: backend suite green on `fuyao_mvp_test` including
-  the restricted-session, binding, rotation, replay, concurrency, and
-  legacy-credential cases; frontend check/test/build green with navigation,
-  guard, draft-protection, and empty/error-state coverage; OpenAPI +
-  routeSpec + generated types aligned; real-theme suite run when
-  `FUYAO_TEST_THEME_ROOT` is available; Caddy template adapt/validate
-  recorded honestly; no server, DNS-console, or Tailscale-console changes
-  are performed by this package. The earlier plain-HTTP IP topology notes
-  stay as the historical record of their time.
+- **M5 — Deployment cutover** (server): execute the local runbook
+  (`.fuyao/m4-deploy/RUNBOOK.md`): stage the release, migrate (0012),
+  re-register the theme, apply the public and private Caddy vhosts,
+  switch `current`, and run the verification matrix over the public
+  network and Tailscale. Until then the live server keeps the pre-split
+  build.
