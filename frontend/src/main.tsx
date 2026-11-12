@@ -5,6 +5,7 @@ import App from './App';
 import AppearanceProvider from './components/AppearanceProvider';
 import './styles/base.css';
 import './styles/shell.css';
+import './styles/sidebar/sidebar.css';
 import './styles/pages.css';
 
 // A data router is required for the unsaved-changes navigation blocker.

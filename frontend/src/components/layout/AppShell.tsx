@@ -1,18 +1,37 @@
 /**
- * AppShell: grouped sidebar (brand, current-site scope with the switch-back
- * entry, grouped menu, footer), the 44px top bar (page slots published via
- * PageHeader plus the session controls on one line), and the workspace as
- * the single vertical scroll region. All navigation facts — routes, menu
- * entries, selection — come from lib/navigation; page positioning lives in
- * the sidebar, so the top bar does not repeat titles.
+ * AppShell: grouped sidebar (brand with the product favicon, current-site
+ * scope, an independently scrolling grouped menu, and a fixed action region
+ * outside the menu), the 44px top bar (page slots published via PageHeader
+ * plus the session controls on one line), and the workspace as the single
+ * vertical scroll region. All navigation facts — routes, menu entries,
+ * selection — come from lib/navigation; the fixed action region carries
+ * "Platform home" and, inside a site scope, "Site overview", so the menu
+ * never mixes platform entries into a site's workspace and the old hidden
+ * back link is gone.
  */
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Button, Dropdown, Layout, Menu } from 'antd';
+import { Button, Dropdown, Layout } from 'antd';
 import type { MenuProps } from 'antd';
+import {
+	AppstoreOutlined,
+	BgColorsOutlined,
+	BuildOutlined,
+	EnvironmentOutlined,
+	FileTextOutlined,
+	GlobalOutlined,
+	HomeOutlined,
+	IdcardOutlined,
+	PictureOutlined,
+	RocketOutlined,
+	SettingOutlined,
+	TeamOutlined
+} from '@ant-design/icons';
 import { siGithub } from 'simple-icons';
+import SidebarActions, { type SidebarAction } from './SidebarActions';
+import SidebarNav from './SidebarNav';
 import Trans from '../i18n/Trans';
 import {
 	i18nSnapshot,
@@ -53,11 +72,27 @@ function GitHubMark() {
 
 type AntdMenuItem = Required<MenuProps>['items'][number];
 
+/** Generic menu icons keyed by the stable navigation id. */
+const navIcons: Record<string, ReactNode> = {
+	sites: <GlobalOutlined />,
+	themes: <AppstoreOutlined />,
+	'site.posts': <FileTextOutlined />,
+	'site.friends': <TeamOutlined />,
+	'site.albums': <PictureOutlined />,
+	'site.footprints': <EnvironmentOutlined />,
+	'site.settings': <SettingOutlined />,
+	'site.config': <IdcardOutlined />,
+	'site.theme': <BgColorsOutlined />,
+	'site.builds': <BuildOutlined />,
+	'site.releases': <RocketOutlined />
+};
+
 function menuEntry(itemId: string, siteId: string | null): AntdMenuItem {
 	const item = navItems.find((entry) => entry.id === itemId);
 	if (!item) throw new Error(`unknown nav item ${itemId}`);
 	return {
 		key: itemPath(item, siteId),
+		icon: navIcons[item.id],
 		label: <Trans text={t(item.titleKey)} />
 	};
 }
@@ -166,25 +201,39 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		? (siteList.sites.find((site) => site.siteId === siteId) ?? null)
 		: null;
 
-	const platformGroup = menuGroup('platform-group', 'nav.platformGroup', [
-		menuEntry('sites', null),
-		menuEntry('themes', null)
-	]);
+	// Site scope: grouped workspace entries only — overview lives in the
+	// fixed action region and platform entries never mix in. Platform scope:
+	// the two catalog entries, flat.
 	const menuItems: AntdMenuItem[] = siteId
-		? [
-				menuEntry('site.overview', siteId),
-				...siteNavGroups.map((group) =>
-					menuGroup(
-						`site-${group.id}`,
-						group.titleKey,
-						navItems
-							.filter((item) => item.scope === 'site' && item.group === group.id)
-							.map((item) => menuEntry(item.id, siteId))
-					)
-				),
-				platformGroup
-			]
-		: [platformGroup];
+		? siteNavGroups.map((group) =>
+				menuGroup(
+					`site-${group.id}`,
+					group.titleKey,
+					navItems
+						.filter((item) => item.scope === 'site' && item.group === group.id)
+						.map((item) => menuEntry(item.id, siteId))
+				)
+			)
+		: [menuEntry('sites', null), menuEntry('themes', null)];
+
+	const actions: SidebarAction[] = [
+		{
+			key: 'platform-home',
+			label: t('nav.platformHome'),
+			icon: <HomeOutlined />,
+			active: pathname === '/sites',
+			onClick: () => navigate('/sites')
+		}
+	];
+	if (siteId) {
+		actions.push({
+			key: 'site-overview',
+			label: t('nav.overview'),
+			icon: <GlobalOutlined />,
+			active: match?.item.id === 'site.overview',
+			onClick: () => navigate(`/sites/${siteId}`)
+		});
+	}
 
 	const selected = selectedPath(pathname);
 	const accountGen = session.user?.id ?? 'anon';
@@ -193,8 +242,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	return (
 		<PageHeaderProvider scope={headerScope}>
 			<Layout className="app-shell">
-				<Layout.Sider width={208} theme="light" className="shell-aside" trigger={null}>
-					<div className="brand-row">
+				<Layout.Sider width={208} theme="light" className="app-sider" trigger={null}>
+					<div className="sidebar-brand">
+						<img src="/favicon.svg" alt="" width={22} height={22} />
 						<span className="brand">
 							<Trans text={t('app.title')} />
 						</span>
@@ -208,22 +258,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
 									<span>{t(`role.${currentSite.role}` as MessageKey)}</span>
 								</div>
 							) : null}
-							<div className="site-switch">
-								<Link to="/sites">{t('site.boundary.backToSites')}</Link>
-							</div>
 						</div>
 					) : null}
-					<nav aria-label={t('app.title')} className="shell-nav">
-						<Menu
-							theme="light"
-							mode="inline"
-							inlineIndent={0}
-							selectedKeys={selected ? [selected] : []}
-							items={menuItems}
-							onClick={({ key }) => navigate(String(key))}
-						/>
-					</nav>
-					<div className="shell-foot">
+					<SidebarNav
+						module={{
+							items: menuItems,
+							selectedKeys: selected ? [selected] : [],
+							onSelect: (key) => navigate(key),
+							ariaLabel: t('app.title')
+						}}
+					/>
+					<SidebarActions items={actions} ariaLabel={t('nav.actions')} />
+					<div className="sidebar-foot">
 						<GitHubMark />
 					</div>
 				</Layout.Sider>

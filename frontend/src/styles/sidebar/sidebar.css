@@ -1,0 +1,187 @@
+/* Sidebar: the fixed brand/scope regions, the independently scrolling menu,
+   and the fixed action region outside the menu; the workspace stays the only
+   other scroll region.
+   Ported from the robot platform's styles/sidebar/sidebar.css
+   (/Volumes/Thunderbolt 5 SSD (2TB)/Code/HZJQ/robot-platform/frontend, read-only
+   reference), adapted to this console's class names, spacing tokens, and the
+   antd 6 inline menu — no device business, no 16:9 stage height rules. */
+
+.app-sider {
+	background: var(--sidebar-bg) !important;
+	border-inline-end: 1px solid var(--border);
+	height: 100vh;
+	position: sticky;
+	top: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.app-sider .ant-layout-sider-children {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1;
+}
+
+.sidebar-brand {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-4) var(--space-4) var(--space-2);
+	font-size: var(--text-title);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.sidebar-brand img {
+	flex: 0 0 auto;
+}
+
+.site-context {
+	padding: var(--space-2) var(--space-4) var(--space-3);
+	border-bottom: 1px solid var(--border);
+	flex: 0 0 auto;
+}
+
+.site-context .site-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.site-context .site-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: 2px;
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+/* The menu region is the only scrolling part of the sidebar. */
+.app-sider nav {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding: var(--space-1) var(--space-1) var(--space-4);
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-gutter: stable;
+}
+
+/* antd inline menus carry a 1px colorSplit inline-end border at the root,
+   which would draw a stray line inside the sidebar; only the root border
+   goes — the selected item's indicator stays. */
+.app-sider .ant-menu-inline,
+.app-sider .ant-menu-vertical {
+	border-inline-end: none !important;
+	background: transparent;
+}
+
+.app-sider .ant-menu-item {
+	display: flex;
+	align-items: center;
+	margin-inline: 0;
+	width: 100%;
+	padding-inline: var(--space-4) !important;
+}
+
+.app-sider .ant-menu-item .ant-menu-item-icon {
+	width: 16px;
+	min-width: 16px;
+}
+
+.app-sider .ant-menu-item .ant-menu-title-content {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin-inline-start: var(--space-2);
+}
+
+.app-sider .ant-menu-item-group-title {
+	padding: var(--space-3) var(--space-4) var(--space-1);
+	font-size: var(--text-caption);
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+
+/* Fixed action region below the menu: full-width text buttons with an
+   active accent surface; the fade line separates it from the menu region. */
+.sidebar-actions {
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-1);
+	min-height: 48px;
+	padding: var(--space-1) var(--space-1) var(--space-2);
+}
+
+.sidebar-actions::before {
+	content: "";
+	position: absolute;
+	inset-inline: 0;
+	top: 0;
+	height: 1px;
+	background: linear-gradient(
+		to right,
+		transparent,
+		var(--border) 20%,
+		var(--border) 80%,
+		transparent
+	);
+	pointer-events: none;
+}
+
+.sidebar-actions .ant-btn {
+	width: 100%;
+	min-width: 0;
+	height: 40px;
+	padding-inline: var(--space-3);
+	gap: var(--space-2);
+	justify-content: flex-start;
+}
+
+.sidebar-actions .ant-btn > span:not(.ant-btn-icon) {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: left;
+}
+
+.sidebar-actions .ant-btn.is-active {
+	background: var(--accent);
+	color: var(--primary);
+}
+
+.sidebar-foot {
+	flex: 0 0 auto;
+	display: flex;
+	align-items: center;
+	padding: var(--space-2) var(--space-4);
+	border-top: 1px solid var(--border);
+	color: var(--muted-foreground);
+	overflow-wrap: anywhere;
+}
+
+/* Narrow screens: the sidebar becomes a full-width block above the
+   workspace; the menu stays reachable inside its own scroll region. */
+@media (max-width: 991px) {
+	.app-shell {
+		flex-direction: column;
+	}
+
+	.app-sider.ant-layout-sider {
+		position: relative;
+		width: 100% !important;
+		min-width: 0 !important;
+		max-width: none !important;
+		flex: 0 0 auto !important;
+		height: auto;
+		border-inline-end: none;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.app-sider nav {
+		max-height: 45vh;
+	}
+}

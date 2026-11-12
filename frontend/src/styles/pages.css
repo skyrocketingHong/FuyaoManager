@@ -40,6 +40,12 @@
 	padding: 0;
 }
 
+.panel-tags {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
 /* TablePanel: the table is the only content surface — no extra card. */
 .table-panel {
 	background: transparent;

@@ -5,7 +5,7 @@
  */
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
@@ -181,7 +181,6 @@ describe('deep links and menu selection', () => {
 	});
 
 	it.each([
-		['/sites/abc', 'page-overview', 'nav.overview'],
 		['/sites/abc/posts', 'page-posts', 'nav.posts'],
 		['/sites/abc/albums', 'page-albums', 'nav.albums'],
 		['/sites/abc/footprints', 'page-footprints', 'nav.footprints'],
@@ -197,6 +196,17 @@ describe('deep links and menu selection', () => {
 			const selected = document.querySelector('.ant-menu-item-selected');
 			expect(selected?.textContent).toContain(zh[titleKey as keyof typeof zh]);
 		});
+	});
+
+	it('deep link /sites/abc marks the overview in the fixed action region, not the menu', async () => {
+		renderAt('/sites/abc');
+		await waitFor(() => expect(screen.getByText('page-overview')).toBeDefined());
+		await waitFor(() => {
+			const active = document.querySelector('.sidebar-actions .is-active');
+			expect(active?.textContent).toContain(zh['nav.overview']);
+			expect(active?.getAttribute('aria-current')).toBe('page');
+		});
+		expect(document.querySelector('.ant-menu-item-selected')).toBeNull();
 	});
 
 	it('shows the current site block in site scope', async () => {
@@ -217,5 +227,45 @@ describe('deep links and menu selection', () => {
 			expect(screen.getByText(zh['site.boundary.notFoundTitle'])).toBeDefined()
 		);
 		expect(screen.queryByText('page-sites')).toBeNull();
+	});
+});
+
+describe('sidebar shell', () => {
+	beforeEach(() => authenticated());
+
+	it('renders the favicon brand, the platform menu, and the fixed home action', async () => {
+		renderAt('/sites');
+		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
+		expect(document.querySelector('.sidebar-brand img[src="/favicon.svg"]')).not.toBeNull();
+		expect(screen.getByText(zh['nav.sites'])).toBeDefined();
+		expect(screen.getByText(zh['nav.themesCatalog'])).toBeDefined();
+		const home = screen.getByText(zh['nav.platformHome']).closest('button');
+		expect(home).not.toBeNull();
+		expect(home?.getAttribute('aria-current')).toBe('page');
+		expect(screen.queryByText(zh['nav.overview'])).toBeNull();
+	});
+
+	it('keeps the site menu free of platform entries and puts overview in the actions', async () => {
+		renderAt('/sites/abc/builds');
+		await waitFor(() => expect(screen.getByText('page-builds')).toBeDefined());
+		expect(screen.getByText(zh['nav.group.content'])).toBeDefined();
+		expect(screen.queryByText(zh['nav.sites'])).toBeNull();
+		expect(screen.queryByText(zh['nav.themesCatalog'])).toBeNull();
+		expect(document.querySelector('.ant-menu-item-selected')?.textContent).toContain(
+			zh['nav.builds']
+		);
+		const overview = screen.getByText(zh['nav.overview']).closest('button');
+		expect(overview?.getAttribute('aria-current')).toBeNull();
+		const home = screen.getByText(zh['nav.platformHome']).closest('button');
+		expect(home?.getAttribute('aria-current')).toBeNull();
+	});
+
+	it('navigates home from the fixed action region', async () => {
+		renderAt('/themes');
+		await waitFor(() => expect(screen.getByText('page-themes')).toBeDefined());
+		await act(async () => {
+			fireEvent.click(screen.getByText(zh['nav.platformHome']).closest('button')!);
+		});
+		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
 	});
 });
