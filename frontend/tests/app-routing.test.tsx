@@ -68,6 +68,9 @@ vi.mock('../src/lib/api/client', () => ({
 
 // Marker doubles keep the test focused on routing, not page internals.
 vi.mock('../src/pages/LoginPage', () => ({ default: () => <div>page-login</div> }));
+vi.mock('../src/pages/AccountSettingsPage', () => ({
+	default: () => <div>page-account</div>
+}));
 vi.mock('../src/pages/BindPasskeyPage', () => ({ default: () => <div>page-bind</div> }));
 vi.mock('../src/pages/SitesPage', () => ({ default: () => <div>page-sites</div> }));
 vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-themes</div> }));
@@ -258,6 +261,13 @@ describe('sidebar shell', () => {
 		expect(overview?.getAttribute('aria-current')).toBeNull();
 		const home = screen.getByText(zh['nav.platformHome']).closest('button');
 		expect(home?.getAttribute('aria-current')).toBeNull();
+	});
+
+	it('mounts /account from the navigation metadata but keeps it out of the menus', async () => {
+		renderAt('/account');
+		await waitFor(() => expect(screen.getByText('page-account')).toBeDefined());
+		// The account page never mixes into either menu.
+		expect(screen.queryByText(zh['nav.account'])).toBeNull();
 	});
 
 	it('navigates home from the fixed action region', async () => {

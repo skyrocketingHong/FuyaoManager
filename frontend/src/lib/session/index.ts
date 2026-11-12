@@ -162,6 +162,17 @@ export async function signOut(): Promise<void> {
 	}
 }
 
+/** Applies a successful self-rename to the live session metadata: the same
+ * session, the same account id — only the username label changes. The
+ * stable user id is verified against the live session, so a rename response
+ * from account A can never relabel the session of account B. Not a
+ * migration, so the auth generation stays untouched. */
+export function renameCurrentUser(userId: string, username: string): void {
+	if (state.user === null || state.user.id !== userId) return;
+	state = { ...state, user: { ...state.user, username } };
+	emit();
+}
+
 /** Clears a stale session after a business-request 401: the store returns to
  * anonymous, so routing reaches the login screen and the authenticated
  * guards stop bouncing. Registered at the client boundary; ceremony 401s and

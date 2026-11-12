@@ -112,6 +112,11 @@ export async function finishPasskeyBinding(
 	return data;
 }
 
+export async function updateAccountProfile(username: string): Promise<User> {
+	const { data } = await api<User>('PATCH', '/api/v1/account/profile', { body: { username } });
+	return data;
+}
+
 export async function listSites(): Promise<Site[]> {
 	const { data } = await api<{ sites: Site[] }>('GET', '/api/v1/sites');
 	return data.sites;

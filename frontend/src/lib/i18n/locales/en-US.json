@@ -333,5 +333,11 @@
 	"draft.leaveTitle": "Unsaved changes",
 	"draft.leaveBody": "Your edits are not saved yet and will be lost if you leave now.",
 	"draft.leaveConfirm": "Leave",
-	"draft.leaveCancel": "Keep editing"
+	"draft.leaveCancel": "Keep editing",
+	"nav.account": "Account settings",
+	"account.title": "Account",
+	"account.usernameLabel": "Username",
+	"account.usernameHint": "Lowercase letters, digits, and . _ -, starting with a letter or digit; passkeys and login codes keep working across a rename.",
+	"account.saved": "Username updated.",
+	"error.usernameTaken": "This username is already used by another account."
 }

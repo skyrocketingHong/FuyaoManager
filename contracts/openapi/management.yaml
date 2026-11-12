@@ -51,6 +51,8 @@ servers:
 tags:
   - name: Auth
     description: WebAuthn enrollment and login ceremonies.
+  - name: Account
+    description: Self-service account profile for the caller's own account.
   - name: Session
     description: Session introspection and logout.
   - name: Sites
@@ -558,6 +560,60 @@ paths:
           $ref: '#/components/responses/Unauthenticated'
         '403':
           $ref: '#/components/responses/Forbidden'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/account/profile:
+    patch:
+      operationId: updateAccountProfile
+      tags: [Account]
+      summary: Rename the caller's own account
+      description: |
+        Self-service account rename. The target is always the caller's own
+        account — the endpoint never accepts a user id. The rename is one
+        atomic UPDATE: the account UUID, the WebAuthn user handle, every
+        passkey credential, and all role memberships are untouched, so
+        existing credentials keep working across the rename. The username
+        format mirrors the database CHECK constraint; a collision with
+        another account answers `username_taken`.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccountProfileUpdate'
+      responses:
+        '200':
+          description: The renamed account.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: The body is missing or malformed (`invalid_json`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Another account already uses this username (`username_taken`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: The username does not match the required format (`validation_error`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         default:
           $ref: '#/components/responses/Problem'
 
@@ -3111,7 +3167,7 @@ components:
           type: integer
         code:
           type: string
-          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
+          description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, username_taken, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
             - csrf_token_invalid
@@ -3149,6 +3205,7 @@ components:
             - release_not_rollbackable
             - no_live_release
             - invalid_code
+            - username_taken
             - code_used
             - code_expired
             - code_locked
@@ -3165,9 +3222,21 @@ components:
             - reference_scan_failed
             - edge_unavailable
             - deployment_disabled
+            - username_taken
             - internal_error
         detail:
           type: string
+
+    AccountProfileUpdate:
+      type: object
+      description: The full body of PATCH /api/v1/account/profile — the target is always the caller's own account.
+      required: [username]
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          pattern: '^[a-z0-9][a-z0-9._-]{2,63}$'
+          description: The new username; mirrors the database CHECK constraint and UNIQUE index.
 
     User:
       type: object

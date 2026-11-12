@@ -6,10 +6,15 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
+
+// ErrUsernameTaken marks an account rename whose username collides with
+// another account's (the users.username UNIQUE constraint).
+var ErrUsernameTaken = errors.New("username already taken")
 
 // UserStore persists administrator accounts.
 type UserStore struct {
@@ -64,6 +69,31 @@ func (s *UserStore) GetByHandle(ctx context.Context, handle []byte) (model.User,
 		return model.User{}, ErrNotFound
 	}
 	return u, err
+}
+
+// UpdateUsername renames one account in a single atomic statement. The
+// immutable columns — the UUID, the WebAuthn user handle, every passkey
+// credential, and the role memberships — are untouched; the username's
+// UNIQUE constraint rejects a collision with another account.
+func (s *UserStore) UpdateUsername(ctx context.Context, id uuid.UUID, username string) (model.User, error) {
+	var u model.User
+	err := s.pool.QueryRow(ctx,
+		`UPDATE users SET username = $2, updated_at = now()
+		 WHERE id = $1
+		 RETURNING `+userColumns,
+		id, username,
+	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return model.User{}, ErrUsernameTaken
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return model.User{}, ErrNotFound
+		}
+		return model.User{}, err
+	}
+	return u, nil
 }
 
 // HasActiveUser reports whether any administrator has completed passkey

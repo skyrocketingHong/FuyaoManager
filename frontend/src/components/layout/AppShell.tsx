@@ -160,6 +160,12 @@ function TopBar() {
 								},
 								{ type: 'divider' },
 								{
+									key: 'account-settings',
+									label: <Trans text={t('nav.account')} />,
+									onClick: () => navigate('/account')
+								},
+								{ type: 'divider' },
+								{
 									key: 'signout',
 									label: <Trans text={t('app.signOut')} />,
 									onClick: () => {

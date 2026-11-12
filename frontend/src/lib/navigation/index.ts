@@ -21,6 +21,9 @@ export interface NavItem {
 export const navItems: readonly NavItem[] = [
 	{ id: 'sites', path: '/sites', scope: 'platform', group: 'platform', titleKey: 'nav.sites' },
 	{ id: 'themes', path: '/themes', scope: 'platform', group: 'platform', titleKey: 'nav.themesCatalog' },
+	// The account settings page lives outside the sidebar menus: it is
+	// reached from the account dropdown in the top bar only.
+	{ id: 'account', path: '/account', scope: 'platform', group: 'platform', titleKey: 'nav.account' },
 	{ id: 'site.overview', path: '/sites/:siteId', scope: 'site', group: 'overview', titleKey: 'nav.overview' },
 	{ id: 'site.posts', path: '/sites/:siteId/posts', scope: 'site', group: 'content', titleKey: 'nav.posts' },
 	{ id: 'site.friends', path: '/sites/:siteId/friends', scope: 'site', group: 'content', titleKey: 'nav.friends' },

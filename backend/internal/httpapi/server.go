@@ -162,6 +162,10 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/session", "getSession", a.handleSession},
 		{http.MethodPost, "/api/v1/auth/logout", "logout", a.requireAuth(a.withCSRF(a.handleLogout))},
 
+		// Self-service account profile: the target is always the caller's own
+		// account — the endpoint never accepts a user id.
+		{http.MethodPatch, "/api/v1/account/profile", "updateAccountProfile", a.requireFullScope(a.withCSRF(a.handleUpdateAccountProfile))},
+
 		// Sites.
 		{http.MethodGet, "/api/v1/sites", "listSites", a.requireFullScope(a.handleListSites)},
 		{http.MethodPost, "/api/v1/sites", "createSite", a.requireFullScope(a.withCSRF(a.handleCreateSite))},

@@ -333,5 +333,11 @@
 	"draft.leaveTitle": "有未保存的修改",
 	"draft.leaveBody": "当前编辑尚未保存，离开后修改将丢失。确定离开吗？",
 	"draft.leaveConfirm": "离开",
-	"draft.leaveCancel": "继续编辑"
+	"draft.leaveCancel": "继续编辑",
+	"nav.account": "账号设置",
+	"account.title": "账号",
+	"account.usernameLabel": "用户名",
+	"account.usernameHint": "小写字母、数字与 . _ -，以字母或数字开头；改名后通行密钥与登录码继续有效。",
+	"account.saved": "用户名已更新。",
+	"error.usernameTaken": "该用户名已被其他账号使用。"
 }
