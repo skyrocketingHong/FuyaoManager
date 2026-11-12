@@ -313,41 +313,90 @@ func (e *PhotoInUseError) Error() string {
 	return "photo " + e.Path + " is still referenced by a live or rollback-able release"
 }
 
-// ReleaseMetadataForSite scans the releases root for every non-failed
-// release's albums metadata (year documents) of one site. It lives here so
-// callers stay lock-free; the releases layout is <releasesRoot>/<siteID>/.
-func ReleaseMetadataForSite(releasesRoot string, siteID uuid.UUID) [][]byte {
+// ReleaseMetadataForSite collects every album metadata document of one
+// site's releases (live, superseded, or rollback-able) so photo deletion can
+// prove nothing still references the file. The real frozen layout stores
+// year documents at <release>/albums/<year>.json (the build snapshot's
+// public tree); <release>/albums/metadata is also scanned for layouts that
+// keep the source-side structure. Any unreadable release directory fails
+// the scan: a deletion decision may never treat unknown references as "no
+// references".
+func ReleaseMetadataForSite(releasesRoot string, siteID uuid.UUID) ([][]byte, error) {
 	siteDir := filepath.Join(releasesRoot, siteID.String())
-	var out [][]byte
 	entries, err := os.ReadDir(siteDir)
 	if err != nil {
-		return nil
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("scan releases of site %s: %w", siteID, err)
 	}
+	var out [][]byte
 	for _, entry := range entries {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		metaDir := filepath.Join(siteDir, entry.Name(), "albums", "metadata")
-		files, err := os.ReadDir(metaDir)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			if !strings.HasSuffix(f.Name(), ".json") {
-				continue
+		releaseAlbums := filepath.Join(siteDir, entry.Name(), "albums")
+		metaDirs := []string{releaseAlbums, filepath.Join(releaseAlbums, "metadata")}
+		for _, metaDir := range metaDirs {
+			files, err := os.ReadDir(metaDir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, fmt.Errorf("scan release %s albums metadata: %w", entry.Name(), err)
 			}
-			data, err := os.ReadFile(filepath.Join(metaDir, f.Name()))
-			if err == nil {
+			for _, mf := range files {
+				if mf.IsDir() || !strings.HasSuffix(mf.Name(), ".json") {
+					continue
+				}
+				data, err := os.ReadFile(filepath.Join(metaDir, mf.Name()))
+				if err != nil {
+					return nil, fmt.Errorf("read release %s %s: %w", entry.Name(), mf.Name(), err)
+				}
 				out = append(out, data)
 			}
 		}
 	}
-	return out
+	return out, nil
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+// DetachAlbumPhoto removes a photo's metadata entry only: the next build
+// excludes it from public output, while the original and thumbnail files
+// stay on disk for releases that still reference them. This is the
+// "remove from future content" path; the hard DELETE additionally removes
+// files and is blocked while any release still references them.
+func (s *Store) DetachAlbumPhoto(siteID uuid.UUID, year, filename string, expectedDigest string) error {
+	if !yearPattern.MatchString(year) || filename == "" || strings.Contains(filename, "/") {
+		return ErrInvalidPath
 	}
-	return b
+	return s.WithAlbumMetaLock(context.Background(), siteID, func() error {
+		doc, digest, err := s.GetAlbumYear(siteID, year)
+		if err != nil {
+			return err
+		}
+		if expectedDigest != "" && digest != expectedDigest {
+			return ErrConflict
+		}
+		found := false
+		for _, photo := range doc.Photos {
+			if photo.Filename == filename {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return ErrNotFound
+		}
+		_, _, err = s.saveAlbumYearLocked(siteID, year, digest, func(edit *AlbumYear) error {
+			kept := edit.Photos[:0]
+			for _, photo := range edit.Photos {
+				if photo.Filename != filename {
+					kept = append(kept, photo)
+				}
+			}
+			edit.Photos = kept
+			return nil
+		})
+		return err
+	})
 }

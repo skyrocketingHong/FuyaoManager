@@ -1658,8 +1658,11 @@ paths:
       summary: Edit one year album
       description: |
         Edits photo titles, descriptions, alt text, and the ordering under
-        If-Match semantics. Identity fields (path, variants, EXIF) are
-        importer-owned; the photo set itself may not change here.
+        If-Match semantics. The submitted order is authoritative — entries
+        are re-emitted in exactly the submitted sequence. Identity fields
+        (path, variants, EXIF) are importer-owned; the filename set must be
+        complete, unique, and identical to the stored set (no additions,
+        removals, or renames through this endpoint).
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -1722,9 +1725,14 @@ paths:
       tags: [Content]
       summary: Delete one photo
       description: |
-        Deletes the original, its thumbnails, and the metadata entry after
-        verifying the digest ETag. Photos still referenced by any live or
-        rollback-able release's frozen metadata are refused (`photo_in_use`).
+        Hard delete (default): removes the original, every thumbnail, and the
+        metadata entry after verifying the digest ETag and proving that no
+        live or rollback-able release's frozen metadata still references the
+        photo (`photo_in_use` otherwise; a failed or unreadable reference
+        scan refuses the deletion with `reference_scan_failed`). Detach mode
+        (`?mode=detach`): removes the metadata entry only, so the next build
+        excludes the photo from public output while the files stay on disk
+        for releases that still reference them.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -1738,12 +1746,26 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [delete, detach]
+            default: delete
+          description: '`delete` removes files and metadata (reference-checked); `detach` removes the metadata entry only.'
         - $ref: '#/components/parameters/CSRFTokenHeader'
       responses:
         '204':
-          description: Photo deleted.
+          description: Photo deleted (or detached).
         '400':
           description: Malformed request (`invalid_if_match`, `invalid_content_path`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          description: The release reference scan failed; deletion is refused (`reference_scan_failed`).
           content:
             application/problem+json:
               schema:
@@ -2906,6 +2928,7 @@ components:
             - content_exists
             - invalid_content_path
             - photo_in_use
+            - reference_scan_failed
             - internal_error
         detail:
           type: string

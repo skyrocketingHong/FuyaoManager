@@ -23,11 +23,15 @@ import (
 // ContentRoots resolves a site's album directories.
 type ContentRoots func(siteID uuid.UUID) (photosRoot, thumbnailsRoot, metadataRoot string, err error)
 
-// Config assembles the runner.
+// Config assembles the runner. AlbumLock serializes the Node indexer
+// against human album edits (the same per-site lock the API savers and the
+// production build prepare hold); nil runs uncoordinated (tests with
+// isolated directories).
 type Config struct {
 	Tasks        *store.MediaTaskStore
 	Themes       *store.ThemeStore
 	ContentRoots ContentRoots
+	AlbumLock    func(siteID uuid.UUID, fn func() error) error
 	Logger       *slog.Logger
 }
 
@@ -91,7 +95,14 @@ func (r *Runner) loop() {
 
 func (r *Runner) run(ctx context.Context, task store.MediaTask) {
 	started := time.Now()
-	err := r.runAlbumIndex(ctx, task)
+	var err error
+	if r.cfg.AlbumLock != nil {
+		err = r.cfg.AlbumLock(task.SiteID, func() error {
+			return r.runAlbumIndex(ctx, task)
+		})
+	} else {
+		err = r.runAlbumIndex(ctx, task)
+	}
 	if err == nil {
 		if err := r.cfg.Tasks.MarkSucceeded(ctx, task.ID); err != nil {
 			r.logger.Error("media task mark succeeded", "taskId", task.ID, "error", err)

@@ -296,8 +296,14 @@ func TestAlbumUploadProcessEditDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	blocked := contentStore.DeleteAlbumPhoto(site.Site.ID, year, photo.Filename,
-		content.ReleaseMetadataForSite(releasesRoot, site.Site.ID), yearEnv.Digest)
+	refs, scanErr := content.ReleaseMetadataForSite(releasesRoot, site.Site.ID)
+	if scanErr != nil {
+		t.Fatalf("reference scan: %v", scanErr)
+	}
+	if len(refs) == 0 {
+		t.Fatal("reference scan found no documents — the real release layout stores albums/<year>.json")
+	}
+	blocked := contentStore.DeleteAlbumPhoto(site.Site.ID, year, photo.Filename, refs, yearEnv.Digest)
 	if blocked == nil {
 		t.Fatal("delete with a live release reference must be refused")
 	}

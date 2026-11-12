@@ -250,6 +250,11 @@ func runServe(ctx context.Context) error {
 		Ports:        st.NetworkEntries,
 		PortMin:      cfg.PortMin,
 		PortMax:      cfg.PortMax,
+		MediaRoots: func(siteID uuid.UUID) (string, string, error) {
+			contentRoot := contentStore.ContentRoot(siteID)
+			return filepath.Join(contentRoot, "albums", "photos"),
+				filepath.Join(contentRoot, "albums", "thumbnails"), nil
+		},
 	})
 	defer previews.Close()
 
@@ -292,6 +297,9 @@ func runServe(ctx context.Context) error {
 			return filepath.Join(contentRoot, "albums", "photos"),
 				filepath.Join(contentRoot, "albums", "thumbnails"),
 				filepath.Join(contentRoot, "albums", "metadata"), nil
+		},
+		AlbumLock: func(siteID uuid.UUID, fn func() error) error {
+			return contentStore.WithAlbumMetaLock(context.Background(), siteID, fn)
 		},
 		Logger: logger,
 	})

@@ -233,12 +233,15 @@ export default function AlbumsPage() {
 		}
 	}
 
-	async function handleDelete(photo: AlbumPhotoEntry) {
+	// Detach removes the photo from the next build only; the files stay for
+	// releases that still reference them. Hard delete additionally removes
+	// files and is refused while referenced.
+	async function handleDelete(photo: AlbumPhotoEntry, mode: 'delete' | 'detach') {
 		if (!siteId || !year) return;
 		try {
-			await deleteAlbumPhoto(siteId, year, photo.filename, digest);
+			await deleteAlbumPhoto(siteId, year, photo.filename, digest, mode);
 			await loadYear(year);
-			void messageApi.success(t('albums.deleted'));
+			void messageApi.success(mode === 'detach' ? t('albums.detached') : t('albums.deleted'));
 		} catch (err) {
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
@@ -390,8 +393,14 @@ export default function AlbumsPage() {
 														↓
 													</Button>
 													<Popconfirm
+														title={t('albums.detachConfirm')}
+														onConfirm={() => void handleDelete(photo, 'detach')}
+													>
+														<Button size="small">{t('albums.detach')}</Button>
+													</Popconfirm>
+													<Popconfirm
 														title={t('albums.deleteConfirm')}
-														onConfirm={() => void handleDelete(photo)}
+														onConfirm={() => void handleDelete(photo, 'delete')}
 													>
 														<Button size="small" danger>
 															{t('posts.delete')}

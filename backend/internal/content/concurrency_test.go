@@ -163,9 +163,9 @@ func TestConcurrentDeleteVsSave(t *testing.T) {
 	switch {
 	case sErr == nil && dErr == nil:
 		t.Fatal("save and delete both succeeded with the same old digest")
-	case sErr != nil && !errors.Is(sErr, ErrConflict) && sErr != nil:
+	case sErr != nil && !errors.Is(sErr, ErrConflict) && !errors.Is(sErr, ErrNotFound):
 		t.Fatalf("save error: %v", sErr)
-	case dErr != nil && !errors.Is(dErr, ErrConflict) && !errors.Is(dErr, ErrNotFound) && dErr != nil:
+	case dErr != nil && !errors.Is(dErr, ErrConflict) && !errors.Is(dErr, ErrNotFound):
 		t.Fatalf("delete error: %v", dErr)
 	}
 	// Terminal state is consistent: the file either exists with the edited

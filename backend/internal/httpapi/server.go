@@ -80,6 +80,7 @@ type ContentStore interface {
 	SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest string, edit func(*content.AlbumYear) error) (content.AlbumYear, string, error)
 	StoreUpload(siteID uuid.UUID, reader io.Reader, sizeHint int64) (string, error)
 	DeleteAlbumPhoto(siteID uuid.UUID, year, filename string, releaseJSONs [][]byte, expectedDigest string) error
+	DetachAlbumPhoto(siteID uuid.UUID, year, filename string, expectedDigest string) error
 	GetFootprints(siteID uuid.UUID) (content.FootprintsDoc, string, error)
 	SaveFootprints(siteID uuid.UUID, doc content.FootprintsDoc, expectedDigest string) (content.FootprintsDoc, string, error)
 }

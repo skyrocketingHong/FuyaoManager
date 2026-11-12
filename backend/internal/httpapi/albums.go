@@ -58,8 +58,11 @@ type yearEditBody struct {
 }
 
 // handlePutAlbumYear edits photo titles/descriptions/alt and the ordering.
-// Identity fields (path, variants) are importer-owned; unknown filenames
-// are rejected.
+// The submitted order is authoritative: entries are re-emitted in exactly
+// the submitted sequence. Identity fields (path, variants) are
+// importer-owned; the submitted filename set must be complete, unique, and
+// identical to the stored set — no additions, removals (use delete/detach),
+// or renames through this endpoint.
 func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	rec, ok := a.requireSiteEditor(w, r, auth)
 	if !ok {
@@ -77,18 +80,32 @@ func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 		if len(body.Photos) != len(doc.Photos) {
 			return errors.New("the photo list changed after it was read; fetch again and retry")
 		}
-		edits := make(map[string]content.AlbumPhoto, len(body.Photos))
+		edits := make(map[string]struct {
+			title, description, alt string
+		}, len(body.Photos))
 		for _, edit := range body.Photos {
-			edits[edit.Filename] = content.AlbumPhoto{
-				Filename: edit.Filename, Title: edit.Title, Description: edit.Description, Alt: edit.Alt,
+			if _, dup := edits[edit.Filename]; dup {
+				return errors.New("duplicate photo " + edit.Filename + " in the submitted order")
 			}
+			edits[edit.Filename] = struct {
+				title, description, alt string
+			}{edit.Title, edit.Description, edit.Alt}
 		}
-		next := make([]content.AlbumPhoto, 0, len(doc.Photos))
+		byFilename := make(map[string]content.AlbumPhoto, len(doc.Photos))
 		for _, photo := range doc.Photos {
-			edit, ok := edits[photo.Filename]
-			if !ok {
+			if _, ok := edits[photo.Filename]; !ok {
 				return errors.New("unknown photo " + photo.Filename)
 			}
+			byFilename[photo.Filename] = photo
+		}
+		if len(byFilename) != len(edits) {
+			return errors.New("the submitted photo set does not match the stored photos")
+		}
+		// Emit in the submitted order, carrying the importer-owned identity
+		// fields from the stored entry and the editable fields from the edit.
+		next := make([]content.AlbumPhoto, 0, len(body.Photos))
+		for _, edit := range body.Photos {
+			photo := byFilename[edit.Filename]
 			next = append(next, content.AlbumPhoto{
 				Filename: photo.Filename, Path: photo.Path, Date: photo.Date, GPS: photo.GPS,
 				CoordType: photo.CoordType, Make: photo.Make, Model: photo.Model,
@@ -195,8 +212,12 @@ func (a *API) handleListMediaTasks(w http.ResponseWriter, r *http.Request, auth 
 	writeJSON(w, http.StatusOK, map[string]any{"tasks": out})
 }
 
-// handleDeleteAlbumPhoto removes a photo after checking that no live or
-// rollback-able release still references its path.
+// handleDeleteAlbumPhoto removes a photo. The default (hard) mode deletes
+// the original, thumbnails, and metadata entry, but only after proving that
+// no live or rollback-able release still references the photo; a failed or
+// unreadable reference scan refuses the deletion. The `mode=detach` form
+// removes the photo from the next build's metadata only, keeping files for
+// releases that still reference them.
 func (a *API) handleDeleteAlbumPhoto(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	rec, ok := a.requireSiteEditor(w, r, auth)
 	if !ok {
@@ -206,12 +227,25 @@ func (a *API) handleDeleteAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 	if err != nil {
 		return
 	}
-	releaseJSONs := content.ReleaseMetadataForSite(a.releasesRoot, rec.Site.ID)
+	if r.URL.Query().Get("mode") == "detach" {
+		if err := a.content.DetachAlbumPhoto(rec.Site.ID, r.PathValue("year"), r.PathValue("filename"), expected); err != nil {
+			writeContentError(w, err, "Failed to detach the photo.")
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	releaseJSONs, err := content.ReleaseMetadataForSite(a.releasesRoot, rec.Site.ID)
+	if err != nil {
+		a.logger.Error("scan release references for photo deletion", "siteId", rec.Site.ID, "error", err)
+		writeProblem(w, http.StatusInternalServerError, "reference_scan_failed", "The release reference scan failed; deletion is refused until the references can be verified.")
+		return
+	}
 	err = a.content.DeleteAlbumPhoto(rec.Site.ID, r.PathValue("year"), r.PathValue("filename"), releaseJSONs, expected)
 	if err != nil {
 		var inUse *content.PhotoInUseError
 		if errors.As(err, &inUse) {
-			writeProblem(w, http.StatusConflict, "photo_in_use", "This photo is still referenced by a live or rollback-able release; remove it from future builds first or roll forward, then delete.")
+			writeProblem(w, http.StatusConflict, "photo_in_use", "This photo is still referenced by a live or rollback-able release; detach it from future builds now and hard-delete after those releases are retired.")
 			return
 		}
 		writeContentError(w, err, "Failed to delete the photo.")

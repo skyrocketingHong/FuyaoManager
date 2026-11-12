@@ -575,8 +575,11 @@ export interface paths {
         /**
          * Edit one year album
          * @description Edits photo titles, descriptions, alt text, and the ordering under
-         *     If-Match semantics. Identity fields (path, variants, EXIF) are
-         *     importer-owned; the photo set itself may not change here.
+         *     If-Match semantics. The submitted order is authoritative — entries
+         *     are re-emitted in exactly the submitted sequence. Identity fields
+         *     (path, variants, EXIF) are importer-owned; the filename set must be
+         *     complete, unique, and identical to the stored set (no additions,
+         *     removals, or renames through this endpoint).
          */
         put: operations["putAlbumYear"];
         post?: never;
@@ -598,9 +601,14 @@ export interface paths {
         post?: never;
         /**
          * Delete one photo
-         * @description Deletes the original, its thumbnails, and the metadata entry after
-         *     verifying the digest ETag. Photos still referenced by any live or
-         *     rollback-able release's frozen metadata are refused (`photo_in_use`).
+         * @description Hard delete (default): removes the original, every thumbnail, and the
+         *     metadata entry after verifying the digest ETag and proving that no
+         *     live or rollback-able release's frozen metadata still references the
+         *     photo (`photo_in_use` otherwise; a failed or unreadable reference
+         *     scan refuses the deletion with `reference_scan_failed`). Detach mode
+         *     (`?mode=detach`): removes the metadata entry only, so the next build
+         *     excludes the photo from public output while the files stay on disk
+         *     for releases that still reference them.
          */
         delete: operations["deleteAlbumPhoto"];
         options?: never;
@@ -1053,7 +1061,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "internal_error";
             detail?: string;
         };
         User: {
@@ -3192,7 +3200,10 @@ export interface operations {
     };
     deleteAlbumPhoto: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `delete` removes files and metadata (reference-checked); `detach` removes the metadata entry only. */
+                mode?: "delete" | "detach";
+            };
             header: {
                 /** @description CSRF token bound to the session. */
                 "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
@@ -3207,7 +3218,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Photo deleted. */
+            /** @description Photo deleted (or detached). */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -3245,6 +3256,15 @@ export interface operations {
                 };
             };
             428: components["responses"]["PreconditionRequired"];
+            /** @description The release reference scan failed; deletion is refused (`reference_scan_failed`). */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description The content store is not configured (`content_unavailable`). */
             503: {
                 headers: {

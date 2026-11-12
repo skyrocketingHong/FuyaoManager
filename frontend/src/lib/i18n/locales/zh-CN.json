@@ -263,5 +263,8 @@
 	"themes.schemaDeclared": "有 schema",
 	"themes.emptyConfigOnly": "仅空对象",
 	"themes.emptyCatalog": "暂无注册主题；使用 fuyao-admin register-theme 登记。",
-	"themes.registerHint": "登记由运维执行：fuyao-admin register-theme --contracts <目录> <主题根>"
+	"themes.registerHint": "登记由运维执行：fuyao-admin register-theme --contracts <目录> <主题根>",
+	"albums.detach": "移出下版",
+	"albums.detachConfirm": "仅从下一次构建移除这张照片？仍引用它的发布继续保留文件。",
+	"albums.detached": "照片已移出后续构建。"
 }

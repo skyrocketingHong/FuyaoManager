@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -35,13 +36,21 @@ type PortSource interface {
 	ReleasePreview(ctx context.Context, buildID uuid.UUID) error
 }
 
+// MediaRoots resolves a site's album media directories for preview
+// serving: photos originals and thumbnail variants under the site's
+// content tree. The frozen build references these through the theme's
+// external media convention (/media/albums/...), so the preview origin
+// serves them from the same authority the published site uses.
+type MediaRoots func(siteID uuid.UUID) (photosRoot, thumbnailsRoot string, err error)
+
 // PreviewConfig assembles the private preview service. BuildsRoot is the
 // per-task root; artifact paths must resolve inside it. BindAddr is the
 // address preview listeners bind (loopback for local development, the
 // private-network address for remote access); ExternalBase is the URL base
 // handed to browsers (never a 127.0.0.1 literal when remote clients exist).
 // Ports, PortMin/PortMax enable persistent platform port allocation; without
-// Ports the origins use OS-assigned ports on the bind address.
+// Ports the origins use OS-assigned ports on the bind address. MediaRoots
+// enables /media/albums serving for previews; without it media paths 404.
 type PreviewConfig struct {
 	Target       PreviewTarget
 	BuildsRoot   string
@@ -52,6 +61,7 @@ type PreviewConfig struct {
 	Ports        PortSource
 	PortMin      int
 	PortMax      int
+	MediaRoots   MediaRoots
 }
 
 // previewCookiePrefix starts the per-origin authorization cookie name.
@@ -81,6 +91,7 @@ type previewOrigin struct {
 	httpSrv     *http.Server
 	artifactDir string
 	spaFallback string
+	mediaRoots  MediaRoots
 }
 
 // PreviewServer issues short-lived per-build preview links on per-build
@@ -242,6 +253,7 @@ func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFal
 		port:        port,
 		artifactDir: artifactDir,
 		spaFallback: spaFallback,
+		mediaRoots:  p.cfg.MediaRoots,
 	}
 	origin.httpSrv = &http.Server{Handler: origin, ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = origin.httpSrv.Serve(ln) }()
@@ -301,7 +313,101 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	// External album media: serve from the site's content tree (the same
+	// authority the published site maps through the edge), path-jailed and
+	// authorized by this origin's cookie. A missing file is a real 404 —
+	// never the SPA fallback, which would fake a successful HTML response.
+	if strings.HasPrefix(r.URL.Path, "/media/albums/photos/") ||
+		strings.HasPrefix(r.URL.Path, "/media/albums/thumbnails/") {
+		o.serveMedia(w, r)
+		return
+	}
 	o.serveArtifact(w, r)
+}
+
+// serveMedia serves one album media file from the site's content directories
+// with traversal protection. Only the two fixed prefixes are reachable, and
+// the remainder must resolve inside the matching root.
+func (o *previewOrigin) serveMedia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.NotFound(w, r)
+		return
+	}
+	if o.mediaRoots == nil {
+		http.NotFound(w, r)
+		return
+	}
+	photosRoot, thumbsRoot, err := o.mediaRoots(o.siteID)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	rel := ""
+	root := ""
+	switch {
+	case strings.HasPrefix(r.URL.Path, "/media/albums/photos/"):
+		root = photosRoot
+		rel = strings.TrimPrefix(r.URL.Path, "/media/albums/photos/")
+	case strings.HasPrefix(r.URL.Path, "/media/albums/thumbnails/"):
+		root = thumbsRoot
+		rel = strings.TrimPrefix(r.URL.Path, "/media/albums/thumbnails/")
+	}
+	if root == "" || rel == "" {
+		http.NotFound(w, r)
+		return
+	}
+	name := path.Clean("/" + rel)
+	if name == "/" || strings.Contains(name, "..") {
+		http.NotFound(w, r)
+		return
+	}
+	rel = strings.TrimPrefix(name, "/")
+	if !fs.ValidPath(rel) {
+		http.NotFound(w, r)
+		return
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	target := filepath.Join(resolvedRoot, filepath.FromSlash(rel))
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(os.PathSeparator)) {
+		http.NotFound(w, r)
+		return
+	}
+	file, err := os.Open(resolved)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+	// Only image content types are served from the media roots.
+	switch strings.ToLower(filepath.Ext(resolved)) {
+	case ".jpg", ".jpeg":
+		w.Header().Set("Content-Type", "image/jpeg")
+	case ".png":
+		w.Header().Set("Content-Type", "image/png")
+	case ".webp":
+		w.Header().Set("Content-Type", "image/webp")
+	case ".gif":
+		w.Header().Set("Content-Type", "image/gif")
+	default:
+		http.NotFound(w, r)
+		return
+	}
+	// *os.File implements io.ReadSeeker, giving range support for images.
+	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
 // validToken checks the origin's own token set; tokens from another build's

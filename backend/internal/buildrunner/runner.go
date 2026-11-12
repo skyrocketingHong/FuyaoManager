@@ -71,6 +71,10 @@ type Config struct {
 	// config, favicon) consumed by prepare-build-inputs in production mode.
 	// nil is only valid for ci mode.
 	ContentRoots func(siteID uuid.UUID) (contentRoot, configRoot, faviconRoot string, err error)
+	// AlbumLock serializes the prepare step's album metadata regeneration
+	// against human edits of the same files (same lock the media indexer
+	// runs under). nil disables coordination (ci fixture mode).
+	AlbumLock func(siteID uuid.UUID, fn func() error) error
 	Requirements SiteRequirements
 	BuildTimeout time.Duration
 	ShutdownWait time.Duration
@@ -478,12 +482,30 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 			// belongs inside it.
 			"FUYAO_DEPLOY_LOCK="+filepath.Join(taskDir, "deploy.lock"))
 	}
-	prepareLog, err := r.runCommand(ctx, build, "prepare", themeCopy,
-		[]string{"node", "$THEME/scripts/prepare-build-inputs.js",
-			"--mode=" + r.cfg.Mode,
-			"--site-overrides=" + filepath.Join(taskDir, "site-overrides.json"),
-			"--theme-config=" + filepath.Join(taskDir, "theme-config.json")},
-		prepareEnv)
+	runPrepare := func() (string, error) {
+		return r.runCommand(ctx, build, "prepare", themeCopy,
+			[]string{"node", "$THEME/scripts/prepare-build-inputs.js",
+				"--mode=" + r.cfg.Mode,
+				"--site-overrides=" + filepath.Join(taskDir, "site-overrides.json"),
+				"--theme-config=" + filepath.Join(taskDir, "theme-config.json")},
+			prepareEnv)
+	}
+	var prepareLog string
+	var err2 error
+	if r.cfg.AlbumLock != nil && r.cfg.Mode == "production" {
+		// The production prepare regenerates album metadata; hold the same
+		// album lock the media indexer and human editors use so a build
+		// never reads half-written metadata nor overwrites a concurrent
+		// human edit.
+		err2 = r.cfg.AlbumLock(build.SiteID, func() error {
+			var inner error
+			prepareLog, inner = runPrepare()
+			return inner
+		})
+		err = err2
+	} else {
+		prepareLog, err = runPrepare()
+	}
 	if err != nil {
 		return r.commandFailure("prepare", prepareLog, err)
 	}

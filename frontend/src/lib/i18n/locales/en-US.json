@@ -263,5 +263,8 @@
 	"themes.schemaDeclared": "schema",
 	"themes.emptyConfigOnly": "empty object",
 	"themes.emptyCatalog": "No registered themes; register one with fuyao-admin register-theme.",
-	"themes.registerHint": "Registration is operator-driven: fuyao-admin register-theme --contracts <dir> <theme-root>"
+	"themes.registerHint": "Registration is operator-driven: fuyao-admin register-theme --contracts <dir> <theme-root>",
+	"albums.detach": "Detach",
+	"albums.detachConfirm": "Remove this photo from the next build only? Files stay for releases still referencing them.",
+	"albums.detached": "Photo detached from future builds."
 }

@@ -404,11 +404,12 @@ export async function deleteAlbumPhoto(
 	siteId: string,
 	year: string,
 	filename: string,
-	digest: string
+	digest: string,
+	mode: 'delete' | 'detach' = 'delete'
 ): Promise<void> {
 	await api<void>(
 		'DELETE',
-		`/api/v1/sites/${siteId}/albums/${year}/${encodeURIComponent(filename)}`,
+		`/api/v1/sites/${siteId}/albums/${year}/${encodeURIComponent(filename)}?mode=${mode}`,
 		{
 			etag: digest
 		}
