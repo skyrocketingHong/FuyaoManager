@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
@@ -81,7 +82,7 @@ func (a *API) handleExchangeCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := a.store.ExchangeCode(r.Context(), req.Code, a.cfg.SessionTTL)
+	result, err := a.store.ExchangeCode(r.Context(), req.Code, a.cfg.SessionTTL, a.cfg.RPID, a.cfg.RegistrationTTL)
 	if err != nil {
 		switch {
 		case errors.Is(err, store.ErrCodeInvalid):
@@ -105,9 +106,20 @@ func (a *API) handleExchangeCode(w http.ResponseWriter, r *http.Request) {
 
 	// Session rotation: every login (code or passkey) mints a brand-new
 	// session; prior cookies of other sessions are unaffected but this
-	// response always carries a fresh token.
-	a.setSessionCookie(w, result.CookieToken)
+	// response always carries a fresh token. When the account still lacks a
+	// credential for the current relying party, the minted session is the
+	// short restricted registration session.
+	cookieTTL := a.cfg.SessionTTL
+	if result.Kind == model.SessionKindRestricted {
+		cookieTTL = a.cfg.RegistrationTTL
+	}
+	a.setSessionCookie(w, result.CookieToken, cookieTTL)
 	a.clearAuthTxCookie(w)
 	a.store.AuthCodes.PurgeExpired(r.Context())
-	writeJSON(w, http.StatusOK, ceremonyDone{User: toUserDTO(result.User), CSRFToken: result.CSRFToken})
+	writeJSON(w, http.StatusOK, ceremonyDone{
+		User:         toUserDTO(result.User),
+		CSRFToken:    result.CSRFToken,
+		SessionScope: result.Kind,
+		PasskeyBound: result.Kind == model.SessionKindFull,
+	})
 }

@@ -37,6 +37,7 @@ type Config struct {
 	CookieSecure     bool
 	SessionTTL       time.Duration
 	ChallengeTTL     time.Duration
+	RegistrationTTL  time.Duration
 	ThemeContracts   ThemeConfigValidator
 	BuildEnqueuer    BuildEnqueuer
 	Previews         PreviewIssuer
@@ -137,73 +138,80 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPost, "/api/v1/auth/login/options", "startPasskeyLogin", a.passkeyRoute(a.handleLoginOptions)},
 		{http.MethodPost, "/api/v1/auth/login/verify", "verifyPasskeyLogin", a.passkeyRoute(a.handleLoginVerify)},
 
-		// One-time CLI-issued code redemption (initialization and per-login).
+		// One-time CLI-issued code redemption (initialization and recovery).
 		{http.MethodPost, "/api/v1/auth/exchange", "exchangeAuthCode", a.handleExchangeCode},
+
+		// Session-bound passkey binding: the only registration path once the
+		// platform has an active administrator. The restricted registration
+		// session (issued when the account has no credential for the current
+		// RP) may drive exactly these two endpoints plus session read/logout.
+		{http.MethodPost, "/api/v1/auth/passkey/register/options", "startPasskeyBinding", a.passkeyRoute(a.requireAuth(a.withCSRF(a.handleBindOptions)))},
+		{http.MethodPost, "/api/v1/auth/passkey/register/verify", "verifyPasskeyBinding", a.passkeyRoute(a.requireAuth(a.withCSRF(a.handleBindVerify)))},
 
 		{http.MethodGet, "/api/v1/session", "getSession", a.handleSession},
 		{http.MethodPost, "/api/v1/auth/logout", "logout", a.requireAuth(a.withCSRF(a.handleLogout))},
 
 		// Sites.
-		{http.MethodGet, "/api/v1/sites", "listSites", a.requireAuth(a.handleListSites)},
-		{http.MethodPost, "/api/v1/sites", "createSite", a.requireAuth(a.withCSRF(a.handleCreateSite))},
-		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireAuth(a.handleGetSite)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireAuth(a.withCSRF(a.handleProvisionSite))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireAuth(a.withCSRF(a.handlePutVisibility))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireAuth(a.handleGetSettings)},
-		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireAuth(a.withCSRF(a.handlePatchSettings))},
+		{http.MethodGet, "/api/v1/sites", "listSites", a.requireFullScope(a.handleListSites)},
+		{http.MethodPost, "/api/v1/sites", "createSite", a.requireFullScope(a.withCSRF(a.handleCreateSite))},
+		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireFullScope(a.handleGetSite)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireFullScope(a.withCSRF(a.handleProvisionSite))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireFullScope(a.withCSRF(a.handlePutVisibility))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireFullScope(a.handleGetSettings)},
+		{http.MethodPatch, "/api/v1/sites/{siteId}/settings", "updateSiteSettings", a.requireFullScope(a.withCSRF(a.handlePatchSettings))},
 
 		// Theme catalog and per-site theme selection. Registration itself is
 		// operator-driven (fuyao-admin register-theme); the HTTP surface only
 		// reads the catalog and saves selections.
-		{http.MethodGet, "/api/v1/themes", "listThemes", a.requireAuth(a.handleListThemes)},
-		{http.MethodGet, "/api/v1/sites/{siteId}/theme", "getSiteTheme", a.requireAuth(a.handleGetSiteTheme)},
-		{http.MethodPut, "/api/v1/sites/{siteId}/theme", "putSiteTheme", a.requireAuth(a.withCSRF(a.handlePutSiteTheme))},
+		{http.MethodGet, "/api/v1/themes", "listThemes", a.requireFullScope(a.handleListThemes)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/theme", "getSiteTheme", a.requireFullScope(a.handleGetSiteTheme)},
+		{http.MethodPut, "/api/v1/sites/{siteId}/theme", "putSiteTheme", a.requireFullScope(a.withCSRF(a.handlePutSiteTheme))},
 
 		// Per-site content (single authority for posts, friends, social
 		// links, and the visual site configuration the builds consume).
-		{http.MethodGet, "/api/v1/sites/{siteId}/posts", "listPosts", a.requireAuth(a.contentRoute(a.handleListPosts))},
-		{http.MethodPost, "/api/v1/sites/{siteId}/posts", "createPost", a.requireAuth(a.withCSRF(a.contentRoute(a.handleCreatePost)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/posts/{postPath}", "getPost", a.requireAuth(a.contentRoute(a.handleGetPost))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/posts/{postPath}", "putPost", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutPost)))},
-		{http.MethodDelete, "/api/v1/sites/{siteId}/posts/{postPath}", "deletePost", a.requireAuth(a.withCSRF(a.contentRoute(a.handleDeletePost)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/content/friends", "getFriends", a.requireAuth(a.contentRoute(a.handleGetFriends))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/content/friends", "putFriends", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutFriends)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/content/social-links", "getSocialLinks", a.requireAuth(a.contentRoute(a.handleGetSocialLinks))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/content/social-links", "putSocialLinks", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSocialLinks)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/edge", "getSiteEdge", a.requireAuth(a.handleGetSiteEdge)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/edge/reapply", "reapplySiteEdge", a.requireAuth(a.withCSRF(a.handleReapplySiteEdge))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireAuth(a.contentRoute(a.handleGetSiteConfig))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts", "listPosts", a.requireFullScope(a.contentRoute(a.handleListPosts))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/posts", "createPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleCreatePost)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts/{postPath}", "getPost", a.requireFullScope(a.contentRoute(a.handleGetPost))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/posts/{postPath}", "putPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPost)))},
+		{http.MethodDelete, "/api/v1/sites/{siteId}/posts/{postPath}", "deletePost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleDeletePost)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/friends", "getFriends", a.requireFullScope(a.contentRoute(a.handleGetFriends))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/friends", "putFriends", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutFriends)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/social-links", "getSocialLinks", a.requireFullScope(a.contentRoute(a.handleGetSocialLinks))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/social-links", "putSocialLinks", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutSocialLinks)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/edge", "getSiteEdge", a.requireFullScope(a.handleGetSiteEdge)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/edge/reapply", "reapplySiteEdge", a.requireFullScope(a.withCSRF(a.handleReapplySiteEdge))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireFullScope(a.contentRoute(a.handleGetSiteConfig))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
 
 		// Albums and footprints: uploads with async processing tasks,
 		// metadata editing, reference-checked deletion, and the footprint
 		// point document.
-		{http.MethodGet, "/api/v1/sites/{siteId}/albums", "getAlbums", a.requireAuth(a.contentRoute(a.handleGetAlbums))},
-		{http.MethodPost, "/api/v1/sites/{siteId}/albums/photos", "uploadAlbumPhoto", a.requireAuth(a.withCSRF(a.contentRoute(a.handleUploadAlbumPhoto)))},
-		{http.MethodPost, "/api/v1/sites/{siteId}/albums/process", "processAlbums", a.requireAuth(a.withCSRF(a.contentRoute(a.handleEnqueueAlbumTask)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/albums/tasks", "listMediaTasks", a.requireAuth(a.contentRoute(a.handleListMediaTasks))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/albums/{year}", "getAlbumYear", a.requireAuth(a.contentRoute(a.handleGetAlbumYear))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/albums/{year}", "putAlbumYear", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutAlbumYear)))},
-		{http.MethodDelete, "/api/v1/sites/{siteId}/albums/{year}/{filename}", "deleteAlbumPhoto", a.requireAuth(a.withCSRF(a.contentRoute(a.handleDeleteAlbumPhoto)))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/content/footprints", "getFootprints", a.requireAuth(a.contentRoute(a.handleGetFootprints))},
-		{http.MethodPut, "/api/v1/sites/{siteId}/content/footprints", "putFootprints", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutFootprints)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums", "getAlbums", a.requireFullScope(a.contentRoute(a.handleGetAlbums))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/albums/photos", "uploadAlbumPhoto", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleUploadAlbumPhoto)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/albums/process", "processAlbums", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleEnqueueAlbumTask)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums/tasks", "listMediaTasks", a.requireFullScope(a.contentRoute(a.handleListMediaTasks))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums/{year}", "getAlbumYear", a.requireFullScope(a.contentRoute(a.handleGetAlbumYear))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/albums/{year}", "putAlbumYear", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutAlbumYear)))},
+		{http.MethodDelete, "/api/v1/sites/{siteId}/albums/{year}/{filename}", "deleteAlbumPhoto", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleDeleteAlbumPhoto)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content/footprints", "getFootprints", a.requireFullScope(a.contentRoute(a.handleGetFootprints))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content/footprints", "putFootprints", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutFootprints)))},
 
 		// Build-preview tasks: creation freezes the version view; the runner
 		// executes and persists state transitions that stay queryable here.
-		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireAuth(a.withCSRF(a.handleCreateBuild))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireAuth(a.handleListBuilds)},
-		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireAuth(a.handleGetBuild)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-links", "createPreviewLink", a.requireAuth(a.withCSRF(a.handleCreatePreviewLink))},
-		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-close", "closePreviewLink", a.requireAuth(a.withCSRF(a.handleClosePreviewLink))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireFullScope(a.withCSRF(a.handleCreateBuild))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireFullScope(a.handleListBuilds)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireFullScope(a.handleGetBuild)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-links", "createPreviewLink", a.requireFullScope(a.withCSRF(a.handleCreatePreviewLink))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds/{buildId}/preview-close", "closePreviewLink", a.requireFullScope(a.withCSRF(a.handleClosePreviewLink))},
 
 		// Releases: publish freezes a succeeded build's artifacts into a
 		// release directory and atomically switches the site's live version;
 		// rollback re-points at an existing release without rebuilding.
-		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireAuth(a.withCSRF(a.handleCreateRelease))},
-		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireAuth(a.handleListReleases)},
-		{http.MethodGet, "/api/v1/sites/{siteId}/releases/{releaseId}", "getRelease", a.requireAuth(a.handleGetRelease)},
-		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireAuth(a.handleGetCurrentRelease)},
-		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireAuth(a.withCSRF(a.handleRollbackRelease))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireFullScope(a.withCSRF(a.handleCreateRelease))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireFullScope(a.handleListReleases)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/releases/{releaseId}", "getRelease", a.requireFullScope(a.handleGetRelease)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireFullScope(a.handleGetCurrentRelease)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireFullScope(a.withCSRF(a.handleRollbackRelease))},
 	}
 }
 
@@ -287,7 +295,9 @@ func (a *API) securityHeaders(next http.Handler) http.Handler {
 // authedHandler receives the resolved session and user.
 type authedHandler func(w http.ResponseWriter, r *http.Request, auth store.AuthSession)
 
-// requireAuth authenticates the session cookie or rejects with 401.
+// requireAuth authenticates the session cookie or rejects with 401. Any live
+// session passes, including a restricted registration session; business
+// routes must use requireFullScope instead.
 func (a *API) requireAuth(h authedHandler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookieName)
@@ -303,6 +313,19 @@ func (a *API) requireAuth(h authedHandler) http.HandlerFunc {
 		}
 		h(w, r, auth)
 	}
+}
+
+// requireFullScope authenticates and additionally requires a full session:
+// restricted registration sessions only prove the account identity and may
+// not reach business APIs.
+func (a *API) requireFullScope(h authedHandler) http.HandlerFunc {
+	return a.requireAuth(func(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+		if auth.Session.Kind != model.SessionKindFull {
+			writeProblem(w, http.StatusForbidden, "passkey_binding_required", "This account must bind a passkey for the current relying party before using the management APIs.")
+			return
+		}
+		h(w, r, auth)
+	})
 }
 
 // withCSRF validates the X-CSRF-Token header against the session's stable
@@ -325,10 +348,12 @@ func sha256Sum64(value string) []byte {
 	return sum[:]
 }
 
-// setSessionCookie writes the session cookie. Secure is omitted only in the
-// all-loopback local development configuration; SameSite=Lax is sufficient
-// because the admin front end and API share the localhost registrable site.
-func (a *API) setSessionCookie(w http.ResponseWriter, token string) {
+// setSessionCookie writes the session cookie; maxAge tracks the actual
+// session lifetime so a short restricted registration session does not leave
+// a long-lived cookie behind. Secure is omitted only in the all-loopback
+// local development configuration; SameSite=Lax is sufficient because the
+// admin front end and API share the registrable site.
+func (a *API) setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
@@ -336,7 +361,7 @@ func (a *API) setSessionCookie(w http.ResponseWriter, token string) {
 		HttpOnly: true,
 		Secure:   a.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(a.cfg.SessionTTL.Seconds()),
+		MaxAge:   int(ttl.Seconds()),
 	})
 }
 

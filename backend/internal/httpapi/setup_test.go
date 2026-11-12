@@ -27,6 +27,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/testauth"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
@@ -183,13 +184,14 @@ func setupApply(t *testing.T, apply func(ctx context.Context, env *testEnv)) *te
 		t.Fatalf("load theme contracts: %v", err)
 	}
 	cfg := Config{
-		RPID:           "localhost",
-		RPOrigins:      []string{origin},
-		CookieSecure:   false,
-		SessionTTL:     time.Hour,
-		ChallengeTTL:   5 * time.Minute,
-		ThemeContracts: contracts,
-		Provisioner:    provisioner,
+		RPID:            "localhost",
+		RPOrigins:       []string{origin},
+		CookieSecure:    false,
+		SessionTTL:      time.Hour,
+		ChallengeTTL:    5 * time.Minute,
+		RegistrationTTL: 30 * time.Minute,
+		ThemeContracts:  contracts,
+		Provisioner:     provisioner,
 	}
 	if applyEnv != nil && applyEnv.mutateConfig != nil {
 		applyEnv.mutateConfig(&cfg)
@@ -335,10 +337,13 @@ func (c *tclient) doRaw(method, path, rawBody string, hdr map[string]string) (in
 	return resp.StatusCode, resp.Header, raw
 }
 
-// createUserSession constructs an active user and a session directly through
-// the store. This helper exists only in _test.go so tests can exercise role
-// and membership scenarios without a passkey ceremony for every user; the
-// runtime code has no equivalent backdoor.
+// createUserSession constructs an active user with a bound passkey plus a
+// full session directly through the store. The credential row keeps the
+// account genuinely bound for the test relying party ("localhost"), so the
+// full session mirrors a completed post-binding login rather than bypassing
+// the binding gate. This helper exists only in _test.go so tests can
+// exercise role and membership scenarios without a passkey ceremony for
+// every user; the runtime code has no equivalent backdoor.
 func (e *testEnv) createUserSession(username string) (model.User, string, string) {
 	e.t.Helper()
 	ctx := context.Background()
@@ -349,11 +354,29 @@ func (e *testEnv) createUserSession(username string) (model.User, string, string
 	if err := e.store.Users.Activate(ctx, user.ID); err != nil {
 		e.t.Fatalf("activate user %s: %v", username, err)
 	}
+	e.bindPasskey(user.ID, testauth.New())
 	token, csrf, _, err := e.store.Sessions.Create(ctx, user.ID, time.Hour)
 	if err != nil {
 		e.t.Fatalf("create session for %s: %v", username, err)
 	}
 	return user, token, csrf
+}
+
+// bindPasskey persists the authenticator's credential for the user under the
+// test relying party, matching what a completed binding ceremony would store.
+func (e *testEnv) bindPasskey(userID uuid.UUID, auth *testauth.Authenticator) {
+	e.t.Helper()
+	credID, publicKey := auth.ExportCredential()
+	if err := e.store.Passkeys.Create(context.Background(), model.Passkey{
+		UserID:       userID,
+		RPID:         "localhost",
+		CredentialID: credID,
+		PublicKey:    publicKey,
+		Transports:   []string{},
+		UserVerified: true,
+	}); err != nil {
+		e.t.Fatalf("bind passkey: %v", err)
+	}
 }
 
 // clientFor returns a client whose requests use an explicitly constructed
@@ -394,13 +417,18 @@ type ceremonyDoneResp struct {
 		ID       string `json:"id"`
 		Username string `json:"username"`
 	} `json:"user"`
-	CSRFToken string `json:"csrfToken"`
+	CSRFToken    string `json:"csrfToken"`
+	SessionScope string `json:"sessionScope"`
+	PasskeyBound bool   `json:"passkeyBound"`
 }
 
 type sessionResp struct {
 	Authenticated       bool   `json:"authenticated"`
 	CSRFToken           string `json:"csrfToken"`
 	PlatformInitialized bool   `json:"platformInitialized"`
+	SessionScope        string `json:"sessionScope"`
+	PasskeyBound        bool   `json:"passkeyBound"`
+	PasskeyAvailable    bool   `json:"passkeyAvailable"`
 }
 
 type siteListResp struct {

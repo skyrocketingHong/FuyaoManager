@@ -15,19 +15,29 @@ type PasskeyStore struct {
 	pool *pgxpool.Pool
 }
 
-const passkeyColumns = `id, user_id, credential_id, public_key, attestation_type, attestation_format,
+const passkeyColumns = `id, user_id, rp_id, credential_id, public_key, attestation_type, attestation_format,
 	transports, sign_count, backup_eligible, backup_state, user_verified, aaguid, last_used_at, created_at`
 
 // Create inserts a newly registered credential.
 func (s *PasskeyStore) Create(ctx context.Context, pk model.Passkey) error {
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO passkeys (`+passkeyColumns+`)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		newUUID(), pk.UserID, pk.CredentialID, pk.PublicKey, pk.AttestationType, pk.AttestationFormat,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		newUUID(), pk.UserID, pk.RPID, pk.CredentialID, pk.PublicKey, pk.AttestationType, pk.AttestationFormat,
 		pk.Transports, pk.SignCount, pk.BackupEligible, pk.BackupState, pk.UserVerified, pk.AAGUID,
 		pk.LastUsedAt, time.Now(),
 	)
 	return err
+}
+
+// CountByUserRP reports how many credentials the user owns under the given
+// relying-party ID. Zero means the account is not bound for that RP.
+func (s *PasskeyStore) CountByUserRP(ctx context.Context, userID uuid.UUID, rpID string) (int, error) {
+	var n int
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM passkeys WHERE user_id = $1 AND rp_id = $2`, userID, rpID,
+	).Scan(&n)
+	return n, err
 }
 
 // ListByUser returns all credentials owned by the user. The WebAuthn layer
@@ -42,7 +52,7 @@ func (s *PasskeyStore) ListByUser(ctx context.Context, userID uuid.UUID) ([]mode
 	var out []model.Passkey
 	for rows.Next() {
 		var pk model.Passkey
-		if err := rows.Scan(&pk.ID, &pk.UserID, &pk.CredentialID, &pk.PublicKey, &pk.AttestationType,
+		if err := rows.Scan(&pk.ID, &pk.UserID, &pk.RPID, &pk.CredentialID, &pk.PublicKey, &pk.AttestationType,
 			&pk.AttestationFormat, &pk.Transports, &pk.SignCount, &pk.BackupEligible, &pk.BackupState,
 			&pk.UserVerified, &pk.AAGUID, &pk.LastUsedAt, &pk.CreatedAt); err != nil {
 			return nil, err

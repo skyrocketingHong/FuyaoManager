@@ -75,10 +75,9 @@ func (s *Store) CompleteEnrollment(ctx context.Context, permitID uuid.UUID, user
 	}
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO passkeys (id, user_id, credential_id, public_key, attestation_type, attestation_format,
-			transports, sign_count, backup_eligible, backup_state, user_verified, aaguid, last_used_at, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		newUUID(), user.ID, credential.CredentialID, credential.PublicKey, credential.AttestationType,
+		`INSERT INTO passkeys (`+passkeyColumns+`)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+		newUUID(), user.ID, credential.RPID, credential.CredentialID, credential.PublicKey, credential.AttestationType,
 		credential.AttestationFormat, credential.Transports, credential.SignCount, credential.BackupEligible,
 		credential.BackupState, credential.UserVerified, credential.AAGUID, credential.LastUsedAt, time.Now(),
 	); err != nil {

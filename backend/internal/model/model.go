@@ -40,10 +40,20 @@ type User struct {
 	UpdatedAt          time.Time
 }
 
-// Passkey is a stored WebAuthn credential.
+// Session kinds. A full session may use the business APIs; a restricted
+// session only proves the account identity long enough to bind a passkey.
+const (
+	SessionKindFull       = "full"
+	SessionKindRestricted = "restricted"
+)
+
+// Passkey is a stored WebAuthn credential. RPID records the relying-party ID
+// the credential was registered under; a credential only counts as bound for
+// the current deployment when it matches the configured RP ID.
 type Passkey struct {
 	ID                uuid.UUID
 	UserID            uuid.UUID
+	RPID              string
 	CredentialID      []byte
 	PublicKey         []byte
 	AttestationType   string
@@ -64,6 +74,7 @@ type Passkey struct {
 type Session struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
+	Kind      string
 	TokenHash []byte
 	CSRFToken string
 	CreatedAt time.Time

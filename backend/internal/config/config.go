@@ -24,6 +24,7 @@ const (
 	EnvChallengeTTL      = "FUYAO_ADMIN_CHALLENGE_TTL"
 	EnvPermitTTL         = "FUYAO_ADMIN_PERMIT_TTL"
 	EnvAuthCodeTTL       = "FUYAO_ADMIN_AUTH_CODE_TTL"
+	EnvRegistrationTTL   = "FUYAO_ADMIN_REGISTRATION_SESSION_TTL"
 	EnvThemeContractsDir = "FUYAO_ADMIN_THEME_CONTRACTS"
 	EnvPreviewBind       = "FUYAO_ADMIN_PREVIEW_BIND"
 	EnvPreviewBase       = "FUYAO_ADMIN_PREVIEW_EXTERNAL_BASE"
@@ -60,6 +61,7 @@ type Config struct {
 	ChallengeTTL        time.Duration
 	PermitTTL           time.Duration
 	AuthCodeTTL         time.Duration
+	RegistrationTTL     time.Duration
 	CookieSecure        bool
 	ThemeContractsDir   string
 	RepoRoot            string
@@ -132,6 +134,7 @@ func Load() (Config, error) {
 	setTTL(EnvChallengeTTL, &cfg.ChallengeTTL, 5*time.Minute)
 	setTTL(EnvPermitTTL, &cfg.PermitTTL, 10*time.Minute)
 	setTTL(EnvAuthCodeTTL, &cfg.AuthCodeTTL, 10*time.Minute)
+	setTTL(EnvRegistrationTTL, &cfg.RegistrationTTL, 30*time.Minute)
 	if ttlErr != nil {
 		return Config{}, ttlErr
 	}

@@ -15,23 +15,26 @@ type AuthStateStore struct {
 	pool *pgxpool.Pool
 }
 
-// AuthState is a consumed ceremony state.
+// AuthState is a consumed ceremony state. SessionID binds "bind" ceremony
+// challenges to the exact session that requested them (nil for the legacy
+// permit registration and login ceremonies).
 type AuthState struct {
-	ID       uuid.UUID
-	Kind     string
-	UserID   *uuid.UUID
-	PermitID *uuid.UUID
-	Data     []byte
+	ID        uuid.UUID
+	Kind      string
+	UserID    *uuid.UUID
+	PermitID  *uuid.UUID
+	SessionID *uuid.UUID
+	Data      []byte
 }
 
 // Create stores ceremony state keyed by a fresh random ID that is echoed to
 // the client in a short-lived cookie.
-func (s *AuthStateStore) Create(ctx context.Context, kind string, userID, permitID *uuid.UUID, data []byte, ttl time.Duration) (uuid.UUID, error) {
+func (s *AuthStateStore) Create(ctx context.Context, kind string, userID, permitID, sessionID *uuid.UUID, data []byte, ttl time.Duration) (uuid.UUID, error) {
 	id := newUUID()
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO auth_states (id, kind, user_id, permit_id, data, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))`,
-		id, kind, userID, permitID, data, ttl.Seconds(),
+		`INSERT INTO auth_states (id, kind, user_id, permit_id, session_id, data, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, now() + make_interval(secs => $7))`,
+		id, kind, userID, permitID, sessionID, data, ttl.Seconds(),
 	)
 	return id, err
 }
@@ -45,9 +48,9 @@ func (s *AuthStateStore) Consume(ctx context.Context, id uuid.UUID) (AuthState, 
 		`UPDATE auth_states
 		 SET consumed_at = now()
 		 WHERE id = $1 AND consumed_at IS NULL AND expires_at > clock_timestamp()
-		 RETURNING kind, user_id, permit_id, data`,
+		 RETURNING kind, user_id, permit_id, session_id, data`,
 		id,
-	).Scan(&state.Kind, &state.UserID, &state.PermitID, &state.Data)
+	).Scan(&state.Kind, &state.UserID, &state.PermitID, &state.SessionID, &state.Data)
 	if err != nil {
 		return AuthState{}, ErrNotFound
 	}

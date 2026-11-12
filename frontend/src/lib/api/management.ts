@@ -67,6 +67,47 @@ export async function logout(): Promise<void> {
 	setCsrfToken(null);
 }
 
+export type CreationOptionsEnvelope = components['schemas']['CreationOptionsEnvelope'];
+export type AssertionOptionsEnvelope = components['schemas']['AssertionOptionsEnvelope'];
+export type CredentialCreationResponse = components['schemas']['CredentialCreationResponse'];
+export type CredentialAssertionResponse = components['schemas']['CredentialAssertionResponse'];
+
+/** Starts a discoverable-credential passkey login. */
+export async function beginPasskeyLogin(): Promise<AssertionOptionsEnvelope> {
+	const { data } = await api<AssertionOptionsEnvelope>('POST', '/api/v1/auth/login/options', {
+		body: {}
+	});
+	return data;
+}
+
+/** Completes a passkey login; the server mints a fresh full session. */
+export async function finishPasskeyLogin(assertion: CredentialAssertionResponse): Promise<CeremonyDone> {
+	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/login/verify', { body: assertion });
+	setCsrfToken(data.csrfToken);
+	return data;
+}
+
+/** Starts the session-bound passkey-binding ceremony (restricted or full session). */
+export async function beginPasskeyBinding(): Promise<CreationOptionsEnvelope> {
+	const { data } = await api<CreationOptionsEnvelope>(
+		'POST',
+		'/api/v1/auth/passkey/register/options',
+		{ body: {} }
+	);
+	return data;
+}
+
+/** Completes the binding; the server rotates the session to a full one. */
+export async function finishPasskeyBinding(
+	attestation: CredentialCreationResponse
+): Promise<CeremonyDone> {
+	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/passkey/register/verify', {
+		body: attestation
+	});
+	setCsrfToken(data.csrfToken);
+	return data;
+}
+
 export async function listSites(): Promise<Site[]> {
 	const { data } = await api<{ sites: Site[] }>('GET', '/api/v1/sites');
 	return data.sites;

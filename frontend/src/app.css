@@ -98,6 +98,18 @@
 	max-width: 480px;
 }
 
+.auth-stack {
+	width: 100%;
+	max-width: 480px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.auth-stack .auth-card {
+	max-width: none;
+}
+
 .code-hint {
 	font-family: 'Menlo', 'SFMono-Regular', Consolas, monospace;
 	overflow-wrap: anywhere;

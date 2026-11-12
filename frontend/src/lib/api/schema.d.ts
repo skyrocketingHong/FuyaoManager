@@ -118,15 +118,77 @@ export interface paths {
          * Redeem a CLI-issued one-time code
          * @description Exchanges a single-use code printed by the server CLI
          *     (`fuyao-admin init-admin` for the first administrator,
-         *     `fuyao-admin login-code` for every later login) for a freshly
-         *     minted session. Codes are stored as SHA-256 digests, expire quickly,
-         *     burn one attempt per presentation, and are consumed in one
+         *     `fuyao-admin login-code` for identity confirmation and recovery) for
+         *     a freshly minted session. Codes are stored as SHA-256 digests, expire
+         *     quickly, burn one attempt per presentation, and are consumed in one
          *     transaction, so concurrent redemptions of the same code can never
          *     both succeed. An initialization code only activates the still-pending
          *     first administrator; a login code only opens sessions for active
-         *     accounts.
+         *     accounts. When the account owns no credential registered under the
+         *     current relying-party ID, the minted session is a short-lived
+         *     restricted registration session (`sessionScope: restricted`) that may
+         *     only complete the passkey-binding ceremony; accounts already bound
+         *     for the current RP receive a full session directly.
          */
         post: operations["exchangeAuthCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/register/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start session-bound passkey binding
+         * @description Starts a WebAuthn registration ceremony for the session's own
+         *     account. This is the only registration path once an administrator
+         *     exists: the binding target comes exclusively from the authenticated
+         *     session, never from the request body. A restricted registration
+         *     session (issued when a one-time code confirmed the identity of an
+         *     account without a credential for the current relying party) may call
+         *     exactly this endpoint, its verify counterpart, the session read, and
+         *     logout.
+         *
+         *     The response sets the short-lived `fuyao_admin_auth_tx` cookie whose
+         *     challenge is bound to both the account and this exact session; a
+         *     challenge cannot be replayed or completed under another session.
+         */
+        post: operations["startPasskeyBinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/register/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete session-bound passkey binding
+         * @description Verifies the attestation against the challenge bound to the
+         *     `fuyao_admin_auth_tx` cookie and to the current session. On success,
+         *     in one transaction, the credential is stored tagged with the current
+         *     relying-party ID, a fresh full session is minted, and the session
+         *     that carried the ceremony is revoked; other restricted sessions of
+         *     the same account are not upgraded. A cancelled or rejected ceremony
+         *     consumes only the challenge: the restricted session stays alive and
+         *     fresh options can be requested while it is valid.
+         */
+        post: operations["verifyPasskeyBinding"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1119,10 +1181,21 @@ export interface components {
             username: string;
             displayName: string;
         };
-        /** @description Successful enrollment or login; the CSRF token is stable for the whole session and must be echoed on mutating requests. */
+        /** @description Successful enrollment, login, binding, or code redemption; the CSRF token is stable for the whole session and must be echoed on mutating requests. */
         CeremonyDone: {
             user: components["schemas"]["User"];
             csrfToken: string;
+            /**
+             * @description Business admission of the freshly minted session. `restricted`
+             *     means the code confirmed the account identity but the account
+             *     owns no credential for the current relying party yet: the session
+             *     may only read the auth state, complete the passkey-binding
+             *     ceremony, and log out.
+             * @enum {string}
+             */
+            sessionScope: "full" | "restricted";
+            /** @description Whether the account owns a credential registered under the current relying-party ID. */
+            passkeyBound: boolean;
         };
         SessionInfo: {
             authenticated: boolean;
@@ -1130,6 +1203,15 @@ export interface components {
             platformInitialized: boolean;
             user?: components["schemas"]["User"];
             csrfToken?: string;
+            /**
+             * @description Present only when authenticated; business APIs require `full`.
+             * @enum {string}
+             */
+            sessionScope?: "full" | "restricted";
+            /** @description Whether the session's account owns a credential registered under the current relying-party ID. */
+            passkeyBound: boolean;
+            /** @description Whether this deployment's relying party can serve WebAuthn ceremonies at all (false on IP-literal configurations). */
+            passkeyAvailable: boolean;
         };
         AuthCodeExchangeRequest: {
             /** @description Single-use code printed by `fuyao-admin init-admin` (first administrator) or `fuyao-admin login-code` (every login). */
@@ -1954,6 +2036,115 @@ export interface operations {
             };
             /** @description Too many redemption attempts from this address (`rate_limited`). */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    startPasskeyBinding: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Creation options for `navigator.credentials.create()`. */
+            200: {
+                headers: {
+                    /** @description Ceremony cookie `fuyao_admin_auth_tx`; path /api/v1/auth; HttpOnly; SameSite=Lax. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreationOptionsEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            /** @description The relying party is unavailable on this deployment (`passkey_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    verifyPasskeyBinding: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CredentialCreationResponse"];
+            };
+        };
+        responses: {
+            /** @description Binding complete; the rotated full session cookie replaces the previous one. */
+            200: {
+                headers: {
+                    /** @description Fresh session cookie `fuyao_admin_session` (HttpOnly, SameSite=Lax); the ceremony cookie is cleared. */
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CeremonyDone"];
+                };
+            };
+            /**
+             * @description Challenge unknown/expired/consumed or bound to another session
+             *     (`challenge_invalid`), or the attestation failed verification
+             *     (`credential_rejected`).
+             */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            /**
+             * @description The credential is already registered (`credential_duplicate`), or
+             *     the session that requested the ceremony no longer exists
+             *     (`session_rotated`).
+             */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            413: components["responses"]["RequestBodyTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            /** @description The relying party is unavailable on this deployment (`passkey_unavailable`). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -344,6 +344,7 @@ func runServe(ctx context.Context) error {
 		CookieSecure:     cfg.CookieSecure,
 		SessionTTL:       cfg.SessionTTL,
 		ChallengeTTL:     cfg.ChallengeTTL,
+		RegistrationTTL:  cfg.RegistrationTTL,
 		ThemeContracts:   themeContracts,
 		BuildEnqueuer:    runner,
 		Previews:         previews,

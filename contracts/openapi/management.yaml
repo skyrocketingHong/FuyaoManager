@@ -10,12 +10,18 @@ info:
 
     Scope of this contract (and of the implementation it describes):
 
-    - Passkey-only authentication (WebAuthn discoverable credentials, user
-      verification required). There is no password, bearer token, or
-      development-admin login.
-    - First-run bootstrap: the local `fuyao-admin bootstrap-admin` CLI issues a
-      short-lived single-use enrollment permit; the permit authorizes passkey
-      enrollment only and is never a login credential.
+    - Passkey authentication (WebAuthn discoverable credentials, user
+      verification required) is the routine sign-in. There is no password,
+      bearer token, or development-admin login. A CLI-issued one-time code
+      (`fuyao-admin init-admin`, `fuyao-admin login-code`) proves the account
+      identity for the first bind and stays the operator-approved recovery
+      entry; an account without a credential for the current relying party
+      holds only a short-lived restricted registration session until it
+      completes the session-bound passkey-binding ceremony.
+    - First-run bootstrap: the legacy local `fuyao-admin bootstrap-admin`
+      permit flow still enrolls exactly the first administrator and closes
+      afterwards; all later registrations go through the session-bound
+      binding endpoints.
     - Cookie sessions with server-side revocation, CSRF token enforcement, and
       strict Origin checking on unsafe methods.
     - Site list, site detail, and site settings with strong ETags and
@@ -297,13 +303,17 @@ paths:
       description: |
         Exchanges a single-use code printed by the server CLI
         (`fuyao-admin init-admin` for the first administrator,
-        `fuyao-admin login-code` for every later login) for a freshly
-        minted session. Codes are stored as SHA-256 digests, expire quickly,
-        burn one attempt per presentation, and are consumed in one
+        `fuyao-admin login-code` for identity confirmation and recovery) for
+        a freshly minted session. Codes are stored as SHA-256 digests, expire
+        quickly, burn one attempt per presentation, and are consumed in one
         transaction, so concurrent redemptions of the same code can never
         both succeed. An initialization code only activates the still-pending
         first administrator; a login code only opens sessions for active
-        accounts.
+        accounts. When the account owns no credential registered under the
+        current relying-party ID, the minted session is a short-lived
+        restricted registration session (`sessionScope: restricted`) that may
+        only complete the passkey-binding ceremony; accounts already bound
+        for the current RP receive a full session directly.
       security:
         - {}
       requestBody:
@@ -348,6 +358,129 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/auth/passkey/register/options:
+    post:
+      operationId: startPasskeyBinding
+      tags: [Auth]
+      summary: Start session-bound passkey binding
+      description: |
+        Starts a WebAuthn registration ceremony for the session's own
+        account. This is the only registration path once an administrator
+        exists: the binding target comes exclusively from the authenticated
+        session, never from the request body. A restricted registration
+        session (issued when a one-time code confirmed the identity of an
+        account without a credential for the current relying party) may call
+        exactly this endpoint, its verify counterpart, the session read, and
+        logout.
+
+        The response sets the short-lived `fuyao_admin_auth_tx` cookie whose
+        challenge is bound to both the account and this exact session; a
+        challenge cannot be replayed or completed under another session.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+      responses:
+        '200':
+          description: Creation options for `navigator.credentials.create()`.
+          headers:
+            Set-Cookie:
+              description: Ceremony cookie `fuyao_admin_auth_tx`; path /api/v1/auth; HttpOnly; SameSite=Lax.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreationOptionsEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: The relying party is unavailable on this deployment (`passkey_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/auth/passkey/register/verify:
+    post:
+      operationId: verifyPasskeyBinding
+      tags: [Auth]
+      summary: Complete session-bound passkey binding
+      description: |
+        Verifies the attestation against the challenge bound to the
+        `fuyao_admin_auth_tx` cookie and to the current session. On success,
+        in one transaction, the credential is stored tagged with the current
+        relying-party ID, a fresh full session is minted, and the session
+        that carried the ceremony is revoked; other restricted sessions of
+        the same account are not upgraded. A cancelled or rejected ceremony
+        consumes only the challenge: the restricted session stays alive and
+        fresh options can be requested while it is valid.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialCreationResponse'
+      responses:
+        '200':
+          description: Binding complete; the rotated full session cookie replaces the previous one.
+          headers:
+            Set-Cookie:
+              description: Fresh session cookie `fuyao_admin_session` (HttpOnly, SameSite=Lax); the ceremony cookie is cleared.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CeremonyDone'
+        '401':
+          description: |
+            Challenge unknown/expired/consumed or bound to another session
+            (`challenge_invalid`), or the attestation failed verification
+            (`credential_rejected`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: |
+            The credential is already registered (`credential_duplicate`), or
+            the session that requested the ceremony no longer exists
+            (`session_rotated`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          $ref: '#/components/responses/RequestBodyTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '503':
+          description: The relying party is unavailable on this deployment (`passkey_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/session:
     get:
       operationId: getSession
@@ -381,10 +514,27 @@ paths:
                         'displayName': 'Alice'
                       }
                     csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
+                    sessionScope: full
+                    passkeyBound: true
+                    passkeyAvailable: true
+                restricted:
+                  value:
+                    authenticated: true
+                    platformInitialized: true
+                    user:
+                      {
+                        'id': '018f3c1e-6a2c-7b41-9f22-3f0a1c7d5b88',
+                        'username': 'alice',
+                        'displayName': 'Alice'
+                      }
+                    csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
+                    sessionScope: restricted
+                    passkeyBound: false
+                    passkeyAvailable: true
                 anonymous:
-                  value: { 'authenticated': false, 'platformInitialized': true }
+                  value: { 'authenticated': false, 'platformInitialized': true, 'passkeyBound': false, 'passkeyAvailable': true }
                 uninitialized:
-                  value: { 'authenticated': false, 'platformInitialized': false }
+                  value: { 'authenticated': false, 'platformInitialized': false, 'passkeyBound': false, 'passkeyAvailable': true }
         default:
           $ref: '#/components/responses/Problem'
 
@@ -2593,9 +2743,9 @@ components:
       in: header
       name: X-CSRF-Token
       description: |
-        CSRF token returned by the ceremony endpoints and rotated by
-        GET /api/v1/session. Required, alongside an allowed Origin, on every
-        authenticated mutating request.
+        CSRF token returned by the ceremony endpoints; stable for the
+        lifetime of the session. Required, alongside an allowed Origin, on
+        every authenticated mutating request.
 
   parameters:
     SiteId:
@@ -3018,17 +3168,29 @@ components:
 
     CeremonyDone:
       type: object
-      description: Successful enrollment or login; the CSRF token is stable for the whole session and must be echoed on mutating requests.
-      required: [user, csrfToken]
+      description: Successful enrollment, login, binding, or code redemption; the CSRF token is stable for the whole session and must be echoed on mutating requests.
+      required: [user, csrfToken, sessionScope, passkeyBound]
       properties:
         user:
           $ref: '#/components/schemas/User'
         csrfToken:
           type: string
+        sessionScope:
+          type: string
+          enum: [full, restricted]
+          description: |
+            Business admission of the freshly minted session. `restricted`
+            means the code confirmed the account identity but the account
+            owns no credential for the current relying party yet: the session
+            may only read the auth state, complete the passkey-binding
+            ceremony, and log out.
+        passkeyBound:
+          type: boolean
+          description: Whether the account owns a credential registered under the current relying-party ID.
 
     SessionInfo:
       type: object
-      required: [authenticated, platformInitialized]
+      required: [authenticated, platformInitialized, passkeyBound, passkeyAvailable]
       properties:
         authenticated:
           type: boolean
@@ -3039,6 +3201,16 @@ components:
           $ref: '#/components/schemas/User'
         csrfToken:
           type: string
+        sessionScope:
+          type: string
+          enum: [full, restricted]
+          description: Present only when authenticated; business APIs require `full`.
+        passkeyBound:
+          type: boolean
+          description: Whether the session's account owns a credential registered under the current relying-party ID.
+        passkeyAvailable:
+          type: boolean
+          description: Whether this deployment's relying party can serve WebAuthn ceremonies at all (false on IP-literal configurations).
 
     AuthCodeExchangeRequest:
       type: object

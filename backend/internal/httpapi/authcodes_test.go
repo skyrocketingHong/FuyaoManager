@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/testauth"
 )
 
 // exchangeCode drives POST /api/v1/auth/exchange with a code string body.
@@ -29,7 +30,9 @@ func exchangeCode(c *tclient, code string) (int, ceremonyDoneResp, problemResp) 
 
 // TestAuthCodeInitFlow covers the full first-run binding: CLI issuance,
 // platform-uninitialized probe, single redemption that activates the pending
-// administrator, session usability, code reuse rejection, and logout.
+// administrator and yields a restricted registration session, business-API
+// rejection while restricted, the passkey-binding ceremony rotating into a
+// full session, code reuse rejection, and logout.
 func TestAuthCodeInitFlow(t *testing.T) {
 	env := setup(t)
 	ctx := context.Background()
@@ -58,13 +61,36 @@ func TestAuthCodeInitFlow(t *testing.T) {
 	if done.User.Username != "firstadmin" || done.CSRFToken == "" {
 		t.Fatalf("exchange response incomplete: %+v", done)
 	}
+	if done.SessionScope != "restricted" || done.PasskeyBound {
+		t.Fatalf("first-run exchange must yield a restricted unbound session: %+v", done)
+	}
 	anon.csrf = done.CSRFToken
 
-	// The session cookie works and the platform now reports initialized.
+	// The restricted session is authenticated but not admitted to business
+	// APIs, and the probe says exactly that.
 	status, _, raw = anon.do("GET", "/api/v1/session", nil, nil)
 	decodeJSONBody(t, raw, &probe)
-	if status != 200 || !probe.Authenticated || !probe.PlatformInitialized {
+	if status != 200 || !probe.Authenticated || !probe.PlatformInitialized ||
+		probe.SessionScope != "restricted" || probe.PasskeyBound || !probe.PasskeyAvailable {
 		t.Fatalf("post-exchange probe = %+v status = %d", probe, status)
+	}
+	status, _, raw = anon.do("GET", "/api/v1/sites", nil, nil)
+	var restrictedProblem problemResp
+	decodeJSONBody(t, raw, &restrictedProblem)
+	if status != 403 || restrictedProblem.Code != "passkey_binding_required" {
+		t.Fatalf("restricted sites status = %d problem = %+v", status, restrictedProblem)
+	}
+
+	// Binding completes the first-run flow: credential persisted under the
+	// current RP, the restricted session rotated into a full one.
+	bindPasskeyViaAPI(t, env, anon, testauth.New())
+	status, _, raw = anon.do("GET", "/api/v1/session", nil, nil)
+	decodeJSONBody(t, raw, &probe)
+	if status != 200 || probe.SessionScope != "full" || !probe.PasskeyBound {
+		t.Fatalf("post-bind probe = %+v status = %d", probe, status)
+	}
+	if status, _, _ := anon.do("GET", "/api/v1/sites", nil, nil); status != 200 {
+		t.Fatalf("post-bind sites status = %d", status)
 	}
 
 	// Replaying the consumed code fails with the exact problem code.

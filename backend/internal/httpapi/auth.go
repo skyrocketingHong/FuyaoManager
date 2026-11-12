@@ -13,24 +13,34 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
-// ceremonyDone is the response body of a completed registration or login: the
-// signed-in user plus the one-time CSRF token the client must echo on
-// mutating requests.
+// ceremonyDone is the response body of a completed registration, login, or
+// code redemption: the signed-in user, the stable CSRF token the client
+// echoes on mutating requests, the resulting session scope, and whether the
+// account now owns a credential for the current relying party.
 type ceremonyDone struct {
-	User      userDTO `json:"user"`
-	CSRFToken string  `json:"csrfToken"`
+	User         userDTO `json:"user"`
+	CSRFToken    string  `json:"csrfToken"`
+	SessionScope string  `json:"sessionScope"`
+	PasskeyBound bool    `json:"passkeyBound"`
 }
 
 // sessionResponse is the GET /api/v1/session body. An authenticated caller
 // receives the session's stable CSRF token, identical across reads and tabs.
 // platformInitialized tells an anonymous browser whether the CLI first-run
 // binding already happened, so the login page can show the exact
-// initialization guidance instead of a dead login form.
+// initialization guidance instead of a dead login form. sessionScope and
+// passkeyBound separate identity confirmation from business admission; an
+// account without a credential for the current RP holds a restricted session
+// that may only complete the binding ceremony. passkeyAvailable reports
+// whether this deployment's relying party can serve ceremonies at all.
 type sessionResponse struct {
 	Authenticated       bool     `json:"authenticated"`
 	User                *userDTO `json:"user,omitempty"`
 	CSRFToken           string   `json:"csrfToken,omitempty"`
 	PlatformInitialized bool     `json:"platformInitialized"`
+	SessionScope        string   `json:"sessionScope,omitempty"`
+	PasskeyBound        bool     `json:"passkeyBound"`
+	PasskeyAvailable    bool     `json:"passkeyAvailable"`
 }
 
 // consumeAuthState resolves and atomically consumes the ceremony cookie.
@@ -99,7 +109,7 @@ func (a *API) handleRegisterOptions(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to start registration.")
 		return
 	}
-	stateID, err := a.store.AuthStates.Create(r.Context(), "register", &userID, &permitID, data, a.cfg.ChallengeTTL)
+	stateID, err := a.store.AuthStates.Create(r.Context(), "register", &userID, &permitID, nil, data, a.cfg.ChallengeTTL)
 	if err != nil {
 		a.logger.Error("store auth state", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to start registration.")
@@ -143,7 +153,9 @@ func (a *API) handleRegisterVerify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = a.store.CompleteEnrollment(r.Context(), *state.PermitID, user, wa.FromCredential(user.ID, credential))
+	pk := wa.FromCredential(user.ID, credential)
+	pk.RPID = a.cfg.RPID
+	err = a.store.CompleteEnrollment(r.Context(), *state.PermitID, user, pk)
 	switch {
 	case err == nil:
 	case errors.Is(err, store.ErrPermitUsed):
@@ -181,7 +193,7 @@ func (a *API) handleLoginOptions(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to start login.")
 		return
 	}
-	stateID, err := a.store.AuthStates.Create(r.Context(), "login", nil, nil, data, a.cfg.ChallengeTTL)
+	stateID, err := a.store.AuthStates.Create(r.Context(), "login", nil, nil, nil, data, a.cfg.ChallengeTTL)
 	if err != nil {
 		a.logger.Error("store auth state", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to start login.")
@@ -247,6 +259,8 @@ func (a *API) handleLoginVerify(w http.ResponseWriter, r *http.Request) {
 }
 
 // finishLogin issues the session cookie and returns the ceremony response.
+// Permit enrollment and discoverable passkey login always mint full sessions:
+// both prove a credential registered under the current relying party.
 func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.User) {
 	token, csrf, _, err := a.store.Sessions.Create(r.Context(), user.ID, a.cfg.SessionTTL)
 	if err != nil {
@@ -254,9 +268,9 @@ func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.Use
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to complete authentication.")
 		return
 	}
-	a.setSessionCookie(w, token)
+	a.setSessionCookie(w, token, a.cfg.SessionTTL)
 	a.clearAuthTxCookie(w)
-	writeJSON(w, http.StatusOK, ceremonyDone{User: toUserDTO(user), CSRFToken: csrf})
+	writeJSON(w, http.StatusOK, ceremonyDone{User: toUserDTO(user), CSRFToken: csrf, SessionScope: model.SessionKindFull, PasskeyBound: true})
 }
 
 // handleSession reports the current session. The CSRF token is stable for
@@ -268,19 +282,34 @@ func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the session.")
 		return
 	}
+	available := a.wa != nil
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
-		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized})
+		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized, PasskeyAvailable: available})
 		return
 	}
 	auth, err := a.store.Sessions.GetAndTouch(r.Context(), sha256Sum64(cookie.Value))
 	if err != nil {
 		a.clearSessionCookie(w)
-		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized})
+		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized, PasskeyAvailable: available})
+		return
+	}
+	bound, err := a.store.Passkeys.CountByUserRP(r.Context(), auth.User.ID, a.cfg.RPID)
+	if err != nil {
+		a.logger.Error("count passkeys", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the session.")
 		return
 	}
 	dto := toUserDTO(auth.User)
-	writeJSON(w, http.StatusOK, sessionResponse{Authenticated: true, User: &dto, CSRFToken: auth.Session.CSRFToken, PlatformInitialized: initialized})
+	writeJSON(w, http.StatusOK, sessionResponse{
+		Authenticated:       true,
+		User:                &dto,
+		CSRFToken:           auth.Session.CSRFToken,
+		PlatformInitialized: initialized,
+		SessionScope:        auth.Session.Kind,
+		PasskeyBound:        bound > 0,
+		PasskeyAvailable:    available,
+	})
 }
 
 // handleLogout revokes the session server-side and clears the cookie.

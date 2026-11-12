@@ -71,10 +71,13 @@ func (s *AuthCodeStore) Create(ctx context.Context, userID uuid.UUID, purpose st
 }
 
 // ExchangeResult is the outcome of a successful code redemption: the signed-in
-// user plus the freshly minted session material.
+// user plus the freshly minted session material. Kind reports whether the
+// session carries full business access or only the restricted registration
+// scope (the account still lacks a credential for the current relying party).
 type ExchangeResult struct {
 	User        model.User
 	SessionID   uuid.UUID
+	Kind        string
 	CookieToken string
 	CSRFToken   string
 	ExpiresAt   time.Time
@@ -84,8 +87,11 @@ type ExchangeResult struct {
 // consumption, purpose enforcement (first-admin activation under the
 // enrollment advisory lock when required), and session creation commit in one
 // transaction, so concurrent redemptions of the same code can never both
-// succeed and a failed session never burns the code.
-func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.Duration) (ExchangeResult, error) {
+// succeed and a failed session never burns the code. When the account owns no
+// credential registered under rpID, the minted session is a short-lived
+// restricted one (restrictedTTL): it proves the identity confirmed by the
+// code and only permits the passkey-binding ceremony.
+func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.Duration, rpID string, restrictedTTL time.Duration) (ExchangeResult, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return ExchangeResult{}, err
@@ -178,6 +184,23 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 		return ExchangeResult{}, ErrCodePurpose
 	}
 
+	// The session scope depends on whether the account already owns a
+	// credential for the current relying party: no credential means the code
+	// only confirms identity, so the session stays restricted until a
+	// passkey-binding ceremony completes.
+	var credentialCount int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM passkeys WHERE user_id = $1 AND rp_id = $2`, userID, rpID,
+	).Scan(&credentialCount); err != nil {
+		return ExchangeResult{}, err
+	}
+	kind := model.SessionKindFull
+	ttl := sessionTTL
+	if credentialCount == 0 {
+		kind = model.SessionKindRestricted
+		ttl = restrictedTTL
+	}
+
 	// Session material is minted inside the same transaction so a failed
 	// insert rolls the code consumption back with it.
 	cookieToken := base32Code()
@@ -185,10 +208,10 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 	sessionID := newUUID()
 	var expiresAt time.Time
 	if err := tx.QueryRow(ctx,
-		`INSERT INTO sessions (id, user_id, token_hash, csrf_token, expires_at)
-		 VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+		`INSERT INTO sessions (id, user_id, kind, token_hash, csrf_token, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))
 		 RETURNING expires_at`,
-		sessionID, userID, sha256Sum([]byte(cookieToken)), csrf, sessionTTL.Seconds(),
+		sessionID, userID, kind, sha256Sum([]byte(cookieToken)), csrf, ttl.Seconds(),
 	).Scan(&expiresAt); err != nil {
 		return ExchangeResult{}, err
 	}
@@ -199,6 +222,7 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 	return ExchangeResult{
 		User:        user,
 		SessionID:   sessionID,
+		Kind:        kind,
 		CookieToken: cookieToken,
 		CSRFToken:   csrf,
 		ExpiresAt:   expiresAt,
