@@ -8,6 +8,7 @@ import SiteBoundary from './components/layout/SiteBoundary';
 import { initLocale, t } from './lib/i18n';
 import { initTheme } from './lib/theme';
 import { navItems } from './lib/navigation';
+import { useDocumentTitle } from './lib/title';
 import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
 import LoginPage from './pages/LoginPage';
 import BindPasskeyPage from './pages/BindPasskeyPage';
@@ -71,6 +72,7 @@ function RequireFull({ status, children }: { status: Status; children: ReactNode
 
 export default function App() {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
+	useDocumentTitle(session.status);
 
 	useEffect(() => {
 		initLocale();
