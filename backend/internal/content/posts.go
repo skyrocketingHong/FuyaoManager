@@ -291,61 +291,99 @@ func (s *Store) GetPost(siteID uuid.UUID, rel string) (Post, error) {
 	return ParsePost(rel, data)
 }
 
-// SavePost validates and atomically writes a post; expectedDigest ("")
-// enforces read-modify-write consistency through the caller.
+// SavePost validates and writes a post under read-modify-write semantics.
+// The digest comparison and the write happen inside one exclusive file lock,
+// so concurrent savers presenting the same old ETag serialize: exactly one
+// wins and the rest observe the moved digest and return ErrConflict. The
+// returned post and digest describe exactly the bytes this call wrote.
 func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Post, error) {
 	if err := post.Validate(); err != nil {
 		return Post{}, err
 	}
 	rel := post.PostPath()
-	if expectedDigest != "" {
-		current, err := s.GetPost(siteID, rel)
-		if errors.Is(err, ErrNotFound) {
-			return Post{}, ErrNotFound
+	var saved Post
+	err := s.withFileLock(siteID, "posts", "posts/"+rel, func() error {
+		if expectedDigest != "" {
+			raw, currentDigest, err := s.ReadFile(siteID, RootContent, "posts/"+rel)
+			if errors.Is(err, ErrNotFound) {
+				return ErrNotFound
+			}
+			if err != nil {
+				return err
+			}
+			if currentDigest != expectedDigest {
+				return ErrConflict
+			}
+			_ = raw
 		}
+		data, err := post.Render()
 		if err != nil {
-			return Post{}, err
+			return err
 		}
-		if current.Digest != expectedDigest {
-			return Post{}, ErrConflict
+		if _, err := s.WriteFile(siteID, RootContent, "posts/"+rel, data); err != nil {
+			return err
 		}
-	}
-	data, err := post.Render()
-	if err != nil {
-		return Post{}, err
-	}
-	if _, err := s.WriteFile(siteID, RootContent, "posts/"+rel, data); err != nil {
-		return Post{}, err
-	}
-	return s.GetPost(siteID, rel)
+		parsed, err := ParsePost(rel, data)
+		if err != nil {
+			return err
+		}
+		parsed.Digest = Digest(data)
+		saved = parsed
+		return nil
+	})
+	return saved, err
 }
 
-// CreatePost saves a new post, refusing to overwrite an existing path.
+// CreatePost saves a new post, refusing to overwrite an existing path. The
+// existence check and the create run inside one lock, so racing creators of
+// the same path cannot both succeed.
 func (s *Store) CreatePost(siteID uuid.UUID, post Post) (Post, error) {
 	if err := post.Validate(); err != nil {
 		return Post{}, err
 	}
-	if _, err := s.GetPost(siteID, post.PostPath()); err == nil {
-		return Post{}, ErrExists
-	} else if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrInvalidPath) {
-		return Post{}, err
-	}
-	return s.SavePost(siteID, post, "")
+	rel := post.PostPath()
+	var saved Post
+	err := s.withFileLock(siteID, "posts", "posts/"+rel, func() error {
+		if _, _, err := s.ReadFile(siteID, RootContent, "posts/"+rel); err == nil {
+			return ErrExists
+		} else if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		data, err := post.Render()
+		if err != nil {
+			return err
+		}
+		if _, err := s.WriteFile(siteID, RootContent, "posts/"+rel, data); err != nil {
+			return err
+		}
+		parsed, err := ParsePost(rel, data)
+		if err != nil {
+			return err
+		}
+		parsed.Digest = Digest(data)
+		saved = parsed
+		return nil
+	})
+	return saved, err
 }
 
-// DeletePost removes one post after digest verification.
+// DeletePost removes one post after digest verification; the check and the
+// removal run inside one lock.
 func (s *Store) DeletePost(siteID uuid.UUID, rel, expectedDigest string) error {
 	if !ValidPostPath(rel) {
 		return ErrInvalidPath
 	}
-	post, err := s.GetPost(siteID, rel)
-	if err != nil {
-		return err
-	}
-	if expectedDigest != "" && post.Digest != expectedDigest {
-		return ErrConflict
-	}
-	return s.Remove(siteID, RootContent, "posts/"+rel)
+	return s.withFileLock(siteID, "posts", "posts/"+rel, func() error {
+		raw, currentDigest, err := s.ReadFile(siteID, RootContent, "posts/"+rel)
+		if err != nil {
+			return err
+		}
+		if expectedDigest != "" && currentDigest != expectedDigest {
+			return ErrConflict
+		}
+		_ = raw
+		return s.Remove(siteID, RootContent, "posts/"+rel)
+	})
 }
 
 func orEmpty(v []string) []string {

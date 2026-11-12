@@ -264,8 +264,8 @@ func TestEdgePublishVisibilityAndReconcile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snippet missing: %v", err)
 	}
-	if !strings.Contains(string(snippet), "http://192.0.2.1:"+itoa(entry.Port)+" {") {
-		t.Fatalf("snippet lacks the private binding:\n%s", snippet)
+	if !strings.Contains(string(snippet), "bind 192.0.2.1") {
+		t.Fatalf("snippet lacks the private bind directive:\n%s", snippet)
 	}
 	if !strings.Contains(string(snippet), filepath.Join(siteRoot, "current")) {
 		t.Fatalf("snippet lacks the current root:\n%s", snippet)

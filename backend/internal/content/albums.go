@@ -1,6 +1,7 @@
 package content
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -112,8 +113,27 @@ func (s *Store) GetAlbumYear(siteID uuid.UUID, year string) (AlbumYear, string, 
 
 // SaveAlbumYear applies an edit to one year document under If-Match
 // semantics. Only title/description/alt and the photo order change; the
-// caller supplies an edit callback receiving the parsed document.
+// caller supplies an edit callback receiving the parsed document. The
+// compare-edit-write sequence runs inside the site's album-metadata lock,
+// serializing against the Node indexer (which the media runner wraps in the
+// same lock) and against concurrent editors.
 func (s *Store) SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest string, edit func(*AlbumYear) error) (AlbumYear, string, error) {
+	if !yearPattern.MatchString(year) {
+		return AlbumYear{}, "", ErrInvalidPath
+	}
+	var saved AlbumYear
+	var newDigest string
+	err := s.WithAlbumMetaLock(context.Background(), siteID, func() error {
+		doc, digest2, err := s.saveAlbumYearLocked(siteID, year, expectedDigest, edit)
+		saved, newDigest = doc, digest2
+		return err
+	})
+	return saved, newDigest, err
+}
+
+// saveAlbumYearLocked implements SaveAlbumYear without taking the lock; the
+// caller must already hold the album-metadata lock.
+func (s *Store) saveAlbumYearLocked(siteID uuid.UUID, year string, expectedDigest string, edit func(*AlbumYear) error) (AlbumYear, string, error) {
 	doc, digest, err := s.GetAlbumYear(siteID, year)
 	if err != nil {
 		return AlbumYear{}, "", err
@@ -161,8 +181,13 @@ func (s *Store) SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest stri
 	if err != nil {
 		return AlbumYear{}, "", err
 	}
+	// Parse the bytes this call wrote (inside the lock) so the response
+	// describes this save, never a concurrent writer's content.
 	saved, _, err := s.GetAlbumYear(siteID, year)
-	return saved, newDigest, err
+	if err != nil {
+		return AlbumYear{}, "", err
+	}
+	return saved, newDigest, nil
 }
 
 func setStr(entry map[string]any, key, value string) {
@@ -236,47 +261,49 @@ func (s *Store) DeleteAlbumPhoto(siteID uuid.UUID, year, filename string, releas
 	if !yearPattern.MatchString(year) || filename == "" || strings.Contains(filename, "/") {
 		return ErrInvalidPath
 	}
-	doc, digest, err := s.GetAlbumYear(siteID, year)
-	if err != nil {
-		return err
-	}
-	if expectedDigest != "" && digest != expectedDigest {
-		return ErrConflict
-	}
-	var target *AlbumPhoto
-	for i := range doc.Photos {
-		if doc.Photos[i].Filename == filename {
-			target = &doc.Photos[i]
-			break
+	return s.WithAlbumMetaLock(context.Background(), siteID, func() error {
+		doc, digest, err := s.GetAlbumYear(siteID, year)
+		if err != nil {
+			return err
 		}
-	}
-	if target == nil {
-		return ErrNotFound
-	}
-	// Reference check: any live/superseded release metadata still listing
-	// this photo's path blocks a hard delete.
-	for _, raw := range releaseJSONs {
-		if strings.Contains(string(raw), target.Path) {
-			return &PhotoInUseError{Path: target.Path}
+		if expectedDigest != "" && digest != expectedDigest {
+			return ErrConflict
 		}
-	}
-	// Remove files: original plus every variant thumbnail.
-	_ = s.Remove(siteID, RootContent, "albums/photos/"+target.Path)
-	for _, variant := range target.Variants {
-		_ = s.Remove(siteID, RootContent, "albums/thumbnails/"+variant.Path)
-	}
-	// Remove the metadata entry through a raw edit.
-	_, _, err = s.SaveAlbumYear(siteID, year, digest, func(edit *AlbumYear) error {
-		kept := edit.Photos[:0]
-		for _, photo := range edit.Photos {
-			if photo.Filename != filename {
-				kept = append(kept, photo)
+		var target *AlbumPhoto
+		for i := range doc.Photos {
+			if doc.Photos[i].Filename == filename {
+				target = &doc.Photos[i]
+				break
 			}
 		}
-		edit.Photos = kept
-		return nil
+		if target == nil {
+			return ErrNotFound
+		}
+		// Reference check: any live/superseded release metadata still listing
+		// this photo's path blocks a hard delete.
+		for _, raw := range releaseJSONs {
+			if strings.Contains(string(raw), target.Path) {
+				return &PhotoInUseError{Path: target.Path}
+			}
+		}
+		// Remove files: original plus every variant thumbnail.
+		_ = s.Remove(siteID, RootContent, "albums/photos/"+target.Path)
+		for _, variant := range target.Variants {
+			_ = s.Remove(siteID, RootContent, "albums/thumbnails/"+variant.Path)
+		}
+		// Remove the metadata entry through the locked raw edit.
+		_, _, err = s.saveAlbumYearLocked(siteID, year, digest, func(edit *AlbumYear) error {
+			kept := edit.Photos[:0]
+			for _, photo := range edit.Photos {
+				if photo.Filename != filename {
+					kept = append(kept, photo)
+				}
+			}
+			edit.Photos = kept
+			return nil
+		})
+		return err
 	})
-	return err
 }
 
 // PhotoInUseError marks a photo still referenced by frozen releases.

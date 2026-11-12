@@ -124,28 +124,34 @@ func (s *Store) GetFootprints(siteID uuid.UUID) (FootprintsDoc, string, error) {
 }
 
 // SaveFootprints validates and writes data/footprints.yaml under If-Match
-// semantics.
+// semantics inside one exclusive lock; the returned document and digest
+// describe exactly the bytes this call wrote.
 func (s *Store) SaveFootprints(siteID uuid.UUID, doc FootprintsDoc, expectedDigest string) (FootprintsDoc, string, error) {
 	if err := doc.Validate(); err != nil {
 		return FootprintsDoc{}, "", err
 	}
-	if expectedDigest != "" {
-		_, current, err := s.GetFootprints(siteID)
+	var saved FootprintsDoc
+	var digest string
+	err := s.withFileLock(siteID, "data", "data/footprints.yaml", func() error {
+		_, currentDigest, err := s.ReadFile(siteID, RootContent, "data/footprints.yaml")
+		if errors.Is(err, ErrNotFound) {
+			currentDigest = Digest(nil)
+		} else if err != nil {
+			return err
+		}
+		if expectedDigest != "" && currentDigest != expectedDigest {
+			return ErrConflict
+		}
+		out, err := yaml.Marshal(&doc)
 		if err != nil {
-			return FootprintsDoc{}, "", err
+			return err
 		}
-		if current != expectedDigest {
-			return FootprintsDoc{}, "", ErrConflict
+		digest, err = s.WriteFile(siteID, RootContent, "data/footprints.yaml", out)
+		if err != nil {
+			return err
 		}
-	}
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return FootprintsDoc{}, "", err
-	}
-	digest, err := s.WriteFile(siteID, RootContent, "data/footprints.yaml", out)
-	if err != nil {
-		return FootprintsDoc{}, "", err
-	}
-	saved, _, err := s.GetFootprints(siteID)
+		saved, _, err = s.GetFootprints(siteID)
+		return err
+	})
 	return saved, digest, err
 }

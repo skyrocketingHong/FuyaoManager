@@ -83,36 +83,45 @@ func (s *Store) GetFriends(siteID uuid.UUID) (FriendsDoc, string, error) {
 	return doc, digest, nil
 }
 
-// SaveFriends validates and atomically writes friends.yaml under If-Match
-// semantics.
+// SaveFriends validates and writes friends.yaml under If-Match semantics.
+// Digest comparison and write run inside one exclusive lock; the returned
+// document and digest describe exactly the bytes this call wrote.
 func (s *Store) SaveFriends(siteID uuid.UUID, doc FriendsDoc, expectedDigest string) (FriendsDoc, string, error) {
 	if err := doc.Validate(); err != nil {
 		return FriendsDoc{}, "", err
 	}
-	if expectedDigest != "" {
-		_, current, err := s.GetFriends(siteID)
+	var saved FriendsDoc
+	var digest string
+	err := s.withFileLock(siteID, "data", "data/friends.yaml", func() error {
+		_, currentDigest, err := s.ReadFile(siteID, RootContent, "data/friends.yaml")
+		if errors.Is(err, ErrNotFound) {
+			currentDigest = Digest(nil)
+		} else if err != nil {
+			return err
+		}
+		if expectedDigest != "" && currentDigest != expectedDigest {
+			return ErrConflict
+		}
+		var buf strings.Builder
+		buf.WriteString("# 友链数据，按状态分组\n")
+		enc := yaml.NewEncoder(&buf)
+		enc.SetIndent(2)
+		if err := enc.Encode(map[string]any{"online": doc.Online, "offline": doc.Offline}); err != nil {
+			return err
+		}
+		if err := enc.Close(); err != nil {
+			return err
+		}
+		data := []byte(buf.String())
+		digest, err = s.WriteFile(siteID, RootContent, "data/friends.yaml", data)
 		if err != nil {
-			return FriendsDoc{}, "", err
+			return err
 		}
-		if current != expectedDigest {
-			return FriendsDoc{}, "", ErrConflict
-		}
-	}
-	var buf strings.Builder
-	buf.WriteString("# 友链数据，按状态分组\n")
-	enc := yaml.NewEncoder(&buf)
-	enc.SetIndent(2)
-	if err := enc.Encode(map[string]any{"online": doc.Online, "offline": doc.Offline}); err != nil {
-		return FriendsDoc{}, "", err
-	}
-	if err := enc.Close(); err != nil {
-		return FriendsDoc{}, "", err
-	}
-	digest, err := s.WriteFile(siteID, RootContent, "data/friends.yaml", []byte(buf.String()))
-	if err != nil {
-		return FriendsDoc{}, "", err
-	}
-	saved, _, err := s.GetFriends(siteID)
+		saved, _, err = s.GetFriends(siteID)
+		return err
+	})
+	// The saved doc was re-parsed inside the lock, so it matches the bytes
+	// this call wrote even under concurrent writers.
 	return saved, digest, err
 }
 
@@ -160,28 +169,35 @@ func (s *Store) GetSocialLinks(siteID uuid.UUID) ([]SocialLink, string, error) {
 	return links, digest, nil
 }
 
-// SaveSocialLinks validates and atomically writes social-links.yaml.
+// SaveSocialLinks validates and writes social-links.yaml under If-Match
+// semantics inside one exclusive lock; the returned list and digest describe
+// exactly the bytes this call wrote.
 func (s *Store) SaveSocialLinks(siteID uuid.UUID, links []SocialLink, expectedDigest string) ([]SocialLink, string, error) {
 	if err := ValidateSocialLinks(links); err != nil {
 		return nil, "", err
 	}
-	if expectedDigest != "" {
-		_, current, err := s.GetSocialLinks(siteID)
+	var saved []SocialLink
+	var digest string
+	err := s.withFileLock(siteID, "data", "data/social-links.yaml", func() error {
+		_, currentDigest, err := s.ReadFile(siteID, RootContent, "data/social-links.yaml")
+		if errors.Is(err, ErrNotFound) {
+			currentDigest = Digest(nil)
+		} else if err != nil {
+			return err
+		}
+		if expectedDigest != "" && currentDigest != expectedDigest {
+			return ErrConflict
+		}
+		out, err := yaml.Marshal(links)
 		if err != nil {
-			return nil, "", err
+			return err
 		}
-		if current != expectedDigest {
-			return nil, "", ErrConflict
+		digest, err = s.WriteFile(siteID, RootContent, "data/social-links.yaml", out)
+		if err != nil {
+			return err
 		}
-	}
-	out, err := yaml.Marshal(links)
-	if err != nil {
-		return nil, "", err
-	}
-	digest, err := s.WriteFile(siteID, RootContent, "data/social-links.yaml", out)
-	if err != nil {
-		return nil, "", err
-	}
-	saved, _, err := s.GetSocialLinks(siteID)
+		saved, _, err = s.GetSocialLinks(siteID)
+		return err
+	})
 	return saved, digest, err
 }

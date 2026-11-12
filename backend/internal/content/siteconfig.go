@@ -1,6 +1,7 @@
 package content
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -81,38 +82,47 @@ func (s *Store) GetSiteConfig(siteID uuid.UUID) (doc SiteConfigDoc, securityCode
 	return doc, doc.Services.Amap.SecurityCode != "", digest, nil
 }
 
-// SaveSiteConfig validates and atomically writes config/site.yaml. The amap
-// security code keeps its stored value unless the request supplies a
-// non-nil replacement through securityCode (empty string clears it); the
-// secret serializes into the YAML naturally (the JSON projection excludes
-// it), so the file always carries exactly what the theme's proxy consumes.
+// SaveSiteConfig validates and writes config/site.yaml under If-Match
+// semantics. The digest comparison, secret preservation, and the write run
+// inside one exclusive lock; the returned document and digest describe
+// exactly the bytes this call wrote. The amap security code keeps its
+// stored value unless the request supplies a non-nil replacement through
+// securityCode (empty string clears it).
 func (s *Store) SaveSiteConfig(siteID uuid.UUID, doc SiteConfigDoc, securityCode *string, expectedDigest string) (SiteConfigDoc, string, error) {
 	if err := validateSiteConfig(&doc); err != nil {
 		return SiteConfigDoc{}, "", err
 	}
-	if expectedDigest != "" {
-		existing, _, current, err := s.GetSiteConfig(siteID)
+	var saved SiteConfigDoc
+	var newDigest string
+	err := s.withFileLock(siteID, "config", "site.yaml", func() error {
+		existing, _, currentDigest, err := s.GetSiteConfig(siteID)
+		if err != nil && !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		if expectedDigest != "" {
+			if err != nil {
+				return err
+			}
+			if currentDigest != expectedDigest {
+				return ErrConflict
+			}
+			// Preserve the stored secret unless explicitly replaced.
+			doc.Services.Amap.SecurityCode = existing.Services.Amap.SecurityCode
+		}
+		if securityCode != nil {
+			doc.Services.Amap.SecurityCode = *securityCode
+		}
+		out, err := yaml.Marshal(&doc)
 		if err != nil {
-			return SiteConfigDoc{}, "", err
+			return err
 		}
-		if current != expectedDigest {
-			return SiteConfigDoc{}, "", ErrConflict
+		newDigest, err = s.WriteFile(siteID, RootConfig, "site.yaml", out)
+		if err != nil {
+			return err
 		}
-		// Preserve the stored secret unless explicitly replaced.
-		doc.Services.Amap.SecurityCode = existing.Services.Amap.SecurityCode
-	}
-	if securityCode != nil {
-		doc.Services.Amap.SecurityCode = *securityCode
-	}
-	out, err := yaml.Marshal(&doc)
-	if err != nil {
-		return SiteConfigDoc{}, "", err
-	}
-	newDigest, err := s.WriteFile(siteID, RootConfig, "site.yaml", out)
-	if err != nil {
-		return SiteConfigDoc{}, "", err
-	}
-	saved, _, _, err := s.GetSiteConfig(siteID)
+		saved, _, _, err = s.GetSiteConfig(siteID)
+		return err
+	})
 	return saved, newDigest, err
 }
 

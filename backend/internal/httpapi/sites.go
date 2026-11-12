@@ -459,9 +459,16 @@ func (a *API) provisionSite(r *http.Request, rec store.SiteRecord, userID uuid.U
 
 // handlePutVisibility switches a site between public and private. Changing
 // visibility re-binds the site's edge entry (private entries answer only on
-// the private-network address, public entries on all interfaces) by
-// re-applying the managed reverse-proxy configuration; the database switch
-// commits first, so a failing re-apply stays repairable and is reported.
+// the private interface via an explicit bind, public entries on all
+// interfaces) by re-applying the managed reverse-proxy configuration; the
+// database switch commits first, so a failing re-apply stays repairable and
+// is reported.
+//
+// A request carrying the database's current value is NOT a no-op: the
+// database saying "private" does not imply the running proxy actually binds
+// the private interface (a previous apply may have failed), so the handler
+// always re-applies and reports the outcome. That makes retry the recovery
+// path for a failed visibility switch.
 func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	siteID, ok := parseSiteID(w, r)
 	if !ok {
@@ -486,19 +493,17 @@ func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth s
 		writeProblem(w, http.StatusForbidden, "forbidden", "Only owners and editors may change site visibility.")
 		return
 	}
-	if rec.Site.Visibility == body.Visibility {
-		writeJSON(w, http.StatusOK, toSiteDTO(rec))
-		return
-	}
-	if err := a.store.Sites.UpdateVisibility(r.Context(), siteID, body.Visibility); err != nil {
-		a.logger.Error("update visibility", "siteId", siteID, "error", err)
-		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to change visibility.")
-		return
+	if rec.Site.Visibility != body.Visibility {
+		if err := a.store.Sites.UpdateVisibility(r.Context(), siteID, body.Visibility); err != nil {
+			a.logger.Error("update visibility", "siteId", siteID, "error", err)
+			writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to change visibility.")
+			return
+		}
 	}
 	if a.edge != nil {
 		if err := a.edge.Reconcile(r.Context()); err != nil {
 			a.logger.Error("edge apply after visibility change", "siteId", siteID, "error", err)
-			writeProblem(w, http.StatusConflict, "edge_apply_failed", "Visibility changed in the database but the entry update failed; retry or contact the operator.")
+			writeProblem(w, http.StatusConflict, "edge_apply_failed", "The visibility is recorded in the database but the site entry update failed; retry to re-apply.")
 			return
 		}
 	}

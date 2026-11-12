@@ -4,6 +4,14 @@
 // executes, Caddy configuration: the snippet contains only addresses, roots,
 // and fixed directives generated from database state — no browser-supplied
 // paths or commands.
+//
+// Consistency model: the database's `sites.current_release_id` is the
+// authority. Edge operations re-read it under the manager lock before
+// touching the on-disk pointer, so a delayed callback from an older publish
+// or rollback can never move `current` backwards; the snippet is always
+// re-rendered from database state, making a late apply idempotent.
+// Visibility retries always re-apply, because "the database says private"
+// does not imply "the running proxy actually binds the private interface".
 package edge
 
 import (
@@ -18,6 +26,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -58,9 +68,40 @@ type entryRow struct {
 	ReleaseDir string
 }
 
-// Manager owns the snippet lifecycle and the current pointers.
+// State is the observed edge health of the manager, exposed for the config
+// surface and diagnostics.
+type State struct {
+	Enabled     bool        `json:"enabled"`
+	InSync      bool        `json:"inSync"`                // the snippet file matches the desired render
+	LastApplied *time.Time  `json:"lastApplied,omitempty"` // last successful apply
+	LastError   string      `json:"lastError,omitempty"`
+	SnippetPath string      `json:"snippetPath,omitempty"`
+	PrivateBind string      `json:"privateBind,omitempty"`
+	PublicHost  string      `json:"publicHost,omitempty"`
+	Sites       []StateSite `json:"sites"`
+}
+
+// StateSite is one published site's edge view.
+type StateSite struct {
+	SiteID     uuid.UUID `json:"siteId"`
+	Slug       string    `json:"slug"`
+	Visibility string    `json:"visibility"`
+	Port       int       `json:"port"`
+	OriginURL  string    `json:"originUrl"`
+	ReleaseDir string    `json:"releaseDir"`
+	CurrentOK  bool      `json:"currentOk"` // the on-disk pointer matches the DB live release
+}
+
+// Manager owns the snippet lifecycle and the current pointers. All mutating
+// operations serialize through mu: rendering, the snippet swap, the
+// validate+reload command, and the current-pointer switch form one critical
+// section per process.
 type Manager struct {
 	cfg Config
+
+	mu          sync.Mutex
+	lastApplied *time.Time
+	lastError   string
 }
 
 // New assembles the manager.
@@ -94,23 +135,55 @@ func (m *Manager) EntryURL(visibility string, port int) string {
 // the live release (publish or rollback commit), so a failure here leaves a
 // consistent, repairable state: the DB is live, the old edge config keeps
 // serving, and Reconcile (or the next publish) repairs the pointer.
+//
+// The pointer switch is guarded by a fresh read of the database authority:
+// when a newer publish or rollback already superseded `release`, the stale
+// callback must not move `current` backwards — it only re-applies the
+// snippet, which renders from the database (the newer state) anyway.
 func (m *Manager) OnLive(ctx context.Context, siteID uuid.UUID, release model.Release) error {
-	if err := m.SwitchCurrent(siteID, release.ReleaseDir); err != nil {
-		return err
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	current, err := m.currentReleaseID(ctx, siteID)
+	if err != nil {
+		return fmt.Errorf("read the live release before switching the edge: %w", err)
+	}
+	if current == release.ID {
+		if err := m.switchCurrentLocked(siteID, release.ReleaseDir); err != nil {
+			return err
+		}
+	} else {
+		m.cfg.Logger.Warn("edge callback superseded; keeping the newer live pointer",
+			"siteId", siteID, "callbackRelease", release.ID, "liveRelease", current)
 	}
 	if !m.Enabled() {
 		return nil
 	}
 	if _, _, err := m.cfg.Entries.EnsureSiteEntry(ctx, siteID, m.cfg.PortMin, m.cfg.PortMax); err != nil {
+		m.lastError = fmt.Sprintf("allocate site entry: %v", err)
 		return fmt.Errorf("allocate site entry: %w", err)
 	}
-	return m.ApplyAll(ctx)
+	return m.applyAllLocked(ctx)
 }
 
-// SwitchCurrent atomically points <ReleasesRoot>/<siteID>/current at the
-// release directory: a temporary symlink is renamed over the old pointer, so
-// readers see either the old or the new release, never a missing path.
-func (m *Manager) SwitchCurrent(siteID uuid.UUID, releaseDir string) error {
+// currentReleaseID reads the site's live release id straight from the
+// database (the authority), independent of any caller's transaction.
+func (m *Manager) currentReleaseID(ctx context.Context, siteID uuid.UUID) (uuid.UUID, error) {
+	var current uuid.UUID
+	err := m.cfg.Pool.QueryRow(ctx,
+		`SELECT current_release_id FROM sites WHERE id = $1`, siteID).Scan(&current)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return current, nil
+}
+
+// switchCurrentLocked atomically points <ReleasesRoot>/<siteID>/current at
+// the release directory: a uniquely named temporary symlink is renamed over
+// the old pointer, so readers see either the old or the new release, never a
+// missing path, and concurrent writers never share a temp name.
+// Caller must hold m.mu.
+func (m *Manager) switchCurrentLocked(siteID uuid.UUID, releaseDir string) error {
 	siteRoot := filepath.Join(m.cfg.ReleasesRoot, siteID.String())
 	target := filepath.Join(siteRoot, releaseDir)
 	if _, err := os.Stat(filepath.Join(target, "release.json")); err != nil {
@@ -132,58 +205,68 @@ func (m *Manager) SwitchCurrent(siteID uuid.UUID, releaseDir string) error {
 }
 
 // Reconcile repairs drift between database live releases, on-disk current
-// pointers, and the rendered snippet. Safe to run at startup and on demand.
+// pointers, and the rendered snippet. Safe to run at startup and on demand;
+// a visibility change re-runs it to make the desired state actually live.
 func (m *Manager) Reconcile(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	rows, err := m.liveRows(ctx)
 	if err != nil {
 		return err
 	}
 	for _, row := range rows {
-		if err := m.SwitchCurrent(row.SiteID, row.ReleaseDir); err != nil {
+		if err := m.switchCurrentLocked(row.SiteID, row.ReleaseDir); err != nil {
 			m.cfg.Logger.Error("edge reconcile pointer", "siteId", row.SiteID, "error", err)
 		}
 	}
 	if !m.Enabled() {
 		return nil
 	}
-	changed := false
 	for _, row := range rows {
-		if _, created, err := m.cfg.Entries.EnsureSiteEntry(ctx, row.SiteID, m.cfg.PortMin, m.cfg.PortMax); err != nil {
+		if _, _, err := m.cfg.Entries.EnsureSiteEntry(ctx, row.SiteID, m.cfg.PortMin, m.cfg.PortMax); err != nil {
 			m.cfg.Logger.Error("edge reconcile entry", "siteId", row.SiteID, "error", err)
-		} else if created {
-			changed = true
 		}
 	}
-	if changed {
-		return m.ApplyAll(ctx)
-	}
-	// Idempotent re-apply keeps the snippet authoritative even after manual
-	// edits; validation failure restores the previous file and is reported.
-	return m.ApplyAll(ctx)
+	// Unconditional re-apply: the database is the authority and a retry after
+	// a failed apply must actually re-run validate+reload — an unchanged
+	// database value never implies the desired state is already applied.
+	return m.applyAllLocked(ctx)
 }
 
 // ApplyAll re-renders and applies the managed snippet for every published
 // site. The previous snippet is restored when validation or reload fails.
 func (m *Manager) ApplyAll(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.applyAllLocked(ctx)
+}
+
+// applyAllLocked implements ApplyAll; caller must hold m.mu.
+func (m *Manager) applyAllLocked(ctx context.Context) error {
 	if !m.Enabled() {
 		return ErrEdgeDisabled
 	}
 	rows, err := m.liveRows(ctx)
 	if err != nil {
+		m.lastError = fmt.Sprintf("read live rows: %v", err)
 		return err
 	}
 	rendered, err := m.render(rows)
 	if err != nil {
+		m.lastError = fmt.Sprintf("render: %v", err)
 		return err
 	}
 	snippetPath := filepath.Join(m.cfg.SnippetDir, "fuyao-admin.caddy")
 	previous, readErr := os.ReadFile(snippetPath)
-	tmp := snippetPath + ".tmp"
+	tmp := snippetPath + ".tmp-" + uuid.NewString()[:8]
 	if err := os.WriteFile(tmp, rendered, 0o640); err != nil {
+		m.lastError = fmt.Sprintf("write snippet: %v", err)
 		return fmt.Errorf("write snippet: %w", err)
 	}
 	if err := os.Rename(tmp, snippetPath); err != nil {
 		_ = os.Remove(tmp)
+		m.lastError = fmt.Sprintf("place snippet: %v", err)
 		return fmt.Errorf("place snippet: %w", err)
 	}
 	if err := m.apply(ctx); err != nil {
@@ -194,10 +277,65 @@ func (m *Manager) ApplyAll(ctx context.Context) error {
 		} else {
 			_ = os.Remove(snippetPath)
 		}
-		return fmt.Errorf("%w: %v", ErrApplyFailed, err)
+		wrapped := fmt.Errorf("%w: %v", ErrApplyFailed, err)
+		m.lastError = wrapped.Error()
+		return wrapped
 	}
+	now := time.Now().UTC()
+	m.lastApplied = &now
+	m.lastError = ""
 	m.cfg.Logger.Info("edge applied", "sites", len(rows))
 	return nil
+}
+
+// State reports the manager's health: whether the snippet on disk matches
+// the desired render, the last apply outcome, and per-site entry state.
+func (m *Manager) State(ctx context.Context) State {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	st := State{
+		Enabled:     m.Enabled(),
+		LastError:   m.lastError,
+		LastApplied: m.lastApplied,
+	}
+	if st.Enabled {
+		st.SnippetPath = filepath.Join(m.cfg.SnippetDir, "fuyao-admin.caddy")
+		st.PrivateBind = m.cfg.PrivateBind
+		st.PublicHost = m.cfg.PublicHost
+	}
+	rows, err := m.liveRows(ctx)
+	if err != nil {
+		if st.LastError == "" {
+			st.LastError = fmt.Sprintf("read live rows: %v", err)
+		}
+		return st
+	}
+	if st.Enabled {
+		if rendered, rerr := m.render(rows); rerr == nil {
+			onDisk, derr := os.ReadFile(st.SnippetPath)
+			st.InSync = derr == nil && bytes.Equal(onDisk, rendered)
+		}
+	}
+	for _, row := range rows {
+		if row.Port == 0 {
+			continue
+		}
+		currentOK := false
+		if link, lerr := os.Readlink(filepath.Join(m.cfg.ReleasesRoot, row.SiteID.String(), "current")); lerr == nil {
+			currentOK = link == row.ReleaseDir
+		}
+		st.Sites = append(st.Sites, StateSite{
+			SiteID:     row.SiteID,
+			Slug:       row.Slug,
+			Visibility: row.Visibility,
+			Port:       row.Port,
+			OriginURL:  m.EntryURL(row.Visibility, row.Port),
+			ReleaseDir: row.ReleaseDir,
+			CurrentOK:  currentOK,
+		})
+	}
+	return st
 }
 
 // apply runs the operator-controlled validate+reload command.
@@ -242,9 +380,14 @@ func (m *Manager) liveRows(ctx context.Context) ([]entryRow, error) {
 }
 
 // render produces the managed snippet: one site block per published site.
-// Private entries bind exactly the private address; public entries bind all
-// interfaces. Roots point at the frozen release trees through the stable
-// `current` pointer and at the site's own album media for /media/albums.
+//
+// Binding: a Caddy site address alone does NOT restrict the listener — the
+// host part is only a match condition and the socket stays wildcard. Private
+// entries therefore carry an explicit `bind <interface>` directive so the
+// port is served on the private interface only; public entries bind all
+// interfaces (no bind directive) unless PublicBind names a specific one.
+// Roots point at the frozen release trees through the stable `current`
+// pointer and at the site's own album media for /media/albums.
 func (m *Manager) render(rows []entryRow) ([]byte, error) {
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Slug < rows[j].Slug })
 	var b bytes.Buffer
@@ -257,14 +400,22 @@ func (m *Manager) render(rows []entryRow) ([]byte, error) {
 		if row.Port == 0 {
 			continue // no entry allocated yet; reconcile assigns one
 		}
-		address := fmt.Sprintf(":%d", row.Port)
-		if row.Visibility == model.SiteVisibilityPrivate {
-			address = urlHostPort(m.cfg.PrivateBind, row.Port)
+		bindHost := ""
+		switch row.Visibility {
+		case model.SiteVisibilityPrivate:
+			bindHost = strings.TrimSpace(m.cfg.PrivateBind)
+		default:
+			if pub := strings.TrimSpace(m.cfg.PublicBind); pub != ":" {
+				bindHost = pub
+			}
 		}
 		releaseRoot := filepath.Join(m.cfg.ReleasesRoot, row.SiteID.String(), "current")
 		photosRoot := filepath.Join(m.cfg.SitesRoot, row.SiteID.String(), "content", "albums", "photos")
 		thumbsRoot := filepath.Join(m.cfg.SitesRoot, row.SiteID.String(), "content", "albums", "thumbnails")
-		fmt.Fprintf(&b, "\nhttp://%s {\n", address)
+		fmt.Fprintf(&b, "\nhttp://:%d {\n", row.Port)
+		if bindHost != "" {
+			fmt.Fprintf(&b, "\tbind %s\n", bindHost)
+		}
 		fmt.Fprintf(&b, "\troot * %s\n", quotePath(releaseRoot))
 		// Static content (indexes, data YAML, fonts, images) is served as
 		// files; only HTML routes fall back to the SPA shell — mirroring the
