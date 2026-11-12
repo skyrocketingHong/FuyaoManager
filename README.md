@@ -171,8 +171,10 @@ See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md). The iteration ledger is
 Server templates (systemd unit, environment samples, Caddy apply helper)
 live in [deploy/fuyao-admin/](./deploy/fuyao-admin/); the bilingual README
 there documents the low-memory build constraints and the managed-snippet
-topology. The currently deployed server still runs the pre-split build; the
-switch plan is documented in the roadmap.
+topology. Production was switched to the standalone FuyaoManager build on
+2026-11-12: the public entrance serves a separate static page and the
+Tailscale entrance serves the console over the same HTTPS hostname. The
+roadmap records deployment verification and the remaining manual acceptance.
 
 ## License
 

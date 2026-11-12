@@ -132,7 +132,7 @@ FUYAO_TEST_THEME_ROOT=/path/to/FuyaoHomepage/site \
 ## 部署
 
 服务器模板（systemd 单元、环境样例、Caddy apply 辅助脚本）位于
-[deploy/fuyao-admin/](./deploy/fuyao-admin/)；该处双语 README 说明小内存构建约束与受管片段拓扑。当前已部署服务器仍运行拆分前构建；切换方案见路线图。
+[deploy/fuyao-admin/](./deploy/fuyao-admin/)；该处双语 README 说明小内存构建约束与受管片段拓扑。2026-11-12 已切换至独立 FuyaoManager 构建：公网入口提供独立静态页，Tailscale 入口经同一 HTTPS 域名提供管理台。部署验证及剩余人工验收见路线图。
 
 ## 许可证
 

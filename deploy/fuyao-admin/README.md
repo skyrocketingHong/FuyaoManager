@@ -9,12 +9,13 @@ Deployment artifacts for the Fuyao management platform on the target server. The
 ```text
 /srv/fuyao-admin/
 ├── current -> releases/<commit-sha>     # the deployed version
-├── releases/<commit-sha>/               # program: binary + console + theme source
+├── releases/<commit-sha>/               # program: binary + console + contracts
 │   ├── fuyao-admin                      # linux/amd64 binary
 │   ├── frontend/                        # built React console (vite dist)
-│   └── theme/                           # controlled source package: package.json,
-│                                        # lockfile, site/ (first theme), contracts/theme/
-│       └── node_modules/                # npm ci output (fuyao-admin-owned)
+│   └── contracts/                       # management HTTP and theme contracts
+├── themes/<theme-id>/<version>/         # independent theme package, site/ and deps
+├── static-page/                         # public page; no management bundle
+├── backups/                             # access-restricted program/DB/config backups
 ├── data/                                # persistent runtime data (never inside releases/)
 │   ├── sites/                           # per-site content/config trees
 │   ├── builds/                          # build task workspaces, snapshots, artifacts
@@ -26,7 +27,7 @@ Deployment artifacts for the Fuyao management platform on the target server. The
 
 Program and data are separated: replacing `current` never touches content, releases, or the database.
 
-## Topology (target: HTTPS domain)
+## Topology (deployed: HTTPS domain)
 
 - The production console lives at `https://manager.fuyaoskyrocket.ing`. The management API listens on loopback only (`127.0.0.1:8787`); Caddy terminates TLS and reverse-proxies.
 - The **public** vhost for that domain serves only the standalone static page in `static-page/` — never the console bundle, and no proxying: API and preview paths get an explicit 404. The template is `caddy/manager.public.caddy.example`; it lives outside the platform-managed snippet directory (which the backend fully re-renders).
@@ -39,41 +40,36 @@ Program and data are separated: replacing `current` never touches content, relea
 ## Files in this directory
 
 - `fuyao-admin.service` — systemd unit (low-privilege user, cgroup memory limit, NODE_OPTIONS heap tuning for the 2 GB host).
-- `config.example.env` — production environment template (HTTPS domain topology).
+- `config.example.env` — public production environment template (HTTPS domain topology); private bind addresses and preview URLs come from operator-local configuration and retain their existing values on upgrade.
 - `fuyao-caddy-apply` — the operator-controlled validate+reload helper installed at `/usr/local/sbin`.
 - `static-page/` — the standalone public landing page (deployed to its own directory, e.g. `/srv/fuyao-admin/static-page`; not part of the console bundle).
 - `caddy/manager.public.caddy.example` — the public vhost template (static page only, explicit 404 for API/preview paths).
 
 ## Deploy / upgrade procedure
 
-1. Build the platform release from this repository's root:
+1. Back up the database, current program and configuration, record the current pointer, and build a separate release from the repository root:
    ```bash
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C backend build -o <stage>/fuyao-admin ./cmd/fuyao-admin
-   npm --prefix frontend ci && npm --prefix frontend run build && cp -R frontend/dist <stage>/frontend
-   cp -R contracts <stage>/contracts
+   manager_stage="$(mktemp -d "${TMPDIR:-/tmp}/fuyao-manager-release.XXXXXX")"
+   mkdir -p "$manager_stage/frontend" "$manager_stage/contracts"
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C backend build -o "$manager_stage/fuyao-admin" ./cmd/fuyao-admin
+   npm --prefix frontend run build
+   cp -R frontend/dist/. "$manager_stage/frontend/"
+   cp -R contracts/. "$manager_stage/contracts/"
+   cp -R deploy/fuyao-admin/static-page "$manager_stage/static-page"
+   chmod 0755 "$manager_stage/fuyao-admin"
    ```
-2. Add the first theme package from its own repository checkout
-   (FuyaoHomepage):
-   ```bash
-   rsync -a --exclude node_modules --exclude .fuyao --exclude build --exclude .svelte-kit --exclude .DS_Store \
-     /path/to/FuyaoHomepage/site/ <stage>/theme/site/
-   cp /path/to/FuyaoHomepage/package.json /path/to/FuyaoHomepage/package-lock.json /path/to/FuyaoHomepage/.npmrc <stage>/theme/
-   ```
-3. Upload to `/srv/fuyao-admin/releases/<sha>/`, `chown -R fuyao-admin:fuyao-admin`, run `npm ci` inside `<stage>/theme` as the service user (or `chown -R` after a root install).
-4. Repoint `current`, `systemctl restart fuyao-admin`.
-5. Re-register the first theme (identity-identical registration refreshes the stored source path):
-   ```bash
-   cd /srv/fuyao-admin/current && . /srv/fuyao-admin/etc/db.env && export FUYAO_ADMIN_DATABASE_URL
-   ./fuyao-admin migrate                 # new migrations, if any
-   ./fuyao-admin register-theme --contracts contracts/theme theme/site
-   ```
-6. Verify: `systemctl is-active fuyao-admin`; the public domain shows only the static page (API paths 404); the private network reaches the console over HTTPS (passkey bind and sign-in); public-IP probes to the management port fail; `journalctl -u fuyao-admin` shows `edge applied`.
+   Run `npm --prefix frontend ci` first for a fresh checkout or changed lockfile. Stop packaging on any failure and keep the live pointer unchanged. Remove the temporary directory when verification is finished.
+2. Keep every registered theme version under `/srv/fuyao-admin/themes/<theme-id>/<version>/`, including its source, package.json, lockfile and installed dependencies. Retain versions referenced by sites. Install dependencies as the service user, or restore ownership after a root install.
+3. Upload into a new `/srv/fuyao-admin/releases/<sha>/`, verify the binary digest and executable mode, and install the public page into its separate `static-page/` directory. When retaining an old environment file, repoint `FUYAO_ADMIN_THEME_CONTRACTS` to the new release's `contracts/theme`, not the pre-split `theme/contracts/theme`.
+4. Stop the management service. From a new-release working directory accessible to the service user, load the operator environment and run the new binary's `migrate`; then run `register-theme` with explicit `--contracts` and each theme package's `site/` path. Only after success, atomically replace `current` and start the service. Do not start a binary requiring unapplied migrations or invoke the service user's CLI from an inaccessible root working directory.
+5. Merge the independent entrance configuration, adapt and validate the complete Caddyfile as the actual Caddy reload user, check that published-site listeners are included, then reload. Grant that user only the required read/traverse and default inherited ACLs on the managed directory: an unreadable import glob may otherwise be silently omitted, so a successful root-only check is insufficient. The public IPv4 is NAT-mapped and cannot be used as a local bind address; the private proxy entrance must bind explicitly. Private DNS and full operator commands stay in the local runbook.
+6. Verify service readiness, trusted TLS, private authentication state and public isolation before deleting old programs. Relocate registered theme sources and historical workspace dependency links first; stop cleanup if lockfiles or installed-dependency records differ. Preserve site content, snapshots and business releases under `data/`.
 
-The currently deployed server still runs the pre-split single-repository
-release (theme contracts and repo root under `<current>/theme`); switch it
-to this layout only when the roadmap's deployment cutover is executed.
+Production was switched to application commit `dc0a4ad` on 2026-11-12,
+with migration 0012 applied and old program directories removed. See M5
+in the roadmap for actual verification and remaining manual acceptance.
 
-Rollback: repoint `current` to the previous release directory and restart; runtime data and the database schema stay compatible within a migration series (downgrades past an applied migration are not supported).
+Rollback: restore the old program from its restricted backup archive if its directory was removed, then restore the corresponding program pointer, environment and entrance configuration together. A pointer change does not downgrade the database. Check migration and authentication semantics before rolling back; restore the last good configuration rather than repeatedly restarting a failing version.
 
 ## Operations
 

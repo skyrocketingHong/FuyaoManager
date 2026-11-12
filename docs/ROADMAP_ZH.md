@@ -6,6 +6,8 @@
 
 ## 已完成
 
+20. **M5 —— 生产切换与旧程序清理**（2026-11-12）：已部署应用提交 `dc0a4ad`、执行迁移 0012，并将两个留存主题版本重新登记到程序 release 之外。`manager.fuyaoskyrocket.ing` 的公网 IPv4 和 IPv6 均提供独立静态页，Tailscale 入口以可信证书提供管理台，后端仅监听回环。公网 DNS 与受限域名分流 DNS 已配置。本轮 Linux 后端构建、前端构建、Caddy adapt/validate/reload 及 11 项 HTTP/TLS 探针通过；另修复并验证重载账号读取受管片段及默认 ACL 继承，最终热重载后原发布站点均可访问；生产协议验证覆盖验证码兑换、受限会话、业务访问拒绝、域名 RP 和必需 UV 的登记选项、Secure 且仅当前主机的 Cookie、注销。站点及业务发布保留；核对依赖锁和安装记录后迁移 16 个历史依赖链接，删除 6 个旧程序目录，数据库、配置和最后良好程序备份单独留存。完整部署证据仅保存在本地 `.fuyao/m4-deploy/m5-20261112-XUCmdA/`。真实认证器仪式、视觉和客户端实际断开重连验收仍由用户执行，未代用户绑定凭据。
+
 19. **M4 —— Passkey 认证恢复、管理台外壳对齐、导航重整、公网静态页与 Tailscale 管理入口**（本仓库，2026-11-12）：认证恢复为"CLI 一次性码确认身份 → 绑定通行密钥 → 进入管理台"。migration 0012 新增 `passkeys.rp_id`（历史行回填 `localhost`——可查证为唯一真实提供过仪式的 RP）、`sessions.kind`（`full`/`restricted`）、`auth_states` 的 `bind` 类型与会话绑定列。`ExchangeCode` 按 RP 分级：账号在当前 RP 下无凭据时只获得短有效期受限登记会话（`FUYAO_ADMIN_REGISTRATION_SESSION_TTL`，默认 30m），仅可读认证状态、调用新增的会话绑定端点 `POST /api/v1/auth/passkey/register/options|verify` 与退出——业务 API 一律 403 `passkey_binding_required`。绑定把凭据连同 RP ID 落库，并在同一事务内签发普通会话、撤销承载仪式的会话；其他受限会话不升级。discoverable 通行密钥登录为日常入口；`login-code` 为恢复入口；旧 permit 登记接口保持首次登记限制。管理台新增 WebAuthn 模块（能力检测、base64url 转换、完整序列化、异常映射）、以通行密钥为主入口的登录页（未初始化时 CLI 指引与兑换表单并存）、绑定页，以及匿名/受限/完整三态守卫与显式错误态。导航有唯一元数据源（`src/lib/navigation`）驱动路由、分组侧栏与选中态；站点上下文边界把不存在/无权限/加载失败分别呈现。外壳对齐参考平台：日夜语义令牌一次计算同时喂给 antd 6 ConfigProvider 与 CSS 变量，208px 侧栏（品牌 → 站点作用域与返回入口 → 分组菜单 → 底部），44px 顶栏 PageHeader 插槽（按账号+路由隔离注册）承载页面筛选/操作/页签，共用 Panel/TablePanel/PageLoading/StatusTag，经 data router 实现未保存离开保护，全部 12 个页面接入。antd 按指示 5 → 6 升级。部署：`manager.fuyaoskyrocket.ing` 公网 vhost 只出 `deploy/fuyao-admin/static-page/` 独立静态页（API/预览路径显式 404、无 SPA fallback），模板在 `deploy/fuyao-admin/caddy/manager.public.caddy.example`；生产环境样例改为 `ADDR=127.0.0.1:8787` + 域名 RP + HTTPS origins；私网 vhost、Split DNS、部署脚本与完整切换手册按公开边界留存本地 `.fuyao/m4-deploy/`。已验证：后端套件在 `fuyao_mvp_test` 全绿，覆盖受限会话、绑定、轮换、重放、跨会话、重复凭据、并发、零密钥补绑、外 RP 凭据（顺带修复 `TestAlbumPipelineRealMedia` 既有短读抖动）；`FUYAO_TEST_THEME_ROOT` 指向真实 FuyaoHomepage 检出后全套再绿（六个真实 Node/SvelteKit 构建）；前端 check/test（85 用例）/build 全绿；OpenAPI + routeSpec + 生成类型一致。Caddy adapt/validate 与全部真实网络项（公网与 Tailscale 可达性、真实认证器、视觉验收）留待运维执行——本轮未部署任何东西。
 
 ## 复核 2026-11-12（Codex 验收，需修改）
@@ -51,4 +53,4 @@
 
 ## 后续（按序，一次一个工作包）
 
-- **M5 —— 部署切换**（服务器）：执行本地运行手册（`.fuyao/m4-deploy/RUNBOOK.md`）：打包落位 release、迁移（0012）、重新登记主题、应用公网与私网 Caddy vhost、原子切换 `current`，并分别在公网与 Tailscale 客户端跑验证矩阵。在此之前线上服务器继续运行拆分前构建。
+- **人工验收**：完成真实认证器绑定、登录和视觉检查，并确认浏览器在 Tailscale 实际断开及重连后的行为。生产切换与程序清理见上方 M5 记录。

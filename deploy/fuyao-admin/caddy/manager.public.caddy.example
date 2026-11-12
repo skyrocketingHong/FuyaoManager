@@ -10,12 +10,10 @@
 # API, the console bundle, and private previews are never proxied here;
 # unknown API paths get an explicit 404, not a 200 HTML page.
 
-manager.fuyaoskyrocket.ing {
-	# Bind the real public address of this host. If the public IP is behind
-	# NAT and not present on any local interface, omit `bind` and rely on the
-	# DNS/firewall boundary instead — never fall back to proxying the Go
-	# service on a wildcard listener to work around a bind failure.
-	bind 149.129.75.59
+(fuyao_manager_public_static) {
+	# Share the existing public listener. The public IPv4 is NAT-mapped,
+	# so it cannot be used as a local bind address. The separate private
+	# vhost must explicitly bind its private interface before proxying.
 
 	# Automatic HTTPS (public ACME). The same certificate also serves the
 	# private-network vhost for this exact hostname.
@@ -23,11 +21,11 @@ manager.fuyaoskyrocket.ing {
 	root * /srv/fuyao-admin/static-page
 
 	# Management surface stays closed on the public network.
-	@api path /api/*
+	@api path /api /api/* /assets /assets/*
 	handle @api {
 		respond 404
 	}
-	@previews path /preview/* /_preview/*
+	@previews path /preview /preview/* /_preview /_preview/*
 	handle @previews {
 		respond 404
 	}
@@ -41,8 +39,17 @@ manager.fuyaoskyrocket.ing {
 	header {
 		Cache-Control "no-store"
 		X-Content-Type-Options "nosniff"
-		- Server
+		-Server
 	}
+}
 
+manager.fuyaoskyrocket.ing {
+	import fuyao_manager_public_static
 	encode gzip
+}
+
+# Direct public-IP HTTP requests receive the same static page. Other
+# hostnames on this listener retain their own routes and HTTPS redirects.
+http://149.129.75.59, http://[2001:470:35:2d8::2] {
+	import fuyao_manager_public_static
 }
