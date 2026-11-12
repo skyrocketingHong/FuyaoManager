@@ -71,11 +71,14 @@ export default function SiteDetailPage() {
 	const state = useSyncExternalStore(detail.subscribe, detail.getSnapshot);
 	const site = state.site ?? boundarySite;
 
-	// Deployment gating: only an explicit ready answer with isolated===false
-	// opens the deployable surfaces; loading and error stay conservative.
-	const edgeReady = edge.kind === 'ready';
-	const isolated = !edgeReady || edge.state.isolated === true;
-	const edgeEnabled = edgeReady && edge.state.enabled === true;
+	// Deployment gating: only an answer for the CURRENT site, explicitly
+	// ready, with isolated===false opens the deployable surfaces — anything
+	// else (loading, error, a mismatched site payload, an absent field) stays
+	// conservative.
+	const trustedEdge =
+		edge.kind === 'ready' && edge.state.site?.siteId === siteId ? edge.state : null;
+	const isolated = !trustedEdge || trustedEdge.isolated !== false;
+	const edgeEnabled = trustedEdge !== null && trustedEdge.enabled === true;
 
 	const refreshEdge = useCallback(async () => {
 		if (!siteId) return;
@@ -115,21 +118,28 @@ export default function SiteDetailPage() {
 
 	useEffect(() => {
 		// A site switch starts from a clean slate: no facts from the previous
-		// site survive into the loading state. The site record itself is not
-		// a trigger — the edge and release requests depend on the siteId only.
+		// site survive into the loading state, and the in-flight action
+		// spinners belonged to the previous site's rows. The site record is
+		// not a trigger — the edge and release requests depend on the siteId
+		// only.
 		setEdge({ kind: 'loading' });
 		setRelease({ kind: 'loading' });
+		setSwitching(false);
+		setReapplying(false);
 		void refreshEdge();
 		void refreshRelease();
 	}, [refreshEdge, refreshRelease]);
 
 	async function handleReapply() {
 		if (!siteId) return;
+		const myGen = generation.current;
 		setReapplying(true);
 		try {
 			await reapplySiteEdge(siteId);
+			if (generation.current !== myGen) return;
 			void messageApi.success(t('edge.applied'));
 		} catch (err) {
+			if (generation.current !== myGen) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
 		} finally {
@@ -140,13 +150,16 @@ export default function SiteDetailPage() {
 
 	async function handleVisibility(publicOn: boolean) {
 		if (!siteId || !site) return;
+		const myGen = generation.current;
 		setSwitching(true);
 		try {
 			const updated = await putSiteVisibility(siteId, publicOn ? 'public' : 'private');
+			if (generation.current !== myGen) return;
 			upsertSite(updated);
 			await detail.load(siteId, async () => {});
 			await refreshEdge();
 		} catch (err) {
+			if (generation.current !== myGen) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
 		} finally {
@@ -156,11 +169,14 @@ export default function SiteDetailPage() {
 
 	async function handleRetryProvision() {
 		if (!siteId) return;
+		const myGen = generation.current;
 		try {
 			const refreshed = await provisionSite(siteId);
+			if (generation.current !== myGen) return;
 			upsertSite(refreshed);
 			await detail.load(siteId, async () => {});
 		} catch (err) {
+			if (generation.current !== myGen) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
 		}
@@ -229,44 +245,46 @@ export default function SiteDetailPage() {
 			</Panel>
 
 			<Panel title={t('edge.title')}>
-				{edge.kind === 'loading' ? (
-					<Typography.Text type="secondary">{t('common.loading')}</Typography.Text>
-				) : edge.kind === 'error' ? (
+				{edge.kind === 'error' ? (
 					<Space wrap>
 						<Typography.Text type="danger">{t('edge.loadFailed')}</Typography.Text>
 						<Button size="small" onClick={() => void refreshEdge()}>
 							{t('common.retry')}
 						</Button>
 					</Space>
-				) : edge.state.isolated ? (
+				) : !trustedEdge ? (
+					// Loading, or a payload that does not belong to this site: no
+					// facts are on display.
+					<Typography.Text type="secondary">{t('common.loading')}</Typography.Text>
+				) : trustedEdge.isolated ? (
 					<Space orientation="vertical" style={{ width: '100%' }}>
 						<Typography.Text type="secondary">{t('edge.isolatedNotice')}</Typography.Text>
-						{edge.state.site?.port ? (
+						{trustedEdge.site?.port ? (
 							<Space wrap>
 								{/* Reservation, not a running origin: rendered as plain
 								    text and gated by currentOk, which only says the
 								    on-disk pointer matches the live release. */}
 								<Typography.Text className="version-text">
-									{edge.state.site.originUrl}
+									{trustedEdge.site.originUrl}
 								</Typography.Text>
-								<StatusTag kind={edge.state.site.currentOk ? 'success' : 'neutral'}>
-									{edge.state.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
+								<StatusTag kind={trustedEdge.site.currentOk ? 'success' : 'neutral'}>
+									{trustedEdge.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
 								</StatusTag>
 							</Space>
 						) : (
 							<Typography.Text type="secondary">{t('edge.pendingEntry')}</Typography.Text>
 						)}
 					</Space>
-				) : edge.state.site?.port ? (
+				) : trustedEdge.site?.port ? (
 					<Space wrap>
-						<a href={edge.state.site.originUrl} target="_blank" rel="noreferrer" className="version-text">
-							{edge.state.site.originUrl}
+						<a href={trustedEdge.site.originUrl} target="_blank" rel="noreferrer" className="version-text">
+							{trustedEdge.site.originUrl}
 						</a>
-						<StatusTag kind={edge.state.inSync ? 'success' : 'warning'}>
-							{edge.state.inSync ? t('edge.inSync') : t('edge.drifted')}
+						<StatusTag kind={trustedEdge.inSync ? 'success' : 'warning'}>
+							{trustedEdge.inSync ? t('edge.inSync') : t('edge.drifted')}
 						</StatusTag>
-						<StatusTag kind={edge.state.site.currentOk ? 'success' : 'neutral'}>
-							{edge.state.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
+						<StatusTag kind={trustedEdge.site.currentOk ? 'success' : 'neutral'}>
+							{trustedEdge.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
 						</StatusTag>
 						{!edgeEnabled ? (
 							<Typography.Text type="secondary">{t('edge.unconfigured')}</Typography.Text>
@@ -281,9 +299,9 @@ export default function SiteDetailPage() {
 								{t('edge.reapply')}
 							</Button>
 						) : null}
-						{edge.state.lastError ? (
+						{trustedEdge.lastError ? (
 							<Typography.Text type="danger" style={{ fontSize: 12 }}>
-								{edge.state.lastError}
+								{trustedEdge.lastError}
 							</Typography.Text>
 						) : null}
 					</Space>

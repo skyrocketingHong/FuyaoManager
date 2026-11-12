@@ -23,8 +23,14 @@ vi.mock('../src/lib/api/management', () => ({
 	finishPasskeyLogin: (...args: unknown[]) => finishPasskeyLogin(...args),
 	logout: (...args: unknown[]) => logout(...args)
 }));
+let authGen = 0;
 vi.mock('../src/lib/api/client', () => ({
-	setCsrfToken: (...args: unknown[]) => setCsrfToken(...args)
+	setCsrfToken: (...args: unknown[]) => setCsrfToken(...args),
+	bumpAuthGeneration: () => {
+		authGen++;
+	},
+	currentAuthGeneration: () => authGen,
+	setUnauthorizedHandler: vi.fn()
 }));
 const createPasskey = vi.fn();
 const getPasskeyAssertion = vi.fn();
@@ -40,6 +46,7 @@ vi.mock('../src/lib/webauthn', async (importOriginal) => {
 beforeEach(() => {
 	vi.clearAllMocks();
 	vi.resetModules();
+	authGen = 0;
 });
 
 const alice = { id: '11111111-1111-1111-1111-111111111111', username: 'alice', displayName: 'Alice' };
@@ -134,5 +141,66 @@ describe('session store', () => {
 		const session = await import('../src/lib/session');
 		const status = await session.signInWithPasskey();
 		expect(status).toBe('authenticated');
+	});
+});
+
+describe('session generation guards', () => {
+	it('a session read landing after a newer ceremony never overwrites the login', async () => {
+		// The stale read starts first and hangs.
+		let resolveRead!: (v: unknown) => void;
+		fetchSession.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveRead = resolve;
+				})
+		);
+		const session = await import('../src/lib/session');
+		const stale = session.loadSession();
+
+		// A fresh login completes while the read is in flight.
+		exchangeAuthCode.mockResolvedValue(fullDone());
+		const status = await session.signInWithCode('code-1');
+		expect(status).toBe('authenticated');
+		expect(session.sessionSnapshot().status).toBe('authenticated');
+
+		// The stale read answers anonymous (with its CSRF clear) and must be
+		// dropped wholesale.
+		resolveRead({ authenticated: false, platformInitialized: true });
+		await stale;
+		expect(session.sessionSnapshot().status).toBe('authenticated');
+		expect(setCsrfToken).not.toHaveBeenCalledWith(null);
+	});
+
+	it('a sign-out finishing after a newer ceremony keeps the fresh session', async () => {
+		let resolveLogout!: () => void;
+		logout.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveLogout = resolve;
+				})
+		);
+		const session = await import('../src/lib/session');
+		const pending = session.signOut();
+
+		exchangeAuthCode.mockResolvedValue(fullDone());
+		await session.signInWithCode('code-1');
+		expect(session.sessionSnapshot().status).toBe('authenticated');
+
+		resolveLogout();
+		await pending;
+		expect(session.sessionSnapshot().status).toBe('authenticated');
+		expect(session.sessionSnapshot().user?.username).toBe('alice');
+	});
+
+	it('expireSession returns an authenticated store to anonymous and clears the CSRF token', async () => {
+		exchangeAuthCode.mockResolvedValue(fullDone());
+		const session = await import('../src/lib/session');
+		await session.signInWithCode('code-1');
+		expect(session.sessionSnapshot().status).toBe('authenticated');
+
+		session.expireSession();
+		expect(session.sessionSnapshot().status).toBe('anonymous');
+		expect(session.sessionSnapshot().user).toBeNull();
+		expect(setCsrfToken).toHaveBeenCalledWith(null);
 	});
 });

@@ -513,3 +513,12 @@ describe('BuildsPage generation guards', () => {
 		expect(vi.mocked(closePreviewLink)).toHaveBeenCalledWith(SITE_A, 'b1-unmount');
 	});
 });
+
+describe('BuildsPage session expiry', () => {
+	it('a real 401 routes the page to the login screen', async () => {
+		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'SiteA'));
+		vi.mocked(listBuilds).mockRejectedValue(new ApiError(401, 'unauthenticated', '', null));
+		mountAt(SITE_A);
+		await waitFor(() => expect(screen.getByText('login')).toBeDefined());
+	});
+});

@@ -9,7 +9,12 @@
  * 'restricted' = identity confirmed, binding still required). A failed
  * session read is an explicit 'error' state — never disguised as anonymous.
  */
-import { setCsrfToken } from '../api/client';
+import {
+	bumpAuthGeneration,
+	currentAuthGeneration,
+	setCsrfToken,
+	setUnauthorizedHandler
+} from '../api/client';
 import {
 	beginPasskeyBinding,
 	beginPasskeyLogin,
@@ -57,9 +62,16 @@ export function sessionSnapshot(): SessionState {
 }
 
 export async function loadSession(): Promise<void> {
+	// A session read that lands after a newer migration (a ceremony, a
+	// sign-out, an expiry) describes a session that no longer exists — its
+	// result, including any CSRF write, is dropped wholesale.
+	const myGen = currentAuthGeneration();
 	try {
 		const info = await fetchSession();
+		if (myGen !== currentAuthGeneration()) return;
 		if (info.authenticated && info.user) {
+			bumpAuthGeneration();
+			setCsrfToken(info.csrfToken ?? null);
 			state = {
 				status: info.sessionScope === 'full' ? 'authenticated' : 'restricted',
 				user: info.user,
@@ -68,6 +80,7 @@ export async function loadSession(): Promise<void> {
 				passkeyAvailable: info.passkeyAvailable
 			};
 		} else {
+			bumpAuthGeneration();
 			setCsrfToken(null);
 			state = {
 				status: 'anonymous',
@@ -78,9 +91,11 @@ export async function loadSession(): Promise<void> {
 			};
 		}
 	} catch {
+		if (myGen !== currentAuthGeneration()) return;
 		// A network/server failure is not "signed out": keep the error
 		// explicit so the shell can offer a retry instead of rendering the
 		// login or initialization screens on a transient outage.
+		bumpAuthGeneration();
 		setCsrfToken(null);
 		state = { ...state, status: 'error', user: null };
 	}
@@ -88,6 +103,10 @@ export async function loadSession(): Promise<void> {
 }
 
 function applyCeremony(done: CeremonyDone): SessionStatus {
+	// A ceremony is a fresh migration: anything in flight that started before
+	// it (a slow sign-out, an old session read, a stale business 401) can no
+	// longer overwrite this state.
+	bumpAuthGeneration();
 	state = {
 		status: done.sessionScope === 'full' ? 'authenticated' : 'restricted',
 		user: done.user,
@@ -128,11 +147,30 @@ export async function bindPasskey(): Promise<SessionStatus> {
 }
 
 export async function signOut(): Promise<void> {
+	// A sign-out that finishes after a newer migration (a login that raced
+	// it) must not clear the fresh session.
+	const myGen = currentAuthGeneration();
 	try {
 		await apiLogout();
 	} finally {
-		setCsrfToken(null);
-		state = { ...state, status: 'anonymous', user: null, passkeyBound: false };
-		emit();
+		if (myGen === currentAuthGeneration()) {
+			bumpAuthGeneration();
+			setCsrfToken(null);
+			state = { ...state, status: 'anonymous', user: null, passkeyBound: false };
+			emit();
+		}
 	}
 }
+
+/** Clears a stale session after a business-request 401: the store returns to
+ * anonymous, so routing reaches the login screen and the authenticated
+ * guards stop bouncing. Registered at the client boundary; ceremony 401s and
+ * network failures never reach it. */
+export function expireSession(): void {
+	bumpAuthGeneration();
+	setCsrfToken(null);
+	state = { ...state, status: 'anonymous', user: null, passkeyBound: false };
+	emit();
+}
+
+setUnauthorizedHandler(expireSession);

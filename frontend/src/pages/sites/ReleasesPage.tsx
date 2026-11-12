@@ -85,21 +85,25 @@ export default function ReleasesPage() {
 
 	const refresh = useCallback(async () => {
 		if (!siteId) return;
+		// A refresh captures the generation at its start: a success path
+		// invoked by an old handler must not bump the epoch with the previous
+		// site's request and overwrite the current site's list.
+		const myGen = generation.current;
 		const my = ++epoch.current;
 		try {
 			const [releaseList, buildList] = await Promise.all([
 				listReleases(siteId),
 				listBuilds(siteId)
 			]);
-			if (my !== epoch.current) return;
+			if (my !== epoch.current || myGen !== generation.current) return;
 			setReleases(releaseList);
 			setSucceeded(buildList.filter((b) => b.status === 'succeeded'));
 			try {
 				const view = await getCurrentRelease(siteId);
-				if (my !== epoch.current) return;
+				if (my !== epoch.current || myGen !== generation.current) return;
 				setCurrent(view);
 			} catch (err) {
-				if (my !== epoch.current) return;
+				if (my !== epoch.current || myGen !== generation.current) return;
 				if (err instanceof ApiError && err.code === 'no_live_release') {
 					setCurrent(null);
 				} else {
@@ -107,7 +111,7 @@ export default function ReleasesPage() {
 				}
 			}
 		} catch (err) {
-			if (my !== epoch.current) return;
+			if (my !== epoch.current || myGen !== generation.current) return;
 			const key = apiErrorKey(err);
 			if (key === 'error.unauthenticated') {
 				navigate('/login');
@@ -132,6 +136,9 @@ export default function ReleasesPage() {
 		setErrorKey(null);
 		setRollbackTarget(null);
 		setEdge({ kind: 'loading' });
+		// In-flight action spinners belong to the previous site's rows.
+		setPublishing(false);
+		setRollingBack(false);
 		siteIdRef.current = siteId;
 		let cancelled = false;
 		getSite(siteId)
@@ -159,12 +166,15 @@ export default function ReleasesPage() {
 		// selector. The action is always bound to a concrete build id.
 		const target = effectiveCandidate;
 		if (!siteId || target === null) return;
+		const myGen = generation.current;
 		setPublishing(true);
 		try {
 			const body: ReleaseCreate = { buildId: target, reasons: ['manual'] };
 			await createRelease(siteId, body);
+			if (generation.current !== myGen) return;
 			await refresh();
 		} catch (err) {
+			if (generation.current !== myGen) return;
 			// A persisted failure record answers application/json with the
 			// failed release; surface its structured detail and refresh the
 			// history so the attempt is visible.
@@ -196,12 +206,15 @@ export default function ReleasesPage() {
 
 	async function handleRollback() {
 		if (!siteId || rollbackTarget === null) return;
+		const myGen = generation.current;
 		setRollingBack(true);
 		try {
 			await rollbackRelease(siteId, rollbackTarget.id);
 			setRollbackTarget(null);
+			if (generation.current !== myGen) return;
 			await refresh();
 		} catch (err) {
+			if (generation.current !== myGen) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
 		} finally {
@@ -212,9 +225,13 @@ export default function ReleasesPage() {
 	const editable = site !== null && canEditSite(site);
 	// Deployment facts: nothing known (loading, fetch failure) counts as
 	// deployable — the isolation presentation is the conservative default.
-	// Deployment gating: only an explicit ready answer with isolated===false
-	// opens the deployable surfaces; loading and error stay conservative.
-	const isolated = edge.kind !== 'ready' || edge.state.isolated === true;
+	// Deployment gating: only an answer for the CURRENT site, explicitly
+	// ready, with isolated===false opens the deployable surfaces — anything
+	// else (loading, error, a mismatched site payload, an absent field) stays
+	// conservative.
+	const trusted =
+		edge.kind === 'ready' && edge.state.site?.siteId === siteId && edge.state.isolated === false;
+	const isolated = !trusted;
 	// Only releases that actually back content block a build from being
 	// published again; failed attempts do not.
 	const releasedBuildIds = new Set(

@@ -37,6 +37,30 @@ export function currentCsrfToken(): string | null {
 	return csrfToken;
 }
 
+// Auth generation: bumped by the session store on every state migration
+// (load, ceremony, sign-out, expiry). A request captures the generation at
+// its start; a 401 that lands after a newer migration is a stale answer
+// about an already-replaced session and must not expire the fresh one.
+let authGeneration = 0;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function bumpAuthGeneration(): void {
+	authGeneration++;
+}
+
+export function currentAuthGeneration(): number {
+	return authGeneration;
+}
+
+/** Registers the handler the client calls for business-request 401s: the
+ * session store clears the stale session and CSRF token there, so routing
+ * can reach the login screen without the authenticated guard bouncing back.
+ * Ceremony 401s and network failures never invoke it, and the client layer
+ * stays free of session imports (no dependency cycle). */
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+	unauthorizedHandler = handler;
+}
+
 interface RequestOptions {
 	body?: unknown;
 	/** Exact ETag from a prior GET, sent as If-Match. */
@@ -50,6 +74,7 @@ export async function api<T>(
 	path: string,
 	opts: RequestOptions = {}
 ): Promise<ApiResult<T>> {
+	const myGen = currentAuthGeneration();
 	const headers: Record<string, string> = {};
 	if (opts.body !== undefined && !opts.multipart) headers['Content-Type'] = 'application/json';
 	if (opts.etag !== undefined) headers['If-Match'] = opts.etag;
@@ -71,6 +96,22 @@ export async function api<T>(
 	const etag = res.headers.get('ETag');
 
 	if (!res.ok) {
+		// A business-request 401 means the session cookie no longer backs this
+		// request: clear the stale session so routing reaches the login screen
+		// instead of bouncing off the authenticated guard. Ceremony 401s
+		// (/api/v1/auth/*) are ordinary failures of the rite itself, and a 401
+		// that lands after a newer session migration describes a session that
+		// no longer exists — neither may touch the current one. Network errors
+		// never reach this branch, so an outage is never disguised as a
+		// sign-out.
+		if (
+			res.status === 401 &&
+			!path.startsWith('/api/v1/auth/') &&
+			myGen === currentAuthGeneration() &&
+			unauthorizedHandler
+		) {
+			unauthorizedHandler();
+		}
 		let code = 'internal_error';
 		let detail = '';
 		let body: unknown;

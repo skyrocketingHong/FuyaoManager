@@ -356,3 +356,93 @@ describe('ReleasesPage isolation facts', () => {
 		expect(findButton(zh['releases.publish'] as string).disabled).toBe(true);
 	});
 });
+
+describe('ReleasesPage cross-site action guards', () => {
+	it('a publish landing after a site switch never overwrites the new site', async () => {
+		const SITE_B = '22222222-2222-2222-2222-222222222222';
+		let navigateRef: ((to: string) => void) | null = null;
+		function NavBridge() {
+			navigateRef = useNavigate();
+			return null;
+		}
+		vi.mocked(getSite).mockImplementation(async (id: string) => ({
+			...site(),
+			siteId: id,
+			slug: id === SITE ? 'blog' : 'other'
+		}));
+		vi.mocked(listBuilds).mockImplementation(async (id: string) =>
+			id === SITE ? [succeededBuild('b1-publish')] : []
+		);
+		vi.mocked(listReleases).mockImplementation(async (id: string) =>
+			id === SITE ? [] : []
+		);
+		vi.mocked(getCurrentRelease).mockImplementation(async (id: string) => {
+			if (id === SITE) {
+				return { release: releaseRow('rel-a', 'b1-publish', 'live'), originUrl: 'http://127.0.0.1:41000' };
+			}
+			throw new ApiError(404, 'no_live_release', '', null);
+		});
+		vi.mocked(getSiteEdge).mockImplementation(async (id: string) => ({
+			...edgeState(false),
+			site: { ...edgeState(false).site, siteId: id }
+		}));
+		let resolvePublish!: (v: Release) => void;
+		vi.mocked(createRelease).mockImplementation(
+			() =>
+				new Promise<Release>((resolve) => {
+					resolvePublish = resolve;
+				})
+		);
+
+		render(
+			<ConfigProvider>
+				<MemoryRouter initialEntries={[`/sites/${SITE}/releases`]}>
+					<NavBridge />
+					<Routes>
+						<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
+						<Route path="/login" element={<div>login</div>} />
+					</Routes>
+				</MemoryRouter>
+			</ConfigProvider>
+		);
+		await waitFor(() => expect(findButton(zh['releases.publish'] as string).disabled).toBe(false));
+
+		await act(async () => {
+			fireEvent.click(findButton(zh['releases.publish'] as string));
+		});
+		// Switch to site B while the publish is in flight.
+		await act(async () => {
+			navigateRef?.(`/sites/${SITE_B}/releases`);
+		});
+		await waitFor(() => expect(screen.getByText(zh['error.noLiveRelease'] as string)).toBeDefined());
+
+		await act(async () => {
+			resolvePublish(releaseRow('rel-b', 'b1-publish', 'live'));
+			for (let i = 0; i < 12; i++) await Promise.resolve();
+		});
+
+		// Site B's empty history is untouched; no error surfaced from the
+		// previous site's action.
+		expect(vi.mocked(createRelease)).toHaveBeenCalledWith(SITE, expect.anything());
+		expect(screen.getByText(zh['error.noLiveRelease'] as string)).toBeDefined();
+		expect(screen.queryByText('b1-publi')).toBeNull();
+	});
+});
+
+describe('ReleasesPage payload identity', () => {
+	it('a ready payload for another site keeps publish and rollback disabled', async () => {
+		const b1 = succeededBuild('b1-foreign');
+		primeState([b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		vi.mocked(getSiteEdge).mockResolvedValue({
+			...edgeState(false),
+			site: { ...edgeState(false).site, siteId: '99999999-9999-9999-9999-999999999999' }
+		});
+		mount();
+		await act(async () => {
+			for (let i = 0; i < 12; i++) await Promise.resolve();
+		});
+		expect(findButton(zh['releases.publish'] as string).disabled).toBe(true);
+		expect(findButton(zh['releases.rollback'] as string).disabled).toBe(true);
+		expect(screen.queryByText(zh['releases.open'] as string)).toBeNull();
+	}, 15000);
+});

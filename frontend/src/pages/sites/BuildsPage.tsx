@@ -76,6 +76,10 @@ export default function BuildsPage() {
 		setSite(null);
 		setBuilds(null);
 		setErrorKey(null);
+		// In-flight action spinners belong to the previous site's rows.
+		setCreating(false);
+		setOpening(null);
+		setClosing(null);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {

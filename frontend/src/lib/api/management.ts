@@ -47,8 +47,10 @@ export function canEditSite(site: Site): boolean {
 }
 
 export async function fetchSession(): Promise<SessionInfo> {
+	// The CSRF write happens in the session store only after its generation
+	// guard accepts the read — a stale response must never touch the token
+	// a newer login installed.
 	const { data } = await api<SessionInfo>('GET', '/api/v1/session');
-	setCsrfToken(data.csrfToken ?? null);
 	return data;
 }
 
@@ -63,8 +65,10 @@ export async function exchangeAuthCode(code: string): Promise<CeremonyDone> {
 }
 
 export async function logout(): Promise<void> {
+	// The CSRF clear happens in the session store only when the sign-out's
+	// generation guard accepts it — a late logout must not erase the token
+	// of a session that raced past it.
 	await api<void>('POST', '/api/v1/auth/logout', { body: {} });
-	setCsrfToken(null);
 }
 
 export type CreationOptionsEnvelope = components['schemas']['CreationOptionsEnvelope'];

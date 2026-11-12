@@ -234,3 +234,22 @@ describe('SiteDetailPage edge-fact lifecycle', () => {
 		expect(document.body.textContent).not.toContain(zh['edge.isolatedNotice']);
 	});
 });
+
+describe('SiteDetailPage payload identity', () => {
+	it('a ready payload for another site stays unknown: nothing deployable, no facts shown', async () => {
+		vi.mocked(getSiteEdge).mockResolvedValue({
+			...edgeState(SITE_B, 41001, false),
+			site: { ...edgeState(SITE_B, 41001, false).site, siteId: SITE_B }
+		});
+		mountAt(SITE_A);
+		// The payload is ready but carries another site's identity: it stays
+		// unknown for this page.
+		await waitFor(() => expect(vi.mocked(getSiteEdge)).toHaveBeenCalledWith(SITE_A));
+		await act(async () => {
+			for (let i = 0; i < 12; i++) await Promise.resolve();
+		});
+		expect(findSwitch().disabled).toBe(true);
+		expect(screen.queryByText(zh['edge.isolatedNotice'])).toBeNull();
+		expect(document.querySelector('a[href="http://127.0.0.1:41001"]')).toBeNull();
+	});
+});
