@@ -1,12 +1,12 @@
 openapi: 3.0.3
 info:
-  title: Fuyao Management API
+  title: FuyaoManager Management API
   version: 0.1.0
   license:
     name: AGPL-3.0-only
     url: https://www.gnu.org/licenses/agpl-3.0.html
   description: |
-    Local development MVP of the FuyaoHomepage management backend.
+    Management API of FuyaoManager, the site and content management platform.
 
     Scope of this contract (and of the implementation it describes):
 
@@ -382,17 +382,9 @@ paths:
                       }
                     csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
                 anonymous:
-                  value:
-                    {
-                      'authenticated': false,
-                      'platformInitialized': true
-                    }
+                  value: { 'authenticated': false, 'platformInitialized': true }
                 uninitialized:
-                  value:
-                    {
-                      'authenticated': false,
-                      'platformInitialized': false
-                    }
+                  value: { 'authenticated': false, 'platformInitialized': false }
         default:
           $ref: '#/components/responses/Problem'
 
@@ -462,12 +454,7 @@ paths:
               $ref: '#/components/schemas/SiteCreate'
             examples:
               minimal:
-                value:
-                  {
-                    'slug': 'personal',
-                    'name': 'My Homepage',
-                    'defaultLocale': 'zh-CN'
-                  }
+                value: { 'slug': 'personal', 'name': 'My Homepage', 'defaultLocale': 'zh-CN' }
               withTheme:
                 value:
                   {
@@ -477,7 +464,7 @@ paths:
                     'visibility': 'private',
                     'themeId': 'fuyao-homepage',
                     'themeVersion': '27.1.1',
-                    'themeConfig': { }
+                    'themeConfig': {}
                   }
       responses:
         '201':

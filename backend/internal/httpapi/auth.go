@@ -8,9 +8,9 @@ import (
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
 // ceremonyDone is the response body of a completed registration or login: the

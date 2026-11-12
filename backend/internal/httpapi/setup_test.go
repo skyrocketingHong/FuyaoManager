@@ -23,12 +23,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
 // repoRoot resolves the repository root from this test file's location.
@@ -38,8 +38,40 @@ func repoRoot(t *testing.T) string {
 	if !ok {
 		t.Fatal("cannot locate the test file")
 	}
-	return filepath.Join(filepath.Dir(file), "..", "..", "..", "..")
+	return filepath.Join(filepath.Dir(file), "..", "..", "..")
 }
+
+// testThemeRoot resolves the external real first theme (a FuyaoHomepage
+// site/ checkout) for integration tests that exercise real Node builds.
+// Set FUYAO_TEST_THEME_ROOT to the theme root; without it those tests skip
+// with an explicit pointer to the cross-repository entry, so a standalone
+// clone still runs every platform-only surface.
+func testThemeRoot(t *testing.T) string {
+	t.Helper()
+	root := os.Getenv("FUYAO_TEST_THEME_ROOT")
+	if root == "" {
+		t.Skip("FUYAO_TEST_THEME_ROOT unset: real-first-theme integration tests need a FuyaoHomepage site/ checkout (see docs/ROADMAP.md)")
+	}
+	if _, err := os.Stat(filepath.Join(root, "theme.json")); err != nil {
+		t.Fatalf("FUYAO_TEST_THEME_ROOT %s has no theme.json: %v", root, err)
+	}
+	return root
+}
+
+// fixtureThemeRoot returns the minimal contract-valid theme shipped with the
+// repository. It covers catalog, selection, and registration surfaces that
+// need a valid manifest but no real build.
+func fixtureThemeRoot(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(repoRoot(t), "backend", "internal", "httpapi", "testdata", "theme")
+}
+
+// The fixture theme's registered identity, kept in sync with
+// testdata/theme/{theme,version}.json.
+const (
+	fixtureThemeID      = "manager-test-theme"
+	fixtureThemeVersion = "1.0.0"
+)
 
 // testEnv is one integration-test world: a dedicated PostgreSQL schema with
 // real migrations, the real handler stack, and a loopback HTTP server that

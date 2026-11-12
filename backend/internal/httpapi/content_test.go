@@ -11,11 +11,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // contentWorld provisions one owner, one site, and wires the content store
@@ -41,7 +41,7 @@ func contentWorld(t *testing.T) (*testEnv, *tclient, string) {
 	if err != nil {
 		t.Fatalf("provisioner: %v", err)
 	}
-	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
+	provisioner.SeedFaviconDir = filepath.Join(fixtureThemeRoot(t), "static", "favicon")
 	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
@@ -319,6 +319,7 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real Node/SvelteKit build")
 	}
+	themeRoot := testThemeRoot(t)
 	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
 	t.Cleanup(func() { _ = buildrunner.MakeTreeWritable(buildsRoot) })
 
@@ -380,12 +381,12 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("provisioner: %v", err)
 	}
-	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
+	provisioner.SeedFaviconDir = filepath.Join(themeRoot, "static", "favicon")
 	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
-	registerFirstTheme(t, env)
-	selectThemeForSite(t, c, mustUUID(siteID), "fuyao-homepage", themeVersionFromCatalog(t, env))
+	registerThemeDir(t, env, themeRoot)
+	selectThemeForSite(t, c, mustUUID(siteID), themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// Content edits through the API.
 	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", postBody("tech", "published-one", "Published One", false), nil); status != http.StatusCreated {

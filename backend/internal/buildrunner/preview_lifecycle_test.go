@@ -12,7 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 type lifecycleTarget struct{ path string }

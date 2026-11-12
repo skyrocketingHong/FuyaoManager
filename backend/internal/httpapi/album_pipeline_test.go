@@ -17,13 +17,13 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
 )
 
 // tinyJPEGBytes is a real 1x1 JPEG.
@@ -39,6 +39,7 @@ func TestAlbumPipelineRealMedia(t *testing.T) {
 	if testing.Short() {
 		t.Skip("real Node/SvelteKit build")
 	}
+	themeRoot := testThemeRoot(t)
 	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
 	t.Cleanup(func() { _ = buildrunner.MakeTreeWritable(buildsRoot) })
 
@@ -106,12 +107,12 @@ func TestAlbumPipelineRealMedia(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	provisioner.SeedFaviconDir = filepath.Join(repoRoot(t), "site", "static", "favicon")
+	provisioner.SeedFaviconDir = filepath.Join(themeRoot, "static", "favicon")
 	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatal(err)
 	}
-	registerFirstTheme(t, env)
-	selectThemeForSite(t, c, mustUUID(siteID), "fuyao-homepage", themeVersionFromCatalog(t, env))
+	registerThemeDir(t, env, themeRoot)
+	selectThemeForSite(t, c, mustUUID(siteID), themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// Two real uploads.
 	p1, err := contentStore.StoreUpload(site.Site.ID, bytes.NewReader(tinyJPEGBytes), int64(len(tinyJPEGBytes)))
@@ -127,7 +128,7 @@ func TestAlbumPipelineRealMedia(t *testing.T) {
 	runIndexer := func(extraArgs ...string) {
 		t.Helper()
 		albumRoot := filepath.Join(contentStore.ContentRoot(site.Site.ID), "albums")
-		args := append([]string{filepath.Join(repoRoot(t), "site", "scripts", "generate-album-index.js"), "--no-rename"}, extraArgs...)
+		args := append([]string{filepath.Join(themeRoot, "scripts", "generate-album-index.js"), "--no-rename"}, extraArgs...)
 		indexer := exec.Command("node", args...)
 		indexer.Env = append([]string{
 			"PATH=" + os.Getenv("PATH"),

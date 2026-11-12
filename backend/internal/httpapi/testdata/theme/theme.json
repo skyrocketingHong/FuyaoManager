@@ -1,0 +1,19 @@
+{
+	"contract": "fuyao.theme.manifest/v1",
+	"id": "manager-test-theme",
+	"version": "1.0.0",
+	"name": "FuyaoManager test theme",
+	"description": "Minimal contract-valid theme shipped with the platform for catalog and selection tests; it never builds.",
+	"adapter": "node22-sveltekit-static",
+	"inputProtocol": "fuyao.theme.build-input/v1",
+	"capabilities": ["blog"],
+	"configSchema": {
+		"file": "theme.config.schema.json",
+		"format": "json-schema-2020-12"
+	},
+	"outputs": {
+		"spaFallback": "200.html",
+		"urlConventions": ["posts", "blog-rss", "sitemap"],
+		"requiredArtifacts": []
+	}
+}

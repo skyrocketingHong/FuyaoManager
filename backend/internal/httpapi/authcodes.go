@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // exchangeRateLimit bounds code-redemption attempts per client address. The

@@ -88,7 +88,7 @@ func Load() (Config, error) {
 		Addr:                envDefault(EnvAddr, "127.0.0.1:8787"),
 		TrustedHosts:        csvEnv(EnvTrustedHosts, ""),
 		RPID:                envDefault(EnvRPID, "localhost"),
-		RPDisplayName:       envDefault(EnvRPName, "Fuyao Admin"),
+		RPDisplayName:       envDefault(EnvRPName, "FuyaoManager"),
 		ThemeContractsDir:   envDefault(EnvThemeContractsDir, ""),
 		RepoRoot:            envDefault(EnvRepoRoot, ""),
 		SitesRoot:           envDefault(EnvSitesRoot, ""),

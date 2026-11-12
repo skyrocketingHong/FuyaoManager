@@ -4,8 +4,8 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // handleGetSiteEdge returns the managed-entry view for one site: the

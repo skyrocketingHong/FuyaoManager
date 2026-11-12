@@ -6,7 +6,7 @@ package main
 import (
 	"os"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/cli"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/cli"
 )
 
 func main() {

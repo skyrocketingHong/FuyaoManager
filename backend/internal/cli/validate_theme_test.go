@@ -8,8 +8,8 @@ import (
 )
 
 // themeContractDir points at the repository contract directory from this
-// package's directory (repo/admin/backend/internal/cli).
-const themeContractDir = "../../../../contracts/theme"
+// package's directory (repo/backend/internal/cli).
+const themeContractDir = "../../../contracts/theme"
 
 func fixture(t *testing.T, rel string) string {
 	t.Helper()

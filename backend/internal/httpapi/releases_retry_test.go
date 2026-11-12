@@ -14,9 +14,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
 )
 
 // flakyContracts injects exactly one ValidateRelease failure, then defers to

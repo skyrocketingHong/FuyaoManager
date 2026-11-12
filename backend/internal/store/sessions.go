@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
 
 // SessionStore persists server-side sessions. The cookie token is stored as

@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
 
 // One-time code purposes. An "init" code binds the first administrator

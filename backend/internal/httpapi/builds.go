@@ -9,8 +9,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // BuildEnqueuer hands a freshly created build to the executor. buildrunner.

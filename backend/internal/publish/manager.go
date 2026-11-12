@@ -21,9 +21,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // ReleaseContract validates release.json documents against the authoritative

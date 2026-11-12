@@ -2,7 +2,7 @@
 
 [English](./README.md) | 简体中文
 
-FuyaoHomepage 内容管理系统的 Go 后端：真实 PostgreSQL 持久化、CLI 一次性码认证、网页建站与目录供应、主题登记与选择、快照构建与私有预览、发布与回滚管线。React 管理台（`admin/frontend`）与该 API 同源通信。
+FuyaoManager 内容管理系统的 Go 后端：真实 PostgreSQL 持久化、CLI 一次性码认证、网页建站与目录供应、主题登记与选择、快照构建与私有预览、发布与回滚管线。React 管理台（`frontend`）与该 API 同源通信。
 
 ## 状态与边界
 
@@ -28,7 +28,7 @@ FuyaoHomepage 内容管理系统的 Go 后端：真实 PostgreSQL 持久化、CL
 ## 目录结构
 
 ```text
-admin/backend/
+backend/
 ├── cmd/fuyao-admin/          CLI 入口
 ├── internal/cli/             migrate / serve / init-admin / login-code / revoke-sessions / bootstrap-admin / create-site / validate-theme / register-theme
 ├── internal/config/          环境变量配置与校验
@@ -82,7 +82,7 @@ HTTP 契约位于仓库根目录 `contracts/openapi/management.yaml`，只描述
 ## 同源联调拓扑
 
 管理前端开发服务器运行在 `http://localhost:5174`，并将 `/api` 代理到
-`127.0.0.1:8787`（见 `admin/frontend/vite.config.ts`）。浏览器只与
+`127.0.0.1:8787`（见 `frontend/vite.config.ts`）。浏览器只与
 `http://localhost:5174` 通信，会话 Cookie 因此同为第一方且同源。
 localhost 页面直连 `http://127.0.0.1:8787` 属于跨站上下文（IP 字面量与主机名永远不同站），
 SameSite Cookie 会被丢弃，请勿使用该拓扑。生产环境由 Go 服务直接托管构建后的管理台
@@ -91,7 +91,7 @@ SameSite Cookie 会被丢弃，请勿使用该拓扑。生产环境由 Go 服务
 ## 快速开始（本地开发）
 
 ```bash
-# 在 admin/backend 目录下
+# 在 backend 目录下
 export FUYAO_ADMIN_DATABASE_URL='postgres://user:pass@127.0.0.1:5432/fuyao_admin'  # 本地 DSN
 
 go run ./cmd/fuyao-admin migrate
@@ -138,7 +138,7 @@ Passkey 端点（`/api/v1/auth/register/*`、`/api/v1/auth/login/*`）与已存�
 集成测试连接真实 PostgreSQL，每个测试创建随机命名的独立 schema（结束后删除）：
 
 ```bash
-# 在 admin/backend 目录下
+# 在 backend 目录下
 FUYAO_ADMIN_TEST_DSN='postgres://user@/fuyao_mvp_test?host=/path/to/socket&port=5432' go test ./...
 ```
 
@@ -151,7 +151,7 @@ FUYAO_ADMIN_TEST_DSN='postgres://user@/fuyao_mvp_test?host=/path/to/socket&port=
 ## 验证
 
 ```bash
-cd admin/backend
+cd backend
 gofmt -l .
 go vet ./...
 go test ./...

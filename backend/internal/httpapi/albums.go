@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // handleGetAlbums returns the album index (years, totals, devices).

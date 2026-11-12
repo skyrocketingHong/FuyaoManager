@@ -7,7 +7,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
 
 // Enrollment closure errors surfaced to the API layer.

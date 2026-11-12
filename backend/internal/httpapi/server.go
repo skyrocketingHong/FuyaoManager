@@ -16,10 +16,10 @@ import (
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // Cookie and header names.

@@ -12,7 +12,7 @@ import (
 // repoRoot resolves the repository root from this test file's location.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	return filepath.Join("..", "..", "..", "..")
+	return filepath.Join("..", "..", "..")
 }
 
 func contractsDir(t *testing.T) string {
@@ -20,14 +20,23 @@ func contractsDir(t *testing.T) string {
 	return filepath.Join(repoRoot(t), "contracts", "theme")
 }
 
-// TestLoadFirstTheme loads the real site/ registration of fuyao-homepage: the
-// first theme must register from its existing theme.json and config schema.
+// fixtureThemeRoot points at the repository's bundled contract-valid theme
+// (see internal/httpapi/testdata/theme); registration of a real external
+// theme is exercised through FUYAO_TEST_THEME_ROOT in the httpapi build
+// tests.
+func fixtureThemeRoot(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(repoRoot(t), "backend", "internal", "httpapi", "testdata", "theme")
+}
+
+// TestLoadFirstTheme loads the bundled fixture theme: it must register from
+// its existing theme.json and config schema.
 func TestLoadFirstTheme(t *testing.T) {
-	theme, err := LoadThemeRoot(context.Background(), contractsDir(t), filepath.Join(repoRoot(t), "site"))
+	theme, err := LoadThemeRoot(context.Background(), contractsDir(t), fixtureThemeRoot(t))
 	if err != nil {
-		t.Fatalf("load site theme: %v", err)
+		t.Fatalf("load fixture theme: %v", err)
 	}
-	if theme.ThemeID != "fuyao-homepage" || theme.Version == "" {
+	if theme.ThemeID != "manager-test-theme" || theme.Version == "" {
 		t.Fatalf("unexpected identity %s@%s", theme.ThemeID, theme.Version)
 	}
 	if theme.Adapter != "node22-sveltekit-static" {
@@ -40,7 +49,7 @@ func TestLoadFirstTheme(t *testing.T) {
 		t.Fatalf("source path %q must be absolute", theme.SourcePath)
 	}
 	// The digest covers the exact theme.json bytes on disk.
-	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "site", "theme.json"))
+	raw, err := os.ReadFile(filepath.Join(fixtureThemeRoot(t), "theme.json"))
 	if err != nil {
 		t.Fatalf("read theme.json: %v", err)
 	}
@@ -51,15 +60,15 @@ func TestLoadFirstTheme(t *testing.T) {
 }
 
 // TestLoadRelativeThemeRoot proves a relative theme-root spelling (the common
-// `../../site` CLI invocation) resolves to the same absolute real path instead
+// `../<theme>` CLI invocation) resolves to the same absolute real path instead
 // of failing or recording a relative source.
 func TestLoadRelativeThemeRoot(t *testing.T) {
-	root := filepath.Join(repoRoot(t), "site")
+	root := fixtureThemeRoot(t)
 	absTheme, err := LoadThemeRoot(context.Background(), contractsDir(t), root)
 	if err != nil {
 		t.Fatalf("absolute load: %v", err)
 	}
-	relTheme, err := LoadThemeRoot(context.Background(), contractsDir(t), filepath.Join("..", "..", "..", "..", "site"))
+	relTheme, err := LoadThemeRoot(context.Background(), contractsDir(t), filepath.Join("..", "httpapi", "testdata", "theme"))
 	if err != nil {
 		t.Fatalf("relative load: %v", err)
 	}

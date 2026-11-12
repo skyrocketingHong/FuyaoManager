@@ -1,5 +1,5 @@
 {
-	"name": "fuyao-admin-frontend",
+	"name": "fuyao-manager-frontend",
 	"private": true,
 	"version": "0.1.0",
 	"type": "module",
@@ -9,9 +9,9 @@
 		"preview": "vite preview",
 		"check": "tsc --noEmit",
 		"test": "vitest run",
-		"api:generate": "openapi-typescript ../../contracts/openapi/management.yaml -o src/lib/api/schema.d.ts",
-		"api:check": "sh -c 'openapi-typescript ../../contracts/openapi/management.yaml -o src/lib/api/schema.generated.tmp.d.ts; status=$?; if [ $status -ne 0 ]; then rm -f src/lib/api/schema.generated.tmp.d.ts; exit $status; fi; diff src/lib/api/schema.d.ts src/lib/api/schema.generated.tmp.d.ts; diffstatus=$?; rm -f src/lib/api/schema.generated.tmp.d.ts; exit $diffstatus'",
-		"api:lint": "redocly lint ../../contracts/openapi/management.yaml --format stylish"
+		"api:generate": "openapi-typescript ../contracts/openapi/management.yaml -o src/lib/api/schema.d.ts",
+		"api:check": "sh -c 'openapi-typescript ../contracts/openapi/management.yaml -o src/lib/api/schema.generated.tmp.d.ts; status=$?; if [ $status -ne 0 ]; then rm -f src/lib/api/schema.generated.tmp.d.ts; exit $status; fi; diff src/lib/api/schema.d.ts src/lib/api/schema.generated.tmp.d.ts; diffstatus=$?; rm -f src/lib/api/schema.generated.tmp.d.ts; exit $diffstatus'",
+		"api:lint": "redocly lint ../contracts/openapi/management.yaml --format stylish"
 	},
 	"devDependencies": {
 		"@redocly/cli": "^1.34.2",

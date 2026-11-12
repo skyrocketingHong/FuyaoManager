@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/testauth"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/testauth"
 )
 
 // setupAtVersion provisions the test world at an older schema version by

@@ -16,9 +16,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themeregistry"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeregistry"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
 type themeListResp struct {
@@ -33,12 +33,14 @@ type siteThemeResp struct {
 	Revision    int64             `json:"revision"`
 }
 
-// registerFirstTheme registers the real site/ fuyao-homepage manifest into
-// the test world through the operator registration path.
+// registerFirstTheme registers the repository's contract-valid fixture theme
+// into the test world through the operator registration path. Real-theme
+// (fuyao-homepage) registration happens through registerThemeDir with
+// FUYAO_TEST_THEME_ROOT in the build tests.
 func registerFirstTheme(t *testing.T, env *testEnv) {
 	t.Helper()
 	_, created, err := themeregistry.Register(context.Background(), env.store.Themes,
-		filepath.Join(repoRoot(t), "contracts", "theme"), filepath.Join(repoRoot(t), "site"))
+		filepath.Join(repoRoot(t), "contracts", "theme"), fixtureThemeRoot(t))
 	if err != nil {
 		t.Fatalf("register first theme: %v", err)
 	}
@@ -115,7 +117,7 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 		t.Fatalf("expected one theme, got %d", len(list.Themes))
 	}
 	entry := list.Themes[0]
-	if entry.ThemeID != "fuyao-homepage" || entry.Adapter != "node22-sveltekit-static" {
+	if entry.ThemeID != fixtureThemeID || entry.Adapter != "node22-sveltekit-static" {
 		t.Fatalf("unexpected entry %+v", entry)
 	}
 	if entry.ManifestDigest == "" || entry.ConfigSchema == nil {
@@ -143,29 +145,29 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	t0 := hdr.Get("ETag")
 
 	// PUT requires CSRF, If-Match, and a known theme with a valid config.
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"X-CSRF-Token": "wrong"}); status != http.StatusForbidden {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"X-CSRF-Token": "wrong"}); status != http.StatusForbidden {
 		t.Fatalf("bad csrf: status %d body %s, want 403", status, raw)
 	}
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": ""}); status != http.StatusPreconditionRequired {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": ""}); status != http.StatusPreconditionRequired {
 		t.Fatalf("missing if-match: status %d body %s, want 428", status, raw)
 	}
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": "*"}); status != http.StatusBadRequest {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": "*"}); status != http.StatusBadRequest {
 		t.Fatalf("wildcard if-match: status %d body %s, want 400", status, raw)
 	}
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", "99.0.0", "{}"), map[string]string{"If-Match": t0}); status != http.StatusNotFound {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, "99.0.0", "{}"), map[string]string{"If-Match": t0}); status != http.StatusNotFound {
 		t.Fatalf("unknown version: status %d body %s, want 404", status, raw)
 	}
 	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("other-theme", version, "{}"), map[string]string{"If-Match": t0}); status != http.StatusNotFound {
 		t.Fatalf("unknown theme: status %d body %s, want 404", status, raw)
 	}
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", "27.1", "{}"), map[string]string{"If-Match": t0}); status != http.StatusBadRequest {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, "27.1", "{}"), map[string]string{"If-Match": t0}); status != http.StatusBadRequest {
 		t.Fatalf("malformed version: status %d body %s, want 400", status, raw)
 	}
 	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("Fuyao Homepage", version, "{}"), map[string]string{"If-Match": t0}); status != http.StatusBadRequest {
 		t.Fatalf("malformed themeId: status %d body %s, want 400", status, raw)
 	}
 	// The first theme's config schema only accepts {}.
-	status, _, raw = ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, `{"unknown":true}`), map[string]string{"If-Match": t0})
+	status, _, raw = ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, `{"unknown":true}`), map[string]string{"If-Match": t0})
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("invalid config: status %d body %s, want 422", status, raw)
 	}
@@ -181,17 +183,17 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	}
 
 	// An explicit null themeConfig is a request error, not the {} default.
-	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "null"), map[string]string{"If-Match": t0}); status != http.StatusBadRequest {
+	if status, _, raw := ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "null"), map[string]string{"If-Match": t0}); status != http.StatusBadRequest {
 		t.Fatalf("explicit null themeConfig: status %d body %s, want 400", status, raw)
 	}
 
 	// Happy path: select with the t0 precondition.
-	status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": t0})
+	status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": t0})
 	if status != http.StatusOK {
 		t.Fatalf("put theme: status %d body %s", status, raw)
 	}
 	decodeJSONBody(t, raw, &sel)
-	if !sel.Selected || sel.Theme == nil || sel.Theme.ThemeID != "fuyao-homepage" || sel.Theme.Version != version || sel.Revision != 1 {
+	if !sel.Selected || sel.Theme == nil || sel.Theme.ThemeID != fixtureThemeID || sel.Theme.Version != version || sel.Revision != 1 {
 		t.Fatalf("unexpected selection %+v", sel)
 	}
 	if sel.Theme.ManifestDigest != entry.ManifestDigest {
@@ -203,7 +205,7 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	}
 
 	// The t0 precondition is now stale and yields 412 with the current ETag.
-	if status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": t0}); status != http.StatusPreconditionFailed {
+	if status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": t0}); status != http.StatusPreconditionFailed {
 		t.Fatalf("stale if-match: status %d body %s, want 412", status, raw)
 	}
 	if hdr.Get("ETag") != t1 {
@@ -221,13 +223,13 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	if status, _, raw = viewerClient.do("GET", themePath, nil, nil); status != http.StatusOK {
 		t.Fatalf("viewer get theme: status %d body %s", status, raw)
 	}
-	if status, _, raw = viewerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusForbidden {
+	if status, _, raw = viewerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusForbidden {
 		t.Fatalf("viewer put theme: status %d body %s, want 403", status, raw)
 	}
 	if status, _, raw = outsiderClient.do("GET", themePath, nil, nil); status != http.StatusNotFound {
 		t.Fatalf("outsider get theme: status %d body %s, want 404", status, raw)
 	}
-	if status, _, raw = outsiderClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusNotFound {
+	if status, _, raw = outsiderClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusNotFound {
 		t.Fatalf("outsider put theme: status %d body %s, want 404", status, raw)
 	}
 
@@ -244,7 +246,7 @@ func TestThemeCatalogAndSelectionLifecycle(t *testing.T) {
 	settingsRev := settings.Revision
 	settingsETag := hdr.Get("ETag")
 
-	if status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody("fuyao-homepage", version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusOK {
+	if status, hdr, raw = ownerClient.do("PUT", themePath, themePutBody(fixtureThemeID, version, "{}"), map[string]string{"If-Match": t1}); status != http.StatusOK {
 		t.Fatalf("update theme selection: status %d body %s", status, raw)
 	}
 	decodeJSONBody(t, raw, &sel)
@@ -280,7 +282,7 @@ func TestThemeRegistrationIdempotency(t *testing.T) {
 	ctx := context.Background()
 	version := themeVersionFromCatalog(t, env)
 
-	root := filepath.Join(repoRoot(t), "site")
+	root := fixtureThemeRoot(t)
 	contracts := filepath.Join(repoRoot(t), "contracts", "theme")
 
 	if _, created, err := themeregistry.Register(ctx, env.store.Themes, contracts, root); err != nil || !created {
@@ -328,7 +330,7 @@ func TestThemeRegistrationIdempotency(t *testing.T) {
 	}
 
 	// The catalog still holds the original definition.
-	kept, err := env.store.Themes.Get(ctx, "fuyao-homepage", version)
+	kept, err := env.store.Themes.Get(ctx, fixtureThemeID, version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +348,7 @@ func TestConcurrentSelectionCreation(t *testing.T) {
 	owner, _, _ := env.createUserSession("racesel")
 	site := createSite(ctx, t, env, "race-site", "Race", "", "zh-CN", owner.ID)
 	theme, created, err := themeregistry.Register(ctx, env.store.Themes,
-		filepath.Join(repoRoot(t), "contracts", "theme"), filepath.Join(repoRoot(t), "site"))
+		filepath.Join(repoRoot(t), "contracts", "theme"), fixtureThemeRoot(t))
 	if err != nil || !created {
 		t.Fatalf("register: %v", err)
 	}
@@ -430,7 +432,7 @@ func TestThemeSelectionWithoutContracts(t *testing.T) {
 
 	status, _, raw := client.do("PUT",
 		"/api/v1/sites/"+site.Site.ID.String()+"/theme",
-		themePutBody("fuyao-homepage", version, "{}"),
+		themePutBody(fixtureThemeID, version, "{}"),
 		map[string]string{"If-Match": themeETag(site.Site.ID.String(), 0)})
 	if status != http.StatusServiceUnavailable {
 		t.Fatalf("put without contracts: status %d body %s, want 503", status, raw)

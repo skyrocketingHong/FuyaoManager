@@ -8,8 +8,8 @@ import (
 )
 
 // contractFixtures points at the repository contract directory from this
-// package's directory (repo/admin/backend/internal/themecontract).
-const contractFixtures = "../../../../contracts/theme"
+// package's directory (repo/backend/internal/themecontract).
+const contractFixtures = "../../../contracts/theme"
 
 func loadSetForTest(t *testing.T) *Set {
 	t.Helper()

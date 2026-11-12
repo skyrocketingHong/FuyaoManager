@@ -13,10 +13,10 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
 )
 
 // setupPublish is the full world for release tests: build runner plus the
@@ -123,6 +123,7 @@ type releaseResp struct {
 // settings edit, rollback restoring the old artifacts without a rebuild and
 // without discarding the edit, and the permission boundaries.
 func TestPublishRollbackClosedLoop(t *testing.T) {
+	themeRoot := testThemeRoot(t)
 	env, buildsRoot, releasesRoot := setupPublish(t)
 	ctx := context.Background()
 
@@ -135,14 +136,14 @@ func TestPublishRollbackClosedLoop(t *testing.T) {
 		site.Site.ID, viewer.ID); err != nil {
 		t.Fatal(err)
 	}
-	registerFirstTheme(t, env)
+	registerThemeDir(t, env, themeRoot)
 
 	ownerClient := env.clientFor(ownerToken, ownerCSRF)
 	viewerClient := env.clientFor(viewerToken, viewerCSRF)
 	outsiderClient := env.clientFor(outsiderToken, outsiderCSRF)
 
 	// Select the theme, build, and publish the first release.
-	selectThemeForSite(t, ownerClient, site.Site.ID, "fuyao-homepage", themeVersionFromCatalog(t, env))
+	selectThemeForSite(t, ownerClient, site.Site.ID, themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 	firstBuild := createBuildAndWait(t, ownerClient, site.Site.ID)
 
 	// Viewer cannot publish; outsider sees nothing.
@@ -170,7 +171,7 @@ func TestPublishRollbackClosedLoop(t *testing.T) {
 			ID string `json:"id"`
 		} `json:"theme"`
 	}
-	if err := json.Unmarshal(metaBytes, &meta); err != nil || meta.Contract != "fuyao.theme.release/v1" || meta.Theme.ID != "fuyao-homepage" {
+	if err := json.Unmarshal(metaBytes, &meta); err != nil || meta.Contract != "fuyao.theme.release/v1" || meta.Theme.ID != themeIDAt(t, themeRoot) {
 		t.Fatalf("release.json malformed: %s err=%v", metaBytes, err)
 	}
 	if meta.Release != firstBuild.ID || len(meta.Reasons) != 1 || meta.Reasons[0] != "manual" {
@@ -274,14 +275,15 @@ func TestPublishRollbackClosedLoop(t *testing.T) {
 // theme's own requiredArtifacts fails with the precise missing list, keeps
 // the previous release live, and persists the failed attempt.
 func TestPublishRequiredArtifactsFailure(t *testing.T) {
+	themeRoot := testThemeRoot(t)
 	env, _, _ := setupPublish(t)
 	ctx := context.Background()
 
 	owner, ownerToken, ownerCSRF := env.createUserSession("pubfailowner")
 	site := createSite(ctx, t, env, "pubfail-site", "发布站丙", "", "zh-CN", owner.ID)
-	registerFirstTheme(t, env)
+	registerThemeDir(t, env, themeRoot)
 	ownerClient := env.clientFor(ownerToken, ownerCSRF)
-	selectThemeForSite(t, ownerClient, site.Site.ID, "fuyao-homepage", themeVersionFromCatalog(t, env))
+	selectThemeForSite(t, ownerClient, site.Site.ID, themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// First publish succeeds and goes live.
 	goodBuild := createBuildAndWait(t, ownerClient, site.Site.ID)

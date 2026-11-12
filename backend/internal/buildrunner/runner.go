@@ -26,7 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
 
 // SiteRequirements is the trusted server-side statement of what this site type
@@ -466,6 +466,7 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	// schemas are handed in as an absolute path so the copy stays
 	// self-contained. Failure keeps the working copy for inspection.
 	prepareEnv := []string{"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")}
+	seedFavicon := func() error { return nil }
 	if r.cfg.Mode == "production" {
 		if r.cfg.ContentRoots == nil {
 			return fail("prepare", "Production builds require per-site content roots; configure FUYAO_ADMIN_SITES_ROOT.")
@@ -473,6 +474,17 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 		contentRoot, configRoot, faviconRoot, err := r.cfg.ContentRoots(build.SiteID)
 		if err != nil {
 			return fail("prepare", "Failed to resolve the site's content roots.")
+		}
+		// A fresh site's favicon directory is empty; production builds seed
+		// it from the theme's own default set (the task's verified copy, so
+		// the bytes match the recorded source manifest) before prepare runs,
+		// letting the theme's favicon validation pass on first build.
+		seedFavicon = func() error {
+			if serr := seedFaviconRoot(faviconRoot, filepath.Join(themeCopy, "static", "favicon")); serr != nil {
+				r.logger.Error("favicon seeding failed", "buildId", build.ID, "faviconRoot", faviconRoot, "error", serr)
+				return serr
+			}
+			return nil
 		}
 		prepareEnv = append(prepareEnv,
 			"FUYAO_CONTENT_ROOT="+contentRoot,
@@ -499,12 +511,18 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 		// never reads half-written metadata nor overwrites a concurrent
 		// human edit.
 		err2 = r.cfg.AlbumLock(build.SiteID, func() error {
+			if serr := seedFavicon(); serr != nil {
+				return serr
+			}
 			var inner error
 			prepareLog, inner = runPrepare()
 			return inner
 		})
 		err = err2
 	} else {
+		if serr := seedFavicon(); serr != nil {
+			return fail("prepare", "Failed to seed the site favicon directory from the theme defaults.")
+		}
 		prepareLog, err = runPrepare()
 	}
 	if err != nil {

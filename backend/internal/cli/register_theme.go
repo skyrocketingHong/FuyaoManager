@@ -6,8 +6,8 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themeregistry"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeregistry"
 )
 
 // runRegisterTheme validates a theme root against the theme contracts and

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/testauth"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/testauth"
 )
 
 // bootstrapAndRegister runs the first-run flow: CLI bootstrap, permit, and a

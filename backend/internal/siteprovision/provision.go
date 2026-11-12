@@ -15,16 +15,19 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
 
 // Provisioner owns the sites root directory.
 type Provisioner struct {
 	// Root is the base directory holding one subtree per site id.
 	Root string
-	// SeedFaviconDir optionally points at a default favicon set (the first
-	// theme's static/favicon); an empty site favicon directory is seeded
-	// from it so production builds pass the theme's favicon validation.
+	// SeedFaviconDir optionally points at an operator-configured default
+	// favicon set; an empty site favicon directory is seeded from it at
+	// provisioning time. Production builds additionally seed an empty
+	// favicon directory from the selected theme's own static/favicon (see
+	// buildrunner), so this field is a convenience default, not a
+	// requirement.
 	SeedFaviconDir string
 }
 

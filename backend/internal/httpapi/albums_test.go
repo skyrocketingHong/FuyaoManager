@@ -17,11 +17,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/mediatask"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/mediatask"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // tinyJPEG is a valid 1x1 JPEG used for upload testing.
@@ -180,10 +180,11 @@ func TestAlbumUploadProcessEditDelete(t *testing.T) {
 		t.Fatalf("provision: %v", err)
 	}
 
-	// The processing pipeline needs a selected theme; the repo's own theme
-	// source provides the scripts (read-only).
-	registerFirstTheme(t, env)
-	selectThemeForSite(t, c, mustUUID(siteID), "fuyao-homepage", themeVersionFromCatalog(t, env))
+	// The processing pipeline needs a selected theme; the registered real
+	// theme source provides the scripts (read-only).
+	themeRoot := testThemeRoot(t)
+	registerThemeDir(t, env, themeRoot)
+	selectThemeForSite(t, c, mustUUID(siteID), themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// Upload one JPEG: accepted, task queued.
 	status, _, raw := uploadPhoto(c, siteID)

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themeregistry"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeregistry"
 )
 
 // runValidateTheme validates a theme root against the contracts/theme

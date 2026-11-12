@@ -18,24 +18,47 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themeregistry"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeregistry"
 )
 
-// themeVersionFromCatalog reads the first theme's version the way the test
-// world registered it (from site/version.json).
+// themeVersionFromCatalog reads the fixture theme's version the way the test
+// world registered it (from the fixture's version.json).
 func themeVersionFromCatalog(t *testing.T, env *testEnv) string {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "site", "version.json"))
+	_ = env
+	return themeVersionAt(t, fixtureThemeRoot(t))
+}
+
+// themeIDAt reads a theme root's registered id from its theme.json.
+func themeIDAt(t *testing.T, root string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, "theme.json"))
 	if err != nil {
-		t.Fatalf("read site version: %v", err)
+		t.Fatalf("read theme.json: %v", err)
+	}
+	var v struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &v); err != nil || v.ID == "" {
+		t.Fatalf("decode theme id: %v", err)
+	}
+	return v.ID
+}
+
+// themeVersionAt reads a theme root's version from its version.json.
+func themeVersionAt(t *testing.T, root string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, "version.json"))
+	if err != nil {
+		t.Fatalf("read theme version: %v", err)
 	}
 	var v struct {
 		Version string `json:"version"`
 	}
 	if err := json.Unmarshal(raw, &v); err != nil || v.Version == "" {
-		t.Fatalf("decode site version: %v", err)
+		t.Fatalf("decode theme version: %v", err)
 	}
 	return v.Version
 }
@@ -194,6 +217,7 @@ type buildResp struct {
 // input digests recorded, a preview link serves the real artifacts, and
 // unauthorized preview access is rejected.
 func TestBuildPreviewClosedLoop(t *testing.T) {
+	themeRoot := testThemeRoot(t)
 	env, _, previews, buildsRoot := setupBuilds(t)
 	ctx := context.Background()
 
@@ -209,7 +233,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 		site.Site.ID, viewer.ID); err != nil {
 		t.Fatalf("add viewer: %v", err)
 	}
-	registerFirstTheme(t, env)
+	registerThemeDir(t, env, themeRoot)
 
 	ownerClient := env.clientFor(ownerToken, ownerCSRF)
 	viewerClient := env.clientFor(viewerToken, viewerCSRF)
@@ -217,7 +241,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 
 	// Baseline the registered theme workspace before any build runs: the
 	// whole point of task workspaces is that these trees never change.
-	baseline := workspaceBaseline(t, repoRoot(t))
+	baseline := workspaceBaseline(t, themeRoot)
 
 	// Viewer cannot trigger builds; a site without selection gets a 422.
 	if status, _, _ := viewerClient.do("POST", "/api/v1/sites/"+site.Site.ID.String()+"/builds", nil, nil); status != http.StatusForbidden {
@@ -228,8 +252,9 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	}
 
 	// Select the theme (revision t0), then create the build.
+	themeID := themeIDAt(t, themeRoot)
 	if status, _, raw := ownerClient.do("PUT", "/api/v1/sites/"+site.Site.ID.String()+"/theme",
-		themePutBody("fuyao-homepage", themeVersionFromCatalog(t, env), ""), map[string]string{"If-Match": fmt.Sprintf(`"%s-t0"`, site.Site.ID)}); status != http.StatusOK {
+		themePutBody(themeID, themeVersionAt(t, themeRoot), ""), map[string]string{"If-Match": fmt.Sprintf(`"%s-t0"`, site.Site.ID)}); status != http.StatusOK {
 		t.Fatalf("select theme: status %d body %s", status, raw)
 	}
 	status, _, raw := ownerClient.do("POST", "/api/v1/sites/"+site.Site.ID.String()+"/builds", nil, nil)
@@ -238,7 +263,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	}
 	var created buildResp
 	decodeJSONBody(t, raw, &created)
-	if created.Status != "queued" || created.Theme.ThemeID != "fuyao-homepage" {
+	if created.Status != "queued" || created.Theme.ThemeID != themeID {
 		t.Fatalf("unexpected created task: %+v", created)
 	}
 	buildPath := "/api/v1/sites/" + site.Site.ID.String() + "/builds/" + created.ID
@@ -311,7 +336,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 		t.Fatal("client bundle does not carry the DB-saved defaultLocale")
 	}
 	// Source content untouched: the fixtures content tree still has no marker.
-	fixtures, err := os.ReadFile(filepath.Join(repoRoot(t), "site", "fixtures", "content", "posts", "hello-world.md"))
+	fixtures, err := os.ReadFile(filepath.Join(themeRoot, "fixtures", "content", "posts", "hello-world.md"))
 	if err == nil && strings.Contains(string(fixtures), "Build Site 标记名") {
 		t.Fatal("source content was rewritten")
 	}
@@ -486,7 +511,7 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	// The registered source and its shared working trees are byte-identical
 	// to the pre-build baseline: tasks wrote only inside their own
 	// directories.
-	assertWorkspaceUnchanged(t, repoRoot(t), baseline)
+	assertWorkspaceUnchanged(t, themeRoot, baseline)
 
 	// The task recorded its full source-copy identity, broader than the
 	// theme.json manifest digest.
@@ -496,8 +521,8 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	_ = previews
 }
 
-// workspaceBaseline digests the theme's shared trees that tasks must never
-// touch: sources, configs, the fresh snapshot staging area, the build
+// workspaceBaseline digests the theme root's shared trees that tasks must
+// never touch: sources, configs, the fresh snapshot staging area, the build
 // output, and the build context.
 func workspaceBaseline(t *testing.T, root string) map[string]string {
 	t.Helper()
@@ -508,7 +533,7 @@ func workspaceBaseline(t *testing.T, root string) map[string]string {
 		filepath.Join(".fuyao", "build-inputs", "current"),
 		"build",
 	} {
-		path := filepath.Join(root, "site", rel)
+		path := filepath.Join(root, rel)
 		if _, err := os.Stat(path); err != nil {
 			out[rel] = "absent"
 			continue
@@ -653,7 +678,7 @@ func TestBuildRecoveryOnRestart(t *testing.T) {
 	site := createSite(ctx, t, env, "rec-site", "Rec Site", "", "zh-CN", owner.ID)
 	registerFirstTheme(t, env)
 	var rowID uuid.UUID
-	if err := env.pool.QueryRow(ctx, `SELECT id FROM themes WHERE theme_id='fuyao-homepage'`).Scan(&rowID); err != nil {
+	if err := env.pool.QueryRow(ctx, `SELECT id FROM themes WHERE theme_id=$1`, fixtureThemeID).Scan(&rowID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := env.store.Themes.SaveSelection(ctx, site.Site.ID, rowID, owner.ID, []byte("{}"), 0); err != nil {

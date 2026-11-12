@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // TestSiteURLFollowsManagedEntry proves the site's canonical URL is real at

@@ -21,18 +21,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/buildrunner"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/config"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/db"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/httpapi"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/mediatask"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/publish"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/siteprovision"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/themecontract"
-	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/wa"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/config"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/httpapi"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/mediatask"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
 // Main dispatches a subcommand and returns the process exit code.
@@ -174,12 +174,28 @@ func runServe(ctx context.Context) error {
 
 	// The theme-contract validator is optional: without it the server still
 	// serves the existing MVP surface, while saving a theme selection fails
-	// with an explicit 503 naming the missing variable.
+	// with an explicit 503 naming the missing configuration. The bundled
+	// contracts/theme of this repository is the default; FUYAO_ADMIN_THEME_CONTRACTS
+	// overrides it (a broken explicit directory still fails loudly).
 	var themeContracts httpapi.ThemeConfigValidator
-	if cfg.ThemeContractsDir != "" {
-		set, err := themecontract.Load(cfg.ThemeContractsDir)
+	repoRoot := cfg.RepoRoot
+	if repoRoot == "" {
+		cwd, wdErr := os.Getwd()
+		if wdErr != nil {
+			return fmt.Errorf("resolve repo root: %w", wdErr)
+		}
+		repoRoot = cwd
+	}
+	contractsDir := cfg.ThemeContractsDir
+	if contractsDir == "" {
+		if bundled := filepath.Join(repoRoot, "contracts", "theme"); dirExists(bundled) {
+			contractsDir = bundled
+		}
+	}
+	if contractsDir != "" {
+		set, err := themecontract.Load(contractsDir)
 		if err != nil {
-			return fmt.Errorf("load theme contracts from %s: %w", cfg.ThemeContractsDir, err)
+			return fmt.Errorf("load theme contracts from %s: %w", contractsDir, err)
 		}
 		themeContracts = set
 	}
@@ -189,31 +205,20 @@ func runServe(ctx context.Context) error {
 	// Build-preview executor and the private preview origin. The runner
 	// serializes whole builds across the shared site working directories; the
 	// preview listener is loopback-only and separate from the API origin.
-	repoRoot := cfg.RepoRoot
-	if repoRoot == "" {
-		cwd, wdErr := os.Getwd()
-		if wdErr != nil {
-			return fmt.Errorf("resolve repo root: %w", wdErr)
-		}
-		repoRoot = cwd
-	}
-	siteWork := filepath.Join(repoRoot, "site")
+	// Runtime data lives under <repo>/data by default — outside any theme
+	// source tree — and every root stays overridable through the environment.
+	dataRoot := filepath.Join(repoRoot, "data")
 	buildsRoot := cfg.BuildsRoot
 	if buildsRoot == "" {
-		buildsRoot = filepath.Join(siteWork, ".fuyao", "admin-builds")
+		buildsRoot = filepath.Join(dataRoot, "builds")
 	}
 	sitesRoot := cfg.SitesRoot
 	if sitesRoot == "" {
-		sitesRoot = filepath.Join(siteWork, ".fuyao", "admin-sites")
+		sitesRoot = filepath.Join(dataRoot, "sites")
 	}
 	provisioner, err := siteprovision.New(sitesRoot)
 	if err != nil {
 		return fmt.Errorf("prepare sites root: %w", err)
-	}
-	// Seed new sites' favicon directories from the first theme's default set
-	// so production builds satisfy the theme's favicon validation.
-	if seedDir := filepath.Join(siteWork, "static", "favicon"); dirExists(seedDir) {
-		provisioner.SeedFaviconDir = seedDir
 	}
 	contentStore, err := content.New(sitesRoot)
 	if err != nil {
@@ -260,7 +265,7 @@ func runServe(ctx context.Context) error {
 
 	releasesRoot := cfg.ReleasesRoot
 	if releasesRoot == "" {
-		releasesRoot = filepath.Join(siteWork, ".fuyao", "admin-releases")
+		releasesRoot = filepath.Join(dataRoot, "releases")
 	}
 
 	// The published-site edge: per-site current pointers plus the managed

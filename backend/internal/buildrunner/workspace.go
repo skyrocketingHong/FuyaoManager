@@ -88,6 +88,44 @@ func copyThemeSource(dst, src string) (sourceManifest, error) {
 	return manifest, nil
 }
 
+// seedFaviconRoot copies a theme's default favicon set into an empty site
+// favicon directory ahead of the production prepare step, so a freshly
+// provisioned site passes the theme's favicon validation on its first build.
+// A populated directory is never touched; a theme without a static/favicon
+// directory seeds nothing and leaves validation to the theme's own checks.
+func seedFaviconRoot(target, seedDir string) error {
+	if !dirExists(seedDir) {
+		return nil
+	}
+	if err := os.MkdirAll(target, 0o750); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return err
+	}
+	if len(entries) > 0 {
+		return nil
+	}
+	seed, err := os.ReadDir(seedDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range seed {
+		if entry.IsDir() || !entry.Type().IsRegular() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(seedDir, entry.Name()))
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // assembleWorkspace mirrors the source's dependency topology inside the
 // task: the theme copy lands at wsRoot/site, with a private node_modules
 // reference on the copy for the source's own installed packages and one on

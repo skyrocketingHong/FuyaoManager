@@ -1,4 +1,4 @@
-module github.com/skyrocketingHong/FuyaoHomepage/admin/backend
+module github.com/skyrocketingHong/FuyaoManager/backend
 
 go 1.27.3
 

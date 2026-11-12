@@ -1,0 +1,17 @@
+{
+	"name": "fuyao-manager",
+	"private": true,
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Convenience scripts for the FuyaoManager repository; the frontend owns its own isolated lockfile.",
+	"scripts": {
+		"frontend:dev": "npm --prefix frontend run dev",
+		"frontend:build": "npm --prefix frontend run build",
+		"frontend:check": "npm --prefix frontend run check",
+		"frontend:test": "npm --prefix frontend run test",
+		"api:generate": "npm --prefix frontend run api:generate",
+		"api:check": "npm --prefix frontend run api:check",
+		"api:lint": "npm --prefix frontend run api:lint",
+		"format": "prettier --write ."
+	}
+}

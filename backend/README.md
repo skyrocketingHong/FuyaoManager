@@ -2,7 +2,7 @@
 
 English | [简体中文](./README_ZH.md)
 
-The Go backend of the FuyaoHomepage content management system: a real PostgreSQL backend with CLI-issued one-time-code authentication, in-browser site creation with on-disk provisioning, theme registry and selection, snapshot builds with private previews, and the publish/rollback pipeline. The React admin console (`admin/frontend`) talks to this API same-origin.
+The Go backend of the FuyaoManager content management system: a real PostgreSQL backend with CLI-issued one-time-code authentication, in-browser site creation with on-disk provisioning, theme registry and selection, snapshot builds with private previews, and the publish/rollback pipeline. The React admin console (`frontend`) talks to this API same-origin.
 
 ## Status and Boundaries
 
@@ -28,7 +28,7 @@ Verified in this package:
 ## Layout
 
 ```text
-admin/backend/
+backend/
 ├── cmd/fuyao-admin/          CLI entry point
 ├── internal/cli/             migrate / serve / init-admin / login-code / revoke-sessions / bootstrap-admin / create-site / validate-theme / register-theme
 ├── internal/config/          environment configuration and validation
@@ -82,7 +82,7 @@ All configuration is read from environment variables. See `config.example.env` f
 ## Same-Origin Development Topology
 
 The admin front end dev server runs at `http://localhost:5174` and proxies
-`/api` to the backend at `127.0.0.1:8787` (see `admin/frontend/vite.config.ts`).
+`/api` to the backend at `127.0.0.1:8787` (see `frontend/vite.config.ts`).
 The browser therefore talks only to `http://localhost:5174`, keeping the
 session cookie first-party and same-origin. Pointing a `localhost` page at
 `http://127.0.0.1:8787` directly is a cross-site context (an IP literal is
@@ -93,7 +93,7 @@ that topology. In production the Go server itself serves the built console
 ## Quick Start (local development)
 
 ```bash
-# from admin/backend
+# from backend
 export FUYAO_ADMIN_DATABASE_URL='postgres://user:pass@127.0.0.1:5432/fuyao_admin'  # your local DSN
 
 go run ./cmd/fuyao-admin migrate
@@ -141,7 +141,7 @@ The passkey endpoints (`/api/v1/auth/register/*`, `/api/v1/auth/login/*`) and al
 Integration tests run against a real PostgreSQL instance and create an isolated, randomly named schema per test (dropped afterwards):
 
 ```bash
-# from admin/backend
+# from backend
 FUYAO_ADMIN_TEST_DSN='postgres://user@/fuyao_mvp_test?host=/path/to/socket&port=5432' go test ./...
 ```
 
@@ -154,7 +154,7 @@ Covered by the suite: anonymous access denial, the full one-time-code lifecycle 
 ## Verification
 
 ```bash
-cd admin/backend
+cd backend
 gofmt -l .
 go vet ./...
 go test ./...

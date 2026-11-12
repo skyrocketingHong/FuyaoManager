@@ -26,10 +26,10 @@ import { loadSiteList, siteListSnapshot, subscribeSiteList } from '../../lib/sit
 function GitHubMark() {
 	return (
 		<a
-			href="https://github.com/skyrocketingHong/FuyaoHomepage"
+			href="https://github.com/skyrocketingHong/FuyaoManager"
 			target="_blank"
 			rel="noreferrer"
-			aria-label="FuyaoHomepage on GitHub"
+			aria-label="FuyaoManager on GitHub"
 			style={{ color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
 		>
 			<svg
