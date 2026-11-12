@@ -172,20 +172,23 @@ func runServe(ctx context.Context) error {
 		webAuthn = nil
 	}
 
+	// Deterministic repo root: an explicitly configured REPO_ROOT is verified
+	// against this repository's markers, otherwise the root is discovered
+	// upward from the working directory (starting `go -C backend` resolves
+	// the repository, not backend/). Nothing is guessed — a missing root
+	// fails loudly instead of adopting another project or website.
+	repoRoot, err := resolveRepoRoot(cfg.RepoRoot)
+	if err != nil {
+		return err
+	}
+
 	// The theme-contract validator is optional: without it the server still
 	// serves the existing MVP surface, while saving a theme selection fails
 	// with an explicit 503 naming the missing configuration. The bundled
-	// contracts/theme of this repository is the default; FUYAO_ADMIN_THEME_CONTRACTS
-	// overrides it (a broken explicit directory still fails loudly).
+	// contracts/theme of the resolved repository is the default;
+	// FUYAO_ADMIN_THEME_CONTRACTS overrides it (a broken explicit directory
+	// still fails loudly).
 	var themeContracts httpapi.ThemeConfigValidator
-	repoRoot := cfg.RepoRoot
-	if repoRoot == "" {
-		cwd, wdErr := os.Getwd()
-		if wdErr != nil {
-			return fmt.Errorf("resolve repo root: %w", wdErr)
-		}
-		repoRoot = cwd
-	}
 	contractsDir := cfg.ThemeContractsDir
 	if contractsDir == "" {
 		if bundled := filepath.Join(repoRoot, "contracts", "theme"); dirExists(bundled) {
@@ -215,6 +218,27 @@ func runServe(ctx context.Context) error {
 	sitesRoot := cfg.SitesRoot
 	if sitesRoot == "" {
 		sitesRoot = filepath.Join(dataRoot, "sites")
+	}
+	releasesRoot := cfg.ReleasesRoot
+	if releasesRoot == "" {
+		releasesRoot = filepath.Join(dataRoot, "releases")
+	}
+	// The three runtime roots default to three independent directories under
+	// <repo>/data. The real-path overlap check runs BEFORE any directory is
+	// created (missing tails resolve against their deepest existing
+	// ancestors): an alias or nesting between sites, builds, and releases
+	// would let one subsystem write into another's tree, and a rejected
+	// configuration must leave the disk untouched.
+	if err := ensureDistinctRoots(
+		[]string{"sites", "builds", "releases"},
+		[]string{sitesRoot, buildsRoot, releasesRoot},
+	); err != nil {
+		return err
+	}
+	for _, dir := range []string{buildsRoot, sitesRoot, releasesRoot} {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
+			return fmt.Errorf("prepare runtime root %s: %w", dir, err)
+		}
 	}
 	provisioner, err := siteprovision.New(sitesRoot)
 	if err != nil {
@@ -262,11 +286,6 @@ func runServe(ctx context.Context) error {
 		},
 	})
 	defer previews.Close()
-
-	releasesRoot := cfg.ReleasesRoot
-	if releasesRoot == "" {
-		releasesRoot = filepath.Join(dataRoot, "releases")
-	}
 
 	// The published-site edge: per-site current pointers plus the managed
 	// reverse-proxy snippet. Always constructed (EntryURL rendering works

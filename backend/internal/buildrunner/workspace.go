@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
 )
 
 // workspaceExcludes names the registered source's entries a task never
@@ -119,7 +121,10 @@ func seedFaviconRoot(target, seedDir string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
+		// No-replace placement: an entry that appears between the emptiness
+		// check and the write (a racing seed or a user edit) wins, so the
+		// site's own favicon edits are never overwritten.
+		if err := siteprovision.WriteFileNoReplace(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
 			return err
 		}
 	}

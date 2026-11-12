@@ -66,9 +66,15 @@ func (p *Provisioner) FaviconRoot(siteID uuid.UUID) string {
 // for the site. baseURL seeds site.yaml's site.url with the site's real
 // entry (http://<host>:<port>); existing files are never overwritten, so
 // retrying a failed provisioning or re-running on an existing tree is safe
-// and never clobbers a user-edited configuration.
+// and never clobbers a user-edited configuration. Only the trees this call
+// writes into — the content/config trees and their ancestors — are checked
+// for dangerous symlinks; other links in the site directory (e.g. a
+// published-site `current` release pointer) stay untouched.
 func (p *Provisioner) Provision(site model.Site, settings model.SiteSettings, baseURL string) error {
 	id := site.ID
+	if err := p.rejectEscapingSymlinks(id); err != nil {
+		return err
+	}
 	dirs := []string{
 		filepath.Join(p.ContentRoot(id), "posts"),
 		filepath.Join(p.ContentRoot(id), "data"),
@@ -136,29 +142,165 @@ func (p *Provisioner) seedFavicon(target string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
+		// No-replace placement: an entry that appears between the emptiness
+		// check and the write (a racing provisioner, a user edit) wins.
+		if err := WriteFileNoReplace(filepath.Join(target, entry.Name()), data, 0o640); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// writeIfAbsent writes content to path only when the file does not exist yet.
-func writeIfAbsent(path string, content []byte, mode os.FileMode) error {
-	if _, err := os.Stat(path); err == nil {
+// rejectEscapingSymlinks inspects exactly what this call may write into:
+// the content and config trees are checked recursively, while their
+// ancestor (the site directory) is checked at the directory level only —
+// links beside these trees, such as the published-site `current` release
+// pointer, stay untouched. A symlink in the inspected set whose target
+// escapes the configured sites root or lands on ANOTHER site's tree (an
+// in-sitesRoot link to a sibling site is just as dangerous as an
+// out-of-root one) is rejected.
+func (p *Provisioner) rejectEscapingSymlinks(siteID uuid.UUID) error {
+	resolvedRoot, err := filepath.EvalSymlinks(p.Root)
+	if err != nil {
+		return err
+	}
+	siteDir := filepath.Join(p.Root, siteID.String())
+	// Ancestor: directory-level check only, no traversal — links next to
+	// the write targets (the current release pointer) are not provisioning
+	// write paths and stay untouched.
+	if info, err := os.Lstat(siteDir); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		if err := p.checkLinkTarget(resolvedRoot, siteID, siteDir); err != nil {
+			return err
+		}
+	}
+	for _, tree := range []string{p.ContentRoot(siteID), p.ConfigRoot(siteID)} {
+		if err := p.checkTreeSymlinks(resolvedRoot, siteID, tree); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkTreeSymlinks checks one write target and, when it is an existing
+// directory, every symlink inside it. A symlink target must resolve inside
+// the configured root AND under this site's own subtree.
+func (p *Provisioner) checkTreeSymlinks(resolvedRoot string, siteID uuid.UUID, tree string) error {
+	info, err := os.Lstat(tree)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		if err := p.checkLinkTarget(resolvedRoot, siteID, tree); err != nil {
+			return err
+		}
+	} else if !info.IsDir() {
+		return nil // a regular file blocks creation; nothing to traverse
+	}
+	var walkErr error
+	_ = filepath.WalkDir(tree, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil // unreadable entries surface through the writes below
+		}
+		if d.Type()&os.ModeSymlink == 0 {
+			return nil
+		}
+		if err := p.checkLinkTarget(resolvedRoot, siteID, path); err != nil {
+			walkErr = err
+			return filepath.SkipAll
+		}
 		return nil
+	})
+	return walkErr
+}
+
+// checkLinkTarget resolves one symlink (dangling links resolve through
+// their deepest existing ancestor) and validates the target: inside the
+// configured root and under this site's own subtree — never another site's.
+func (p *Provisioner) checkLinkTarget(resolvedRoot string, siteID uuid.UUID, linkPath string) error {
+	target, err := os.Readlink(linkPath)
+	if err != nil {
+		return nil
+	}
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(filepath.Dir(linkPath), target)
+	}
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil {
+		probe := target
+		rel := ""
+		resolved = ""
+		for {
+			parent := filepath.Dir(probe)
+			if parent == probe {
+				break
+			}
+			rel = filepath.Join(filepath.Base(probe), rel)
+			if found, ferr := filepath.EvalSymlinks(parent); ferr == nil {
+				resolved = filepath.Join(found, rel)
+				break
+			}
+			probe = parent
+		}
+		if resolved == "" {
+			resolved = filepath.Clean(target)
+		}
+	}
+	if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(os.PathSeparator)) {
+		return fmt.Errorf("refusing to provision: symlink %s escapes the configured sites root", linkPath)
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolved)
+	// An upward rel is exactly ".." or starts with "../" — a literal sibling
+	// directory named "..foo" inside the root is not an escape.
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("refusing to provision: symlink %s points at the sites root itself", linkPath)
+	}
+	first := rel
+	if idx := strings.IndexByte(rel, filepath.Separator); idx >= 0 {
+		first = rel[:idx]
+	}
+	if first != siteID.String() {
+		return fmt.Errorf("refusing to provision: symlink %s points at another site's tree (%s)", linkPath, first)
+	}
+	return nil
+}
+
+// WriteFileNoReplace atomically creates path with content when it does not
+// exist yet; an existing file — including a concurrently created one — is
+// never overwritten, so user edits survive re-provisioning and racing
+// provisioners. The final name must not be a symlink.
+func WriteFileNoReplace(path string, content []byte, mode os.FileMode) error {
+	if info, err := os.Lstat(path); err == nil {
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to write %s: it is a symlink", path)
+		}
+		return nil // existing content always wins
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	tmp := path + ".tmp"
+	// A unique temporary file removes the fixed-.tmp collision between
+	// racing writers; os.Link fails with EEXIST when another writer won,
+	// which is the atomic no-replace placement.
+	tmp := path + ".tmp-" + uuid.NewString()
 	if err := os.WriteFile(tmp, content, mode); err != nil {
 		return fmt.Errorf("write %s: %w", path, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := os.Link(tmp, path); err != nil {
 		_ = os.Remove(tmp)
+		if os.IsExist(err) {
+			return nil // the existing file won the race and stays untouched
+		}
 		return fmt.Errorf("place %s: %w", path, err)
 	}
+	_ = os.Remove(tmp)
 	return nil
+}
+
+// writeIfAbsent writes content to path only when the file does not exist yet.
+func writeIfAbsent(path string, content []byte, mode os.FileMode) error {
+	return WriteFileNoReplace(path, content, mode)
 }
 
 func emptyAlbumIndex() []byte {
