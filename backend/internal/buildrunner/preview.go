@@ -62,6 +62,9 @@ type PreviewConfig struct {
 	PortMin      int
 	PortMax      int
 	MediaRoots   MediaRoots
+	// SweepInterval controls the expiry sweeper (diagnostics and tests);
+	// the default is TTL/4 bounded to [250ms, 30s].
+	SweepInterval time.Duration
 }
 
 // previewCookiePrefix starts the per-origin authorization cookie name.
@@ -95,15 +98,21 @@ type previewOrigin struct {
 }
 
 // PreviewServer issues short-lived per-build preview links on per-build
-// loopback origins.
+// private origins. Origins are reclaimed when they expire: the sweeper (and
+// the lazy sweep on every Issue) drop origins whose tokens have all expired,
+// revoking credentials, stopping the listener, and releasing the persistent
+// port assignment — so an expired preview never pins capacity.
 type PreviewServer struct {
 	cfg     PreviewConfig
 	mu      sync.Mutex
 	origins map[uuid.UUID]*previewOrigin
 	closed  bool
+	stop    chan struct{}
+	done    chan struct{}
 }
 
-// NewPreviewServer assembles the preview service.
+// NewPreviewServer assembles the preview service and starts the expiry
+// sweeper; Close stops it and tears every origin down.
 func NewPreviewServer(cfg PreviewConfig) *PreviewServer {
 	if cfg.TTL <= 0 {
 		cfg.TTL = 30 * time.Minute
@@ -114,8 +123,88 @@ func NewPreviewServer(cfg PreviewConfig) *PreviewServer {
 	if cfg.BindAddr == "" {
 		cfg.BindAddr = "127.0.0.1"
 	}
+	if cfg.SweepInterval <= 0 {
+		interval := cfg.TTL / 4
+		if interval < 250*time.Millisecond {
+			interval = 250 * time.Millisecond
+		}
+		if interval > 30*time.Second {
+			interval = 30 * time.Second
+		}
+		cfg.SweepInterval = interval
+	}
 	cfg.ExternalBase = strings.TrimRight(cfg.ExternalBase, "/")
-	return &PreviewServer{cfg: cfg, origins: make(map[uuid.UUID]*previewOrigin)}
+	p := &PreviewServer{
+		cfg:     cfg,
+		origins: make(map[uuid.UUID]*previewOrigin),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+	}
+	go p.sweepLoop()
+	return p
+}
+
+// sweepLoop periodically reclaims expired origins. Test knobs live in
+// SweepInterval; production defaults keep the loop under one call per TTL
+// quarter and at most one per 30s.
+func (p *PreviewServer) sweepLoop() {
+	defer close(p.done)
+	ticker := time.NewTicker(p.cfg.SweepInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-p.stop:
+			return
+		case <-ticker.C:
+			p.sweepExpired()
+		}
+	}
+}
+
+// sweepExpired removes every origin whose tokens have all expired. Media
+// access dies with the listener; the persistent port assignment is released
+// so other builds can allocate it.
+func (p *PreviewServer) sweepExpired() {
+	p.mu.Lock()
+	var expired []*previewOrigin
+	for id, origin := range p.origins {
+		if origin.expired() {
+			expired = append(expired, origin)
+			delete(p.origins, id)
+		}
+	}
+	p.mu.Unlock()
+	for _, origin := range expired {
+		origin.revoke()
+		_ = origin.httpSrv.Close()
+		if p.cfg.Ports != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			_ = p.cfg.Ports.ReleasePreview(ctx, origin.buildID)
+			cancel()
+		}
+	}
+}
+
+// expired reports whether the origin has no unexpired token left. Tokens
+// are minted immediately when an origin is created, so "no live token"
+// unambiguously means the preview's lifetime is over.
+func (o *previewOrigin) expired() bool {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	now := time.Now()
+	for _, expiry := range o.tokens {
+		if now.Before(expiry) {
+			return false
+		}
+	}
+	return true
+}
+
+// revoke clears every token, invalidating all issued credentials at once.
+func (o *previewOrigin) revoke() {
+	o.mu.Lock()
+	o.tokens = make(map[string]time.Time)
+	o.mu.Unlock()
 }
 
 // ErrPreviewNotReady marks issue requests for builds that have no servable
@@ -123,10 +212,11 @@ func NewPreviewServer(cfg PreviewConfig) *PreviewServer {
 var ErrPreviewNotReady = errors.New("preview target is not ready")
 
 // Issue mints a fresh token for one build and returns the entry URL on that
-// build's own loopback origin. Visiting the URL exchanges the token for an
+// build's own private origin. Visiting the URL exchanges the token for an
 // HttpOnly cookie scoped to the origin; everything else on the origin
 // requires the cookie. Tokens are unguessable and expire; there is no
-// anonymous directory access.
+// anonymous directory access. Expired origins are reclaimed lazily first,
+// so a full capacity never stays pinned by stale previews.
 func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt time.Time, err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -147,6 +237,10 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 		strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
 		return "", time.Time{}, ErrPreviewNotReady
 	}
+
+	// Lazy reclaim: drop expired origins before the capacity check so a
+	// long-expired preview cannot pin MaxOrigins.
+	p.sweepExpired()
 
 	origin, err := p.originFor(siteID, buildID, resolvedArtifact, spaFallback)
 	if err != nil {
@@ -181,29 +275,52 @@ func (p *PreviewServer) CloseOrigin(siteID, buildID uuid.UUID) error {
 	}
 	p.mu.Unlock()
 	if ok {
-		origin.mu.Lock()
-		origin.tokens = make(map[string]time.Time)
-		origin.mu.Unlock()
+		origin.revoke()
 		_ = origin.httpSrv.Close()
 	}
 	if p.cfg.Ports != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
+		// ReleasePreview deletes only this build's preview entry; releasing
+		// an already-released (or never-allocated) entry is a no-op.
 		return p.cfg.Ports.ReleasePreview(ctx, buildID)
 	}
 	return nil
 }
 
-// Close shuts every origin's listener down.
+// Close stops the sweeper and tears every origin down. Listeners and
+// in-memory state die with the process; persistent port assignments of
+// still-live previews are released so a restart cannot leak them (fresh
+// issues allocate anew).
 func (p *PreviewServer) Close() {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 	if p.closed {
+		p.mu.Unlock()
 		return
 	}
 	p.closed = true
-	for _, origin := range p.origins {
+	origins := make([]*previewOrigin, 0, len(p.origins))
+	for id, origin := range p.origins {
+		origins = append(origins, origin)
+		delete(p.origins, id)
+	}
+	p.mu.Unlock()
+
+	close(p.stop)
+	select {
+	case <-p.done:
+	case <-time.After(5 * time.Second):
+	}
+	for _, origin := range origins {
+		origin.revoke()
 		_ = origin.httpSrv.Close()
+	}
+	if p.cfg.Ports != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for _, origin := range origins {
+			_ = p.cfg.Ports.ReleasePreview(ctx, origin.buildID)
+		}
 	}
 }
 
@@ -418,8 +535,14 @@ func (o *previewOrigin) validToken(token string) bool {
 	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
+	now := time.Now()
+	for t, expiry := range o.tokens {
+		if now.After(expiry) {
+			delete(o.tokens, t)
+		}
+	}
 	expiry, ok := o.tokens[token]
-	if !ok || time.Now().After(expiry) {
+	if !ok || now.After(expiry) {
 		return false
 	}
 	return true

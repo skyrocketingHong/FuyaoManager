@@ -74,7 +74,7 @@ type Config struct {
 	// AlbumLock serializes the prepare step's album metadata regeneration
 	// against human edits of the same files (same lock the media indexer
 	// runs under). nil disables coordination (ci fixture mode).
-	AlbumLock func(siteID uuid.UUID, fn func() error) error
+	AlbumLock    func(siteID uuid.UUID, fn func() error) error
 	Requirements SiteRequirements
 	BuildTimeout time.Duration
 	ShutdownWait time.Duration
