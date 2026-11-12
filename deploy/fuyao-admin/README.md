@@ -26,18 +26,23 @@ Deployment artifacts for the Fuyao management platform on the target server. The
 
 Program and data are separated: replacing `current` never touches content, releases, or the database.
 
-## Topology
+## Topology (target: HTTPS domain)
 
-- The management API + console listen on the server's Tailscale address only (`100.117.154.115:8787`); public-IP connections do not reach the service.
-- Private build previews bind the same Tailscale address with platform-allocated ports (default range `20000-20100`); preview URLs carry the Tailscale base, never `127.0.0.1`.
-- Published sites are served by the system Caddy through the platform-managed snippet at `/etc/caddy/fuyao-admin/fuyao-admin.caddy` (imported from `/etc/caddy/Caddyfile`). Private entries bind exactly the Tailscale address; public entries bind all interfaces and are announced with the public IP.
+- The production console lives at `https://manager.fuyaoskyrocket.ing`. The management API listens on loopback only (`127.0.0.1:8787`); Caddy terminates TLS and reverse-proxies.
+- The **public** vhost for that domain serves only the standalone static page in `static-page/` — never the console bundle, and no proxying: API and preview paths get an explicit 404. The template is `caddy/manager.public.caddy.example`; it lives outside the platform-managed snippet directory (which the backend fully re-renders).
+- The **private** vhost (same hostname, bound to the private-network address) reverse-proxies to the loopback listener; both vhosts share the hostname's automatically issued certificate. Its configuration, the split-DNS setup, and the full cutover runbook are operator-local documents by policy (not committed to the repository); see the deployment runbook kept with the server's ops notes.
+- Private build previews keep their own bind/port/URL rules (platform-allocated ports on the private address, default `20000-20100`); the management domain is not a blanket replacement for them.
+- Published sites are served by the system Caddy through the platform-managed snippet at `/etc/caddy/fuyao-admin/fuyao-admin.caddy` (imported from `/etc/caddy/Caddyfile`). Private entries bind exactly the private address; public entries bind all interfaces and are announced with the public IP.
 - Reload privilege: the service user `fuyao-admin` may run exactly one root command (`/usr/local/sbin/fuyao-caddy-apply`, validate + reload with fixed arguments) through sudoers; the service itself never runs as root.
+- Passkeys require the domain relying party (`FUYAO_ADMIN_RP_ID=manager.fuyaoskyrocket.ing`, HTTPS origins); the one-time CLI code is the identity-proofing and recovery entry.
 
 ## Files in this directory
 
 - `fuyao-admin.service` — systemd unit (low-privilege user, cgroup memory limit, NODE_OPTIONS heap tuning for the 2 GB host).
-- `config.example.env` — environment template for the post-split (FuyaoManager) release layout.
+- `config.example.env` — production environment template (HTTPS domain topology).
 - `fuyao-caddy-apply` — the operator-controlled validate+reload helper installed at `/usr/local/sbin`.
+- `static-page/` — the standalone public landing page (deployed to its own directory, e.g. `/srv/fuyao-admin/static-page`; not part of the console bundle).
+- `caddy/manager.public.caddy.example` — the public vhost template (static page only, explicit 404 for API/preview paths).
 
 ## Deploy / upgrade procedure
 
@@ -62,7 +67,7 @@ Program and data are separated: replacing `current` never touches content, relea
    ./fuyao-admin migrate                 # new migrations, if any
    ./fuyao-admin register-theme --contracts contracts/theme theme/site
    ```
-6. Verify: `systemctl is-active fuyao-admin`, Tailscale HTTP on the console, public-IP probes fail, `journalctl -u fuyao-admin` shows `edge applied`.
+6. Verify: `systemctl is-active fuyao-admin`; the public domain shows only the static page (API paths 404); the private network reaches the console over HTTPS (passkey bind and sign-in); public-IP probes to the management port fail; `journalctl -u fuyao-admin` shows `edge applied`.
 
 The currently deployed server still runs the pre-split single-repository
 release (theme contracts and repo root under `<current>/theme`); switch it
@@ -76,6 +81,6 @@ Rollback: repoint `current` to the previous release directory and restart; runti
 systemctl status fuyao-admin          # state
 journalctl -u fuyao-admin -f          # logs
 systemctl restart fuyao-admin         # restart (build executor recovers interrupted tasks)
-fuyao-admin login-code --username fuyao   # per-login one-time code (on the server)
+fuyao-admin login-code --username fuyao   # identity-confirmation / recovery code (on the server)
 fuyao-admin revoke-sessions --username fuyao
 ```

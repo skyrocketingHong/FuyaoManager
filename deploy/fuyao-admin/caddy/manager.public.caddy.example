@@ -1,0 +1,48 @@
+# FuyaoManager public entrance (manager.fuyaoskyrocket.ing).
+#
+# Install: copy to a directory imported by the main Caddyfile but OUTSIDE the
+# platform-managed snippet directory (/etc/caddy/fuyao-admin/fuyao-admin.caddy
+# is fully re-rendered by the backend; anything written there is lost), e.g.
+#   /etc/caddy/fuyao-admin-manager/manager.public.caddy
+# and add `import /etc/caddy/fuyao-admin-manager/*.caddy` to /etc/caddy/Caddyfile.
+#
+# The public vhost serves ONLY the standalone static page. The management
+# API, the console bundle, and private previews are never proxied here;
+# unknown API paths get an explicit 404, not a 200 HTML page.
+
+manager.fuyaoskyrocket.ing {
+	# Bind the real public address of this host. If the public IP is behind
+	# NAT and not present on any local interface, omit `bind` and rely on the
+	# DNS/firewall boundary instead — never fall back to proxying the Go
+	# service on a wildcard listener to work around a bind failure.
+	bind 149.129.75.59
+
+	# Automatic HTTPS (public ACME). The same certificate also serves the
+	# private-network vhost for this exact hostname.
+
+	root * /srv/fuyao-admin/static-page
+
+	# Management surface stays closed on the public network.
+	@api path /api/*
+	handle @api {
+		respond 404
+	}
+	@previews path /preview/* /_preview/*
+	handle @previews {
+		respond 404
+	}
+
+	handle {
+		# Static files only; no SPA fallback, no index rewrite beyond
+		# file_server's own directory index behavior.
+		file_server
+	}
+
+	header {
+		Cache-Control "no-store"
+		X-Content-Type-Options "nosniff"
+		- Server
+	}
+
+	encode gzip
+}

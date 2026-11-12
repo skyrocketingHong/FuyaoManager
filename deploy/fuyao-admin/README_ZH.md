@@ -26,18 +26,23 @@ Fuyao 管理平台在目标服务器上的部署产物。部署刻意采用文�
 
 程序与数据分离：更换 `current` 不影响内容、发布与数据库。
 
-## 拓扑
+## 拓扑（目标：HTTPS 域名）
 
-- 管理 API 与控制台只监听服务器 Tailscale 地址（`100.117.154.115:8787`）；公网 IP 连接到不了服务。
-- 私有构建预览绑定同一 Tailscale 地址，端口由平台分配（默认范围 `20000-20100`）；预览 URL 携带 Tailscale 基址，绝不返回 `127.0.0.1`。
-- 已发布站点由系统 Caddy 经平台受管片段 `/etc/caddy/fuyao-admin/fuyao-admin.caddy` 服务（由 `/etc/caddy/Caddyfile` import）。私有入口只绑定 Tailscale 地址；公开入口绑定全部接口并以公网 IP 通告。
+- 生产管理台位于 `https://manager.fuyaoskyrocket.ing`。管理 API 只监听回环（`127.0.0.1:8787`），由 Caddy 终止 TLS 并反向代理。
+- **公网** vhost 只提供 `static-page/` 下的独立静态页——不含管理台 bundle、不做任何代理，API 与预览路径显式返回 404。模板见 `caddy/manager.public.caddy.example`；该文件必须放在平台受管片段目录之外（受管片段由后端整体覆写）。
+- **私网** vhost（同域名，绑定私网地址）反向代理到回环监听；两个 vhost 共用该域名自动签发的证书。私网入口配置、Split DNS 与完整切换手册按约定为运维本地文件（不提交仓库），见随服务器运维资料保存的运行手册。
+- 私有构建预览保留自己的绑定/端口/URL 规则（平台分配端口，默认 `20000-20100`）；管理域名不是它们的统一替代。
+- 已发布站点由系统 Caddy 经平台受管片段 `/etc/caddy/fuyao-admin/fuyao-admin.caddy` 服务（由 `/etc/caddy/Caddyfile` import）。私有入口只绑定私网地址；公开入口绑定全部接口并以公网 IP 通告。
 - reload 特权：服务用户 `fuyao-admin` 仅可通过 sudoers 执行一个 root 命令（`/usr/local/sbin/fuyao-caddy-apply`，固定参数的校验+reload）；服务本身绝不由 root 运行。
+- 通行密钥要求域名 RP（`FUYAO_ADMIN_RP_ID=manager.fuyaoskyrocket.ing`、HTTPS origins）；一次性 CLI 码是身份确认与恢复入口。
 
 ## 本目录文件
 
 - `fuyao-admin.service` —— systemd 单元（低权限用户、cgroup 内存上限、2 GB 主机的 NODE_OPTIONS 堆调优）。
-- `config.example.env` —— 拆分后（FuyaoManager）release 布局的环境变量模板。
+- `config.example.env` —— 生产环境变量模板（HTTPS 域名拓扑）。
 - `fuyao-caddy-apply` —— 安装在 `/usr/local/sbin` 的运维控制校验+reload 脚本。
+- `static-page/` —— 独立公网静态页（部署到独立目录，如 `/srv/fuyao-admin/static-page`，不属于管理台 bundle）。
+- `caddy/manager.public.caddy.example` —— 公网 vhost 模板（仅静态页，API/预览路径显式 404）。
 
 ## 部署 / 升级流程
 
@@ -61,7 +66,7 @@ Fuyao 管理平台在目标服务器上的部署产物。部署刻意采用文�
    ./fuyao-admin migrate                 # 如有新迁移
    ./fuyao-admin register-theme --contracts contracts/theme theme/site
    ```
-6. 验证：`systemctl is-active fuyao-admin`、Tailscale HTTP 可达控制台、公网探测失败、`journalctl -u fuyao-admin` 出现 `edge applied`。
+6. 验证：`systemctl is-active fuyao-admin`；公网域名只出静态页（API 路径 404）；私网经 HTTPS 进入管理台（可完成绑定与通行密钥登录）；公网探测管理端口失败；`journalctl -u fuyao-admin` 出现 `edge applied`。
 
 当前已部署服务器仍运行拆分前的单仓 release（主题契约与 repo root 位于 `<current>/theme`）；待路线图的部署切换执行时再换到本布局。
 
@@ -73,6 +78,6 @@ Fuyao 管理平台在目标服务器上的部署产物。部署刻意采用文�
 systemctl status fuyao-admin          # 状态
 journalctl -u fuyao-admin -f          # 日志
 systemctl restart fuyao-admin         # 重启（构建执行器会恢复中断任务）
-fuyao-admin login-code --username fuyao   # 每次登录的一次性码（在服务器执行）
+fuyao-admin login-code --username fuyao   # 身份确认/恢复码（在服务器执行）
 fuyao-admin revoke-sessions --username fuyao
 ```
