@@ -40,12 +40,13 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0011)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0012)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries
-│   │   ├── httpapi/           # management API: auth, sites, content, albums,
-│   │   │                      # themes, builds, releases, edge status, UI hosting
+│   │   ├── httpapi/           # management API: auth (codes, passkey binding,
+│   │   │                      # session), sites, content, albums, themes, builds,
+│   │   │                      # releases, edge status, UI hosting
 │   │   │                      # + testdata/theme (bundled fixture theme)
 │   │   ├── content/           # per-site jailed content store (ETag, atomic writes)
 │   │   ├── siteprovision/     # per-site directory provisioning
@@ -60,15 +61,21 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   │   └── testauth/          # test-only synthetic authenticator
 │   ├── config.example.env     # environment template without real credentials
 │   └── go.mod / go.sum        # module github.com/skyrocketingHong/FuyaoManager/backend
-├── frontend/                  # React + antd console (own package-lock.json)
+├── frontend/                  # React + antd 6 console (own package-lock.json)
 │   ├── src/lib/api/           # typed client + generated schema.d.ts
 │   ├── src/lib/sites/         # site business modules (race-safe detail, editors)
 │   ├── src/lib/themes/        # theme-selection store (catalog, If-Match, 412)
+│   ├── src/lib/editing/       # EditableDoc state machine + unsaved-changes guard
+│   ├── src/lib/navigation/    # single navigation metadata (routes, menu, scope)
+│   ├── src/lib/webauthn/      # passkey ceremonies, JSON conversion, error mapping
 │   ├── src/lib/i18n/          # zh-CN / en-US dictionaries
-│   ├── src/lib/theme/         # day/night antd algorithm state
-│   ├── src/lib/session/       # session state incl. platformInitialized
-│   ├── src/components/        # AppShell (grouped sidebar, top bar, Simple Icons)
-│   ├── src/pages/             # login, themes catalog, sites, per-site surfaces
+│   ├── src/lib/theme/         # day/night state + semantic token assembly
+│   ├── src/lib/session/       # session state: anonymous/restricted/full/error
+│   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
+│   │                          # TablePanel, PageLoading, StatusTag, layout/ shell
+│   ├── src/styles/            # base / shell / pages CSS (semantic variables)
+│   ├── src/pages/             # login, passkey binding, themes catalog, sites,
+│   │                          # per-site surfaces
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/
 │   ├── openapi/management.yaml  # authoritative management HTTP contract
@@ -78,7 +85,9 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │       └── examples/            # public-safe positive/negative fixtures
 ├── deploy/
 │   └── fuyao-admin/          # server deployment: bilingual README, systemd unit,
-│                             # config sample, Caddy apply helper
+│                             # config sample, Caddy apply helper, public static
+│                             # page (static-page/), public Caddy vhost template
+│                             # (caddy/)
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer

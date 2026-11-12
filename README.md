@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](./LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
-[![Ant Design](https://img.shields.io/badge/Ant_Design-5-1677ff.svg)](https://ant.design/)
+[![Ant Design](https://img.shields.io/badge/Ant_Design-6-1677ff.svg)](https://ant.design/)
 
 </div>
 
@@ -25,10 +25,14 @@ platform development history preserved; see
 
 ## Features
 
-- **Authentication without passwords**: every login is a one-time code issued
-  by the local CLI (`fuyao-admin login-code`); sessions are cookie-based
-  with CSRF and Origin enforcement. Passkey rows and endpoints remain as a
-  domain-RP-ID compatibility path.
+- **Passkey authentication**: everyday sign-in is a discoverable passkey
+  (WebAuthn, user verification required); sessions are cookie-based with
+  CSRF and Origin enforcement. First run: `fuyao-admin init-admin` prints a
+  one-time code, the browser redeems it, and binding a passkey completes the
+  activation — a code for an account without a credential for the current
+  relying party yields only a short-lived restricted registration session
+  until the binding ceremony succeeds. `fuyao-admin login-code` stays the
+  operator-approved recovery entry.
 - **In-browser site creation**: per-site content, config, and favicon trees
   provisioned on disk with explicit state and idempotent retry.
 - **Content authority**: posts (frontmatter-aware, draft-gated), friends,
@@ -53,15 +57,15 @@ platform development history preserved; see
 - **Managed edge**: rendered Caddy snippet from database state, per-site
   public/private visibility with explicit interface binding, apply through a
   fixed operator command with last-good restore.
-- **Console**: React 18 + official Ant Design, zh-CN/en-US, day/night
-  themes, grouped desktop-app shell.
+- **Console**: React 18 + official Ant Design 6, zh-CN/en-US, day/night
+  themes, grouped desktop-app shell (sidebar scopes, top-bar page slots).
 
 ## Tech stack
 
 | Layer     | Choice                                                             |
 | --------- | ------------------------------------------------------------------ |
 | Backend   | Go 1.27, PostgreSQL 18 (pgx), JSON Schema draft 2020-12            |
-| Console   | TypeScript, React 18, Vite, Ant Design 5, Simple Icons             |
+| Console   | TypeScript, React 18, Vite, Ant Design 6, Simple Icons             |
 | Contracts | OpenAPI 3.0 (management API), JSON Schema (theme contracts)        |
 | Edge      | Caddy (managed snippet, rendered — never executed from user input) |
 
@@ -97,8 +101,8 @@ go run ./cmd/fuyao-admin register-theme \
   --root /path/to/FuyaoHomepage/site
 ```
 
-Open the printed one-time code URL flow in the console, create a site,
-select the theme, write content, build, preview, publish.
+Redeem the printed one-time code in the console and bind a passkey, then
+create a site, select the theme, write content, build, preview, publish.
 
 ## Commands
 
@@ -117,8 +121,8 @@ Backend (run inside `backend/`):
 | ----------------------------- | ---------------------------------------------------------------- |
 | `fuyao-admin migrate`         | Apply all SQL migrations                                         |
 | `fuyao-admin serve`           | Start the management API (+ console if `FUYAO_ADMIN_UI_DIR` set) |
-| `fuyao-admin init-admin`      | First-run binding; prints a one-time init code                   |
-| `fuyao-admin login-code`      | One-time login code for an existing admin                        |
+| `fuyao-admin init-admin`      | First-run identity; prints a one-time init code (bind a passkey after redeeming) |
+| `fuyao-admin login-code`      | Identity-confirmation / recovery code for an existing admin      |
 | `fuyao-admin revoke-sessions` | Revoke a user's sessions                                         |
 | `fuyao-admin register-theme`  | Register/refresh a theme in the catalog                          |
 | `fuyao-admin validate-theme`  | Validate a theme root against the contracts                      |

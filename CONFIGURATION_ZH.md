@@ -17,7 +17,8 @@
 | `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | 会话有效期。                                                          |
 | `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn challenge 有效期。                                           |
 | `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | 登记许可有效期。                                                      |
-| `FUYAO_ADMIN_AUTH_CODE_TTL`   | `10m`                   | CLI 一次性码有效期。                                                  |
+| `FUYAO_ADMIN_AUTH_CODE_TTL`   | `10m`                   | 一次性 CLI 码有效期（身份确认与恢复入口）。 |
+| `FUYAO_ADMIN_REGISTRATION_SESSION_TTL` | `30m` | 受限登记会话有效期（账号在当前 RP 下无凭据时由兑换签发）。 |
 | `FUYAO_ADMIN_UI_DIR`          | 空                      | 已构建管理台目录；非 `/api` 路径以受限 CSP 服务该 SPA。               |
 
 ## 路径与契约

@@ -34,7 +34,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0011）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0012）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
 │   │   │                      # 主题、构建、发布、媒体任务、网络入口
@@ -54,16 +54,21 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   │   └── testauth/          # 仅测试用的合成认证器
 │   ├── config.example.env     # 无真实凭据的环境模板
 │   └── go.mod / go.sum        # module github.com/skyrocketingHong/FuyaoManager/backend
-├── frontend/                  # React + antd 管理台（独立 package-lock.json）
+├── frontend/                  # React + antd 6 管理台（独立 package-lock.json）
 │   ├── src/lib/api/           # 类型化客户端 + 生成的 schema.d.ts
-│   ├── src/lib/sites/         # 站点业务模块（竞态安全详情、编辑器）
-│   ├── src/lib/themes/        # 主题选择 store（目录、If-Match、412）
-│   ├── src/lib/i18n/          # zh-CN / en-US 词典
-│   ├── src/lib/theme/         # 日/夜 antd 算法状态
-│   ├── src/lib/session/       # 会话状态（含 platformInitialized）
-│   ├── src/components/        # AppShell（分组侧栏、顶栏、Simple Icons）
-│   ├── src/pages/             # 登录、主题目录、站点列表、逐站各页面
-│   └── tests/                 # vitest 套件（jsdom）
+│   ├── src/lib/sites/         # 站点业务模块（防竞态详情、编辑器）
+│   ├── src/lib/themes/        # 主题选择存储（目录、If-Match、412）
+│   ├── src/lib/editing/       # EditableDoc 状态机 + 未保存离开保护
+│   ├── src/lib/navigation/    # 唯一导航元数据（路由、菜单、作用域）
+│   ├── src/lib/webauthn/      # 通行密钥仪式、JSON 转换、错误映射
+│   ├── src/lib/i18n/          # 中英文字典
+│   ├── src/lib/theme/         # 日夜状态 + 语义令牌装配
+│   ├── src/lib/session/       # 会话状态：匿名/受限/完整/错误
+│   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
+│   │                          # TablePanel、PageLoading、StatusTag、layout/ 外壳
+│   ├── src/styles/            # base / shell / pages 样式（语义变量）
+│   ├── src/pages/             # 登录、通行密钥绑定、主题目录、站点与各业务页
+│   └── tests/                 # vitest 测试（jsdom）
 ├── contracts/
 │   ├── openapi/management.yaml  # 权威管理 HTTP 契约
 │   └── theme/                   # 权威主题契约
@@ -71,8 +76,9 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │       ├── README.md / README_ZH.md
 │       └── examples/            # 公开安全的正负例 fixtures
 ├── deploy/
-│   └── fuyao-admin/          # 服务器部署：双语 README、systemd 单元、
-│                             # 配置样例、Caddy apply 辅助脚本
+│   └── fuyao-admin/          # 服务器部署：双语 README、systemd 单元、配置样例、
+│                             # Caddy apply 脚本、公网静态页（static-page/）、
+│                             # 公网 Caddy vhost 模板（caddy/）
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针

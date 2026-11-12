@@ -13,13 +13,14 @@ the server template. Real DSNs and secrets never enter the repository.
 | `FUYAO_ADMIN_DATABASE_URL`    | — (required)            | PostgreSQL DSN.                                                                                           |
 | `FUYAO_ADMIN_ADDR`            | `127.0.0.1:8787`        | Listen address. Non-loopback hosts must be listed in `FUYAO_ADMIN_TRUSTED_HOSTS`.                         |
 | `FUYAO_ADMIN_TRUSTED_HOSTS`   | empty                   | Comma-separated hosts allowed for non-loopback binding and plain-HTTP origins (e.g. a Tailscale address). |
-| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn relying-party ID (compatibility path; IP-literal deployments answer 503 on passkey endpoints).   |
+| `FUYAO_ADMIN_RP_ID`           | `localhost`             | WebAuthn relying-party ID (production: `manager.fuyaoskyrocket.ing`; IP-literal deployments answer 503 on passkey endpoints). |
 | `FUYAO_ADMIN_RP_DISPLAY_NAME` | `FuyaoManager`          | Relying-party display name.                                                                               |
 | `FUYAO_ADMIN_RP_ORIGINS`      | `http://localhost:5174` | Accepted origins; an https origin switches session cookies to `Secure`.                                   |
 | `FUYAO_ADMIN_SESSION_TTL`     | `12h`                   | Session lifetime.                                                                                         |
 | `FUYAO_ADMIN_CHALLENGE_TTL`   | `5m`                    | WebAuthn challenge lifetime.                                                                              |
 | `FUYAO_ADMIN_PERMIT_TTL`      | `10m`                   | Enrollment permit lifetime.                                                                               |
-| `FUYAO_ADMIN_AUTH_CODE_TTL`   | `10m`                   | One-time CLI code lifetime.                                                                               |
+| `FUYAO_ADMIN_AUTH_CODE_TTL`   | `10m`                   | One-time CLI code lifetime (identity proofing and recovery).                                               |
+| `FUYAO_ADMIN_REGISTRATION_SESSION_TTL` | `30m` | Restricted registration session lifetime (issued when the account has no passkey for the current RP). |
 | `FUYAO_ADMIN_UI_DIR`          | empty                   | Built console directory; non-`/api` paths serve this SPA under a restrictive CSP.                         |
 
 ## Paths and contracts

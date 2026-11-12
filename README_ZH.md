@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue.svg)](./LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.27-00ADD8.svg)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-18-61DAFB.svg)](https://react.dev/)
-[![Ant Design](https://img.shields.io/badge/Ant_Design-5-1677ff.svg)](https://ant.design/)
+[![Ant Design](https://img.shields.io/badge/Ant_Design-6-1677ff.svg)](https://ant.design/)
 
 </div>
 
@@ -19,7 +19,7 @@ FuyaoManager 是自托管的站点与内容管理平台：管理站点、内容�
 
 ## 特性
 
-- **无密码认证**：每次登录都由本机 CLI 签发一次性码（`fuyao-admin login-code`）；Cookie 会话配合 CSRF 与 Origin 校验。通行密钥数据与端点作为域名 RP ID 兼容路径保留。
+- **通行密钥认证**：日常登录使用 discoverable 通行密钥（WebAuthn，要求用户验证）；Cookie 会话配合 CSRF 与 Origin 校验。首次运行由 `fuyao-admin init-admin` 签发一次性码，浏览器兑换后绑定通行密钥完成激活——账号在当前 RP 下无凭据时，兑换只获得短有效期受限登记会话，完成绑定仪式后才放开业务。`fuyao-admin login-code` 保留为运维批准的恢复入口。
 - **网页建站**：逐站内容、配置与 favicon 目录落盘，供应状态显式记录，支持幂等重试。
 - **内容权威源**：文章（frontmatter 感知、草稿门控）、友链、社交链接、可视化站点配置（高德安全码只写不读）、足迹点位——全部写入经由同一个受限内容库，带摘要 ETag 与原子写。
 - **相册与媒体任务**：服务端可控路径的上传、所选主题自己的 Node 索引器只读执行、年文档按 filename 编辑、删除受发布引用保护。
@@ -28,14 +28,14 @@ FuyaoManager 是自托管的站点与内容管理平台：管理站点、内容�
 - **私有预览**：逐构建的环回 origin，一次性入口令牌；关闭预览撤销令牌、停止监听并释放端口。
 - **发布与回滚**：契约校验的 release 元数据、密封只读产物、逐站发布锁内原子切换 live 指针、失败可重试、回滚不重新构建。
 - **受管边缘**：由数据库状态渲染 Caddy 片段，逐站公开/私有与显式接口绑定，经固定运维命令应用并支持最后良好状态回退。
-- **管理台**：React 18 + 官方 Ant Design，中英文、日夜主题、桌面应用式分组外壳。
+- **管理台**：React 18 + 官方 Ant Design 6，中英文、日夜主题、桌面应用式分组外壳（侧栏作用域、顶栏页面插槽）。
 
 ## 技术栈
 
 | 层     | 选型                                                     |
 | ------ | -------------------------------------------------------- |
 | 后端   | Go 1.27、PostgreSQL 18（pgx）、JSON Schema draft 2020-12 |
-| 管理台 | TypeScript、React 18、Vite、Ant Design 5、Simple Icons   |
+| 管理台 | TypeScript、React 18、Vite、Ant Design 6、Simple Icons   |
 | 契约   | OpenAPI 3.0（管理 API）、JSON Schema（主题契约）         |
 | 边缘   | Caddy（受管片段，仅渲染——绝不执行用户输入）              |
 
@@ -69,7 +69,7 @@ go run ./cmd/fuyao-admin register-theme \
   --root /path/to/FuyaoHomepage/site
 ```
 
-在管理台走完一次性码流程后创建站点、选择主题、写入内容、构建、预览、发布。
+在管理台兑换一次性码并绑定通行密钥后创建站点、选择主题、写入内容、构建、预览、发布。
 
 ## 命令索引
 
@@ -88,8 +88,8 @@ go run ./cmd/fuyao-admin register-theme \
 | ----------------------------- | ---------------------------------------------------------- |
 | `fuyao-admin migrate`         | 应用全部 SQL 迁移                                          |
 | `fuyao-admin serve`           | 启动管理 API（设置 `FUYAO_ADMIN_UI_DIR` 时同时服务管理台） |
-| `fuyao-admin init-admin`      | 首次运行绑定；打印一次性初始化码                           |
-| `fuyao-admin login-code`      | 为已有管理员签发一次性登录码                               |
+| `fuyao-admin init-admin`      | 首次运行身份签发；打印一次性初始化码（兑换后绑定通行密钥） |
+| `fuyao-admin login-code`      | 为已有管理员签发身份确认/恢复码                            |
 | `fuyao-admin revoke-sessions` | 撤销用户会话                                               |
 | `fuyao-admin register-theme`  | 登记或刷新主题目录条目                                     |
 | `fuyao-admin validate-theme`  | 依契约校验主题根                                           |
