@@ -52,10 +52,59 @@ superseded where they conflict with this section.
 
 ## Next (in order, one package at a time)
 
-Product constraints carried over from the N rounds: one-time CLI login
-codes, loopback/Tailscale-only management surfaces, per-site public/private
-visibility, plain HTTP by IP, official Ant Design console.
+Product constraints carried over from the N rounds, amended by the M4
+decisions: the primary browser authentication is passkey (the one-time CLI
+code remains the identity-proofing and recovery entry); the production
+management surface moves to `https://manager.fuyaoskyrocket.ing` with the
+public internet seeing only a standalone static page and authorized
+Tailscale clients reaching the real console through the same domain; the
+console keeps the official Ant Design stack (upgraded to antd 6).
 
-- **M4 — Deployment cutover** (server): stage the FuyaoManager release
-  layout, re-register the theme package, switch `current`, verify over
-  Tailscale; until then the live server keeps the pre-split build.
+- **M4 — Passkey authentication restoration, console shell alignment,
+  navigation rebuild, public static page and Tailscale admin entrance**
+  (in progress, approved 2026-11-12; this repository plus local-only
+  deployment artifacts):
+
+  1. Authentication: restore "CLI one-time code proves identity → bind a
+     passkey → enter the console". Code redemption for an account without a
+     current-RP credential now issues a short-lived restricted registration
+     session (read auth state, complete the passkey ceremony, log out —
+     nothing else); the new session-bound
+     `POST /api/v1/auth/passkey/register/options|verify` endpoints bind the
+     challenge to user + session, persist the credential with its RP ID,
+     and rotate into a full session in one transaction. Discoverable
+     passkey login is the routine entry; `login-code` stays the recovery
+     path. Migration 0012 adds `passkeys.rp_id` (legacy rows backfilled
+     `localhost`, verifiable as the only RP that ever served ceremonies),
+     `sessions.kind`, and `auth_states` kind `bind` + session binding; the
+     legacy permit enrollment surface keeps its first-admin restriction.
+  2. Navigation: a single navigation metadata source drives routes, the
+     sidebar menu, selection, and page positioning (platform scope: sites,
+     theme catalog; site scope: overview, content, settings, build &
+     release groups); unified anonymous/restricted/full guards and a site
+     context boundary replace the scattered redirect branches.
+  3. Console alignment: semantic tokens (day/night) synced into antd 6
+     ConfigProvider, grouped sidebar with scope block, 44px top bar with a
+     PageHeader slot provider carrying page filters/actions/tabs, shared
+     Panel/TablePanel/PageLoading/StatusTag/feedback components, and a
+     page-by-page tidy that reuses the existing editing/ETag stores.
+  4. Public/private boundary: the public vhost serves only an independent
+     static page (no console bundle, no API proxy, explicit 404 for API
+     paths); the Tailscale-bound vhost reverse-proxies the same domain to
+     `127.0.0.1:8787`. Public-side assets live in `deploy/fuyao-admin/`;
+     the private entrance, split-DNS and the full cutover runbook stay
+     local under `.fuyao/m4-deploy/` (not pushed to GitHub).
+  5. Deployment preparation: production env sample
+     (`RP_ID=manager.fuyaoskyrocket.ing`, HTTPS origins, loopback addr),
+     Caddy templates kept outside the managed snippet, migration/rollback
+     notes, and the verification matrix.
+
+  Acceptance checklist: backend suite green on `fuyao_mvp_test` including
+  the restricted-session, binding, rotation, replay, concurrency, and
+  legacy-credential cases; frontend check/test/build green with navigation,
+  guard, draft-protection, and empty/error-state coverage; OpenAPI +
+  routeSpec + generated types aligned; real-theme suite run when
+  `FUYAO_TEST_THEME_ROOT` is available; Caddy template adapt/validate
+  recorded honestly; no server, DNS-console, or Tailscale-console changes
+  are performed by this package. The earlier plain-HTTP IP topology notes
+  stay as the historical record of their time.

@@ -49,6 +49,14 @@
 
 ## 后续（按序，一次一个工作包）
 
-沿用 N 轮已确认的产品约束：CLI 一次性登录码、管理面仅本机与 Tailscale 可达、逐站公开/私有、HTTP + IP、官方 Ant Design 管理台。
+沿用 N 轮已确认的产品约束，并按 M4 决议修订：浏览器主认证方式为通行密钥（CLI 一次性码保留为身份确认与恢复入口）；生产管理面迁至 `https://manager.fuyaoskyrocket.ing`——公网只见独立静态页，获授权 Tailscale 客户端经同一域名进入真实管理台；管理台沿用官方 Ant Design 技术栈（本轮升级 antd 6）。
 
-- **M4 —— 部署切换**（服务器）：按 FuyaoManager release 布局打包、重新登记主题包、切换 `current`、经 Tailscale 验证；在此之前线上服务器继续运行拆分前构建。
+- **M4 —— Passkey 认证恢复、管理台外壳对齐、导航重整、公网静态页与 Tailscale 管理入口**（进行中，2026-11-12 批准；本仓库加本地留存部署产物）：
+
+  1. 认证：恢复"CLI 一次性码确认身份 → 绑定通行密钥 → 进入管理台"。当前 RP 下无凭据的账号兑换验证码后获得短有效期受限登记会话（仅可读认证状态、完成登记仪式、退出）；新增会话绑定的 `POST /api/v1/auth/passkey/register/options|verify`，挑战绑定用户与会话，凭据连同 RP ID 落库，并在同一事务内轮换为普通会话。discoverable 通行密钥登录为日常入口；`login-code` 保留为恢复路径。migration 0012 新增 `passkeys.rp_id`（历史行回填 `localhost`，可查证为唯一真实提供过仪式的 RP）、`sessions.kind`、`auth_states` 的 `bind` 类型与会话绑定列；旧 permit 登记接口保持首次登记限制。
+  2. 导航：唯一导航元数据源驱动路由、侧栏菜单、选中态与页面定位（平台作用域：站点管理、主题目录；站点作用域：总览、内容、设置、构建发布分组）；统一匿名/受限/完整守卫与站点上下文边界取代散落的跳转分支。
+  3. 外壳对齐：日夜语义令牌同步进 antd 6 ConfigProvider、带作用域区块的分组侧栏、44px 顶栏与 PageHeader 插槽承载页面筛选/操作/页签，共用 Panel/TablePanel/PageLoading/StatusTag/反馈组件，逐页整理并复用既有编辑/ETag 存储。
+  4. 公私网边界：公网 vhost 只提供独立静态页（无管理台 bundle、不代理 API、API 路径显式 404）；Tailscale 绑定的 vhost 将同一域名反代到 `127.0.0.1:8787`。公网侧产物入 `deploy/fuyao-admin/`；私网入口、Split DNS 与完整切换手册留存本地 `.fuyao/m4-deploy/`（不上传 GitHub）。
+  5. 部署准备：生产环境样例（`RP_ID=manager.fuyaoskyrocket.ing`、HTTPS origins、回环监听）、置于受管片段之外的 Caddy 模板、迁移/回滚说明与验证矩阵。
+
+  验收清单：后端套件在 `fuyao_mvp_test` 全绿，覆盖受限会话、绑定、轮换、重放、并发与历史凭据用例；前端 check/test/build 全绿，覆盖导航、守卫、草稿保护与空态/错误态；OpenAPI + routeSpec + 生成类型一致；具备 `FUYAO_TEST_THEME_ROOT` 时执行真实主题套件；Caddy 模板 adapt/validate 如实记录；本工作包不改线上服务器、DNS 控制台与 Tailscale 控制台。旧 HTTP+IP 拓扑记述保留其时点事实。
