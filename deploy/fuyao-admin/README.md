@@ -36,28 +36,37 @@ Program and data are separated: replacing `current` never touches content, relea
 ## Files in this directory
 
 - `fuyao-admin.service` — systemd unit (low-privilege user, cgroup memory limit, NODE_OPTIONS heap tuning for the 2 GB host).
-- `config.example.env` — environment template matching the live deployment.
+- `config.example.env` — environment template for the post-split (FuyaoManager) release layout.
 - `fuyao-caddy-apply` — the operator-controlled validate+reload helper installed at `/usr/local/sbin`.
 
 ## Deploy / upgrade procedure
 
-1. Build locally from the repository root:
+1. Build the platform release from this repository's root:
    ```bash
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C admin/backend build -o <stage>/fuyao-admin ./cmd/fuyao-admin
-   npm run admin:build && cp -R admin/frontend/dist <stage>/frontend
-   rsync -a --exclude node_modules --exclude .fuyao --exclude build --exclude .svelte-kit --exclude .DS_Store site/ <stage>/theme/site/
-   cp package.json package-lock.json .npmrc <stage>/theme/
-   cp -R contracts/theme <stage>/theme/contracts/theme
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C backend build -o <stage>/fuyao-admin ./cmd/fuyao-admin
+   npm --prefix frontend ci && npm --prefix frontend run build && cp -R frontend/dist <stage>/frontend
+   cp -R contracts <stage>/contracts
    ```
-2. Upload to `/srv/fuyao-admin/releases/<sha>/`, `chown -R fuyao-admin:fuyao-admin`, run `npm ci` as the service user (or `chown -R` after a root install).
-3. Repoint `current`, `systemctl restart fuyao-admin`.
-4. Re-register the first theme (identity-identical registration refreshes the stored source path):
+2. Add the first theme package from its own repository checkout
+   (FuyaoHomepage):
+   ```bash
+   rsync -a --exclude node_modules --exclude .fuyao --exclude build --exclude .svelte-kit --exclude .DS_Store \
+     /path/to/FuyaoHomepage/site/ <stage>/theme/site/
+   cp /path/to/FuyaoHomepage/package.json /path/to/FuyaoHomepage/package-lock.json /path/to/FuyaoHomepage/.npmrc <stage>/theme/
+   ```
+3. Upload to `/srv/fuyao-admin/releases/<sha>/`, `chown -R fuyao-admin:fuyao-admin`, run `npm ci` inside `<stage>/theme` as the service user (or `chown -R` after a root install).
+4. Repoint `current`, `systemctl restart fuyao-admin`.
+5. Re-register the first theme (identity-identical registration refreshes the stored source path):
    ```bash
    cd /srv/fuyao-admin/current && . /srv/fuyao-admin/etc/db.env && export FUYAO_ADMIN_DATABASE_URL
    ./fuyao-admin migrate                 # new migrations, if any
-   ./fuyao-admin register-theme --contracts theme/contracts/theme theme/site
+   ./fuyao-admin register-theme --contracts contracts/theme theme/site
    ```
-5. Verify: `systemctl is-active fuyao-admin`, Tailscale HTTP on the console, public-IP probes fail, `journalctl -u fuyao-admin` shows `edge applied`.
+6. Verify: `systemctl is-active fuyao-admin`, Tailscale HTTP on the console, public-IP probes fail, `journalctl -u fuyao-admin` shows `edge applied`.
+
+The currently deployed server still runs the pre-split single-repository
+release (theme contracts and repo root under `<current>/theme`); switch it
+to this layout only when the roadmap's deployment cutover is executed.
 
 Rollback: repoint `current` to the previous release directory and restart; runtime data and the database schema stay compatible within a migration series (downgrades past an applied migration are not supported).
 

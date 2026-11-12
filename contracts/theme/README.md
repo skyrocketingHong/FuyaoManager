@@ -2,7 +2,7 @@ English | [简体中文](./README_ZH.md)
 
 # Theme Contract (v1)
 
-Authoritative, machine-checkable contracts that decouple the public site from the content platform. A theme declares what it consumes and produces; the platform decides whether a site's needs are covered before any build, preview, or publication runs. The contracts are JSON Schema (draft 2020-12) documents validated by the Go package `admin/backend/internal/themecontract`.
+Authoritative, machine-checkable contracts that decouple the public site from the content platform. A theme declares what it consumes and produces; the platform decides whether a site's needs are covered before any build, preview, or publication runs. The contracts are JSON Schema (draft 2020-12) documents validated by the Go package `backend/internal/themecontract`.
 
 Scope boundary: `contracts/openapi/management.yaml` governs the management HTTP API (transport, auth, errors). This directory governs the build-time theme contract (identity, inputs, outputs). HTTP surface changes land in the OpenAPI file as the backend phases implement them; the theme contract never describes HTTP endpoints.
 
@@ -108,9 +108,9 @@ Each schema version is identified by its `contract` constant (or the legacy `sch
 
 ```bash
 # Unit and fixture tests (positive and negative, no database needed)
-cd admin/backend && go test ./internal/themecontract/ ./internal/cli/
+cd backend && go test ./internal/themecontract/ ./internal/cli/
 
 # Validate a theme root from the command line (flags must precede the root)
-cd admin/backend && go run ./cmd/fuyao-admin validate-theme \
+cd backend && go run ./cmd/fuyao-admin validate-theme \
   --contracts ../../contracts/theme [--config <theme-config.json>] <theme-root>
 ```

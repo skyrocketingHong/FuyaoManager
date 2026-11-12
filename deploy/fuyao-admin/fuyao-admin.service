@@ -1,5 +1,5 @@
 [Unit]
-Description=Fuyao management backend
+Description=FuyaoManager management backend
 After=network-online.target postgresql.service tailscaled.service
 Wants=network-online.target
 

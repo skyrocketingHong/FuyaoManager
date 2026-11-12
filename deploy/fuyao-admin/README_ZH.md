@@ -36,28 +36,34 @@ Fuyao 管理平台在目标服务器上的部署产物。部署刻意采用文�
 ## 本目录文件
 
 - `fuyao-admin.service` —— systemd 单元（低权限用户、cgroup 内存上限、2 GB 主机的 NODE_OPTIONS 堆调优）。
-- `config.example.env` —— 与线上部署一致的环境变量模板。
+- `config.example.env` —— 拆分后（FuyaoManager）release 布局的环境变量模板。
 - `fuyao-caddy-apply` —— 安装在 `/usr/local/sbin` 的运维控制校验+reload 脚本。
 
 ## 部署 / 升级流程
 
-1. 在仓库根目录本地构建：
+1. 从本仓库根目录构建平台 release：
    ```bash
-   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C admin/backend build -o <stage>/fuyao-admin ./cmd/fuyao-admin
-   npm run admin:build && cp -R admin/frontend/dist <stage>/frontend
-   rsync -a --exclude node_modules --exclude .fuyao --exclude build --exclude .svelte-kit --exclude .DS_Store site/ <stage>/theme/site/
-   cp package.json package-lock.json .npmrc <stage>/theme/
-   cp -R contracts/theme <stage>/theme/contracts/theme
+   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C backend build -o <stage>/fuyao-admin ./cmd/fuyao-admin
+   npm --prefix frontend ci && npm --prefix frontend run build && cp -R frontend/dist <stage>/frontend
+   cp -R contracts <stage>/contracts
    ```
-2. 上传至 `/srv/fuyao-admin/releases/<sha>/`，`chown -R fuyao-admin:fuyao-admin`，以服务用户执行 `npm ci`（或 root 安装后整体 `chown -R`）。
-3. 重指 `current`，`systemctl restart fuyao-admin`。
-4. 重新注册首主题（身份一致的重复登记会刷新记录的 source 路径）：
+2. 从主题项目自身的检出（FuyaoHomepage）加入首主题包：
+   ```bash
+   rsync -a --exclude node_modules --exclude .fuyao --exclude build --exclude .svelte-kit --exclude .DS_Store \
+     /path/to/FuyaoHomepage/site/ <stage>/theme/site/
+   cp /path/to/FuyaoHomepage/package.json /path/to/FuyaoHomepage/package-lock.json /path/to/FuyaoHomepage/.npmrc <stage>/theme/
+   ```
+3. 上传至 `/srv/fuyao-admin/releases/<sha>/`，`chown -R fuyao-admin:fuyao-admin`，以服务用户在 `<stage>/theme` 内执行 `npm ci`（或 root 安装后整体 `chown -R`）。
+4. 重指 `current`，`systemctl restart fuyao-admin`。
+5. 重新注册首主题（身份一致的重复登记会刷新记录的 source 路径）：
    ```bash
    cd /srv/fuyao-admin/current && . /srv/fuyao-admin/etc/db.env && export FUYAO_ADMIN_DATABASE_URL
    ./fuyao-admin migrate                 # 如有新迁移
-   ./fuyao-admin register-theme --contracts theme/contracts/theme theme/site
+   ./fuyao-admin register-theme --contracts contracts/theme theme/site
    ```
-5. 验证：`systemctl is-active fuyao-admin`、Tailscale HTTP 可达控制台、公网探测失败、`journalctl -u fuyao-admin` 出现 `edge applied`。
+6. 验证：`systemctl is-active fuyao-admin`、Tailscale HTTP 可达控制台、公网探测失败、`journalctl -u fuyao-admin` 出现 `edge applied`。
+
+当前已部署服务器仍运行拆分前的单仓 release（主题契约与 repo root 位于 `<current>/theme`）；待路线图的部署切换执行时再换到本布局。
 
 回滚：将 `current` 指回上一 release 目录并重启；运行数据与数据库模式在同一迁移序列内保持兼容（不支持跨已应用迁移降级）。
 

@@ -2,7 +2,7 @@
 
 English | [简体中文](./README_ZH.md)
 
-The React 18 + TypeScript + Vite + Ant Design admin console of the FuyaoHomepage management system (brand icons via Simple Icons). The console covers: first-run passkey enrollment, passkey login/logout, the site list, site detail, site settings editing with optimistic-concurrency conflict handling, per-site theme selection, build-preview tasks with private preview links, and the publish/rollback release history. There are deliberately no pages for articles, modules, or key/source operations yet; see [admin/ROADMAP.md](../ROADMAP.md).
+The React 18 + TypeScript + Vite + Ant Design admin console of the FuyaoManager management system (brand icons via Simple Icons). The console covers: first-run passkey enrollment, passkey login/logout, the site list, site detail, site settings editing with optimistic-concurrency conflict handling, per-site theme selection, build-preview tasks with private preview links, and the publish/rollback release history. There are deliberately no pages for articles, modules, or key/source operations yet; see [admin/ROADMAP.md](../ROADMAP.md).
 
 ## First-Time Setup
 
@@ -10,7 +10,7 @@ The console keeps its own lockfile, so the repository-root `npm ci` does not
 install it. Once per checkout:
 
 ```bash
-cd admin/frontend
+cd frontend
 npm ci
 ```
 
@@ -29,7 +29,7 @@ export FUYAO_ADMIN_DATABASE_URL='postgres://user@localhost:5432/fuyao_admin_dev'
 ### 2. Migrate, enroll the first administrator, register the theme
 
 ```bash
-cd admin/backend
+cd backend
 go run ./cmd/fuyao-admin migrate
 go run ./cmd/fuyao-admin bootstrap-admin --username admin
 #   prints a single-use enrollment permit; keep it for the browser step
@@ -43,7 +43,7 @@ the contract and repository-root settings):
 
 ```bash
 # terminal 1: backend on 127.0.0.1:8787
-cd admin/backend
+cd backend
 FUYAO_ADMIN_DATABASE_URL=... \
 FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
 FUYAO_ADMIN_REPO_ROOT="$PWD/../.." \
@@ -67,7 +67,7 @@ when the site actually serves the whole first theme.
    (WebAuthn binds to the origin `http://localhost:5174`).
 2. Follow "first time", enter the permit from step 2, and enroll your
    passkey.
-3. Create the first site (CLI, in `admin/backend` with the DSN exported):
+3. Create the first site (CLI, in `backend` with the DSN exported):
    `go run ./cmd/fuyao-admin create-site --slug blog --name "My Site"`.
 4. In the console: select the theme, build, preview, publish, roll back.
 
@@ -112,7 +112,7 @@ break.
 ## Layout
 
 ```text
-admin/frontend/src/
+frontend/src/
 ├── App.tsx                       # route table; hierarchy mirrors paths
 ├── main.tsx                      # ConfigProvider (antd locale + day/night algorithm) and router
 ├── app.css                       # layout shell + prefers-reduced-motion overrides

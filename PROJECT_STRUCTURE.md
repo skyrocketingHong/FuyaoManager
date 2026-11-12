@@ -1,0 +1,94 @@
+English | [简体中文](./PROJECT_STRUCTURE_ZH.md)
+
+# Project Structure and Overview
+
+## Overview
+
+FuyaoManager is the site and content management platform extracted from
+FuyaoHomepage (2026-11-12). It manages sites, content, media tasks, theme
+registration, frozen-snapshot builds, private previews, publishing,
+rollback, and the managed reverse-proxy edge. Themes are external projects
+consumed through the versioned contracts under `contracts/theme/`; the
+repository builds and tests without any theme checkout present (real-theme
+integration tests activate through `FUYAO_TEST_THEME_ROOT`).
+
+## Directory Structure
+
+```text
+.
+├── .github/workflows/ci.yml   # CI: backend (real PostgreSQL), frontend,
+│                              # optional external-theme integration job
+├── .gitignore                 # ignores data/, deps, builds, secrets
+├── .npmrc                     # npm engine-strict
+├── .prettierignore            # formatting ignores (lockfiles, generated types)
+├── .prettierrc                # tab/single-quote formatting
+├── AGENTS.md                  # development conventions (this repository)
+├── CHANGELOG.md               # English changelog
+├── CHANGELOG_ZH.md            # Simplified Chinese changelog
+├── CONFIGURATION.md           # English environment-variable reference
+├── CONFIGURATION_ZH.md        # Simplified Chinese environment-variable reference
+├── PROJECT_STRUCTURE.md       # this document
+├── PROJECT_STRUCTURE_ZH.md    # Simplified Chinese project structure
+├── README.md                  # default English entry
+├── README_ZH.md               # Simplified Chinese entry
+├── LICENSE                    # AGPL-3.0-only
+├── package.json               # root convenience scripts (frontend owns its lockfile)
+├── backend/                   # Go management backend
+│   ├── cmd/fuyao-admin/       # CLI: migrate / serve / init-admin / login-code /
+│   │                          # revoke-sessions / bootstrap-admin / create-site /
+│   │                          # validate-theme / register-theme
+│   ├── internal/
+│   │   ├── cli/               # command wiring + serve composition
+│   │   ├── config/            # environment loading and validation
+│   │   ├── db/                # pool setup + SQL migrations (0001-0011)
+│   │   ├── model/             # shared records
+│   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
+│   │   │                      # themes, builds, releases, media tasks, network entries
+│   │   ├── httpapi/           # management API: auth, sites, content, albums,
+│   │   │                      # themes, builds, releases, edge status, UI hosting
+│   │   │                      # + testdata/theme (bundled fixture theme)
+│   │   ├── content/           # per-site jailed content store (ETag, atomic writes)
+│   │   ├── siteprovision/     # per-site directory provisioning
+│   │   ├── themeregistry/     # operator-driven theme registration
+│   │   ├── themecontract/     # contracts/theme loader and validators (Go)
+│   │   ├── buildrunner/       # build tasks, trusted adapter, task workspaces,
+│   │   │                      # preview origins
+│   │   ├── publish/           # release sealing, atomic live pointer, published origins
+│   │   ├── mediatask/         # album indexing through the theme's Node script
+│   │   ├── edge/              # managed Caddy snippet rendering/applying
+│   │   ├── wa/                # WebAuthn bridge (compatibility path)
+│   │   └── testauth/          # test-only synthetic authenticator
+│   ├── config.example.env     # environment template without real credentials
+│   └── go.mod / go.sum        # module github.com/skyrocketingHong/FuyaoManager/backend
+├── frontend/                  # React + antd console (own package-lock.json)
+│   ├── src/lib/api/           # typed client + generated schema.d.ts
+│   ├── src/lib/sites/         # site business modules (race-safe detail, editors)
+│   ├── src/lib/themes/        # theme-selection store (catalog, If-Match, 412)
+│   ├── src/lib/i18n/          # zh-CN / en-US dictionaries
+│   ├── src/lib/theme/         # day/night antd algorithm state
+│   ├── src/lib/session/       # session state incl. platformInitialized
+│   ├── src/components/        # AppShell (grouped sidebar, top bar, Simple Icons)
+│   ├── src/pages/             # login, themes catalog, sites, per-site surfaces
+│   └── tests/                 # vitest suites (jsdom)
+├── contracts/
+│   ├── openapi/management.yaml  # authoritative management HTTP contract
+│   └── theme/                   # authoritative theme contracts
+│       ├── manifest.schema.json / build-input.schema.json / release.schema.json
+│       ├── README.md / README_ZH.md
+│       └── examples/            # public-safe positive/negative fixtures
+├── deploy/
+│   └── fuyao-admin/          # server deployment: bilingual README, systemd unit,
+│                             # config sample, Caddy apply helper
+└── docs/
+    ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
+    ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer
+    └── source-mapping/commit-map-from-fuyaohomepage.txt
+```
+
+## Runtime data layout
+
+Default runtime data lives under `<repo>/data/` (overridable per root via
+`FUYAO_ADMIN_*`): `data/builds/<taskId>/` (snapshot + artifacts + logs),
+`data/sites/<siteId>/{content,config}`, `data/releases/<siteId>/<buildId>/`.
+Deployments set these to the persistent data directory
+(`/srv/fuyao-admin/data/...`); nothing under `data/` is version controlled.

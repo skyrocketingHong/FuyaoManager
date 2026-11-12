@@ -2,14 +2,14 @@
 
 [English](./README.md) | 简体中文
 
-FuyaoHomepage 内容管理系统的 React 18 + TypeScript + Vite + Ant Design 管理台（品牌图标使用 Simple Icons）。覆盖：首次 Passkey 登记、Passkey 登录/注销、站点列表、站点详情、带乐观并发冲突处理的站点配置编辑、逐站主题选择、构建任务与私有预览链接，以及发布/回滚的发布历史。刻意不提供文章、模块、密钥与源码操作等页面；迭代计划见 [admin/ROADMAP_ZH.md](../ROADMAP_ZH.md)。
+FuyaoManager 内容管理系统的 React 18 + TypeScript + Vite + Ant Design 管理台（品牌图标使用 Simple Icons）。覆盖：首次 Passkey 登记、Passkey 登录/注销、站点列表、站点详情、带乐观并发冲突处理的站点配置编辑、逐站主题选择、构建任务与私有预览链接，以及发布/回滚的发布历史。刻意不提供文章、模块、密钥与源码操作等页面；迭代计划见 [admin/ROADMAP_ZH.md](../ROADMAP_ZH.md)。
 
 ## 首次安装
 
 管理前端使用独立锁文件，仓库根目录的 `npm ci` 不会安装它。每次检出后执行一次：
 
 ```bash
-cd admin/frontend
+cd frontend
 npm ci
 ```
 
@@ -27,7 +27,7 @@ export FUYAO_ADMIN_DATABASE_URL='postgres://user@localhost:5432/fuyao_admin_dev'
 ### 2. 迁移、登记首位管理员、登记主题
 
 ```bash
-cd admin/backend
+cd backend
 go run ./cmd/fuyao-admin migrate
 go run ./cmd/fuyao-admin bootstrap-admin --username admin
 #   打印一次性登记许可；留给浏览器步骤使用
@@ -41,7 +41,7 @@ go run ./cmd/fuyao-admin register-theme \
 
 ```bash
 # 终端 1：后端监听 127.0.0.1:8787
-cd admin/backend
+cd backend
 FUYAO_ADMIN_DATABASE_URL=... \
 FUYAO_ADMIN_THEME_CONTRACTS="$PWD/../../contracts/theme" \
 FUYAO_ADMIN_REPO_ROOT="$PWD/../.." \
@@ -63,7 +63,7 @@ npm run admin:dev
 1. 打开 `http://localhost:5174`——必须用 `localhost`，不要用 `127.0.0.1`
    （WebAuthn 绑定 origin `http://localhost:5174`）。
 2. 进入"首次使用"，输入第 2 步的许可，登记你的 Passkey。
-3. 创建首个站点（CLI，在 `admin/backend` 目录并已导出 DSN）：
+3. 创建首个站点（CLI，在 `backend` 目录并已导出 DSN）：
    `go run ./cmd/fuyao-admin create-site --slug blog --name "我的站点"`。
 4. 在管理台内：选择主题、构建、预览、发布、回滚。
 
@@ -104,7 +104,7 @@ origin 导致 Passkey 与 Cookie 失效。
 ## 目录结构
 
 ```text
-admin/frontend/src/
+frontend/src/
 ├── App.tsx                       # 路由表，层级与路径对应
 ├── main.tsx                      # ConfigProvider（antd 语言与日/夜算法）与路由
 ├── app.css                       # 布局壳与 prefers-reduced-motion 覆盖
