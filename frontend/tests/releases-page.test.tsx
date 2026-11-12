@@ -5,13 +5,13 @@
  * and a 409 conflict answers with the mapped warning.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, act, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, act, waitFor, cleanup } from '@testing-library/react';
 import { fireEvent } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { ApiError } from '../src/lib/api/client';
-import type { BuildTask, Release, Site } from '../src/lib/api/management';
+import type { BuildTask, Release, Site, SiteEdgeState } from '../src/lib/api/management';
 
 vi.mock('../src/lib/api/management', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../src/lib/api/management')>();
@@ -21,12 +21,14 @@ vi.mock('../src/lib/api/management', async (importOriginal) => {
 		listBuilds: vi.fn(),
 		listReleases: vi.fn(),
 		getCurrentRelease: vi.fn(),
-		createRelease: vi.fn()
+		createRelease: vi.fn(),
+		getSiteEdge: vi.fn()
 	};
 });
 
 import {
 	getSite,
+	getSiteEdge,
 	listBuilds,
 	listReleases,
 	getCurrentRelease,
@@ -122,10 +124,27 @@ function mount() {
 	);
 }
 
+function edgeState(isolated: boolean): SiteEdgeState {
+	return {
+		site: {
+			siteId: SITE,
+			slug: 'blog',
+			visibility: 'private',
+			port: 41000,
+			originUrl: 'http://127.0.0.1:41000',
+			currentOk: !isolated
+		},
+		enabled: true,
+		isolated,
+		inSync: !isolated
+	};
+}
+
 function primeState(builds: BuildTask[], releases: Release[]) {
 	vi.mocked(getSite).mockResolvedValue(site());
 	vi.mocked(listBuilds).mockResolvedValue(builds);
 	vi.mocked(listReleases).mockResolvedValue(releases);
+	vi.mocked(getSiteEdge).mockResolvedValue(edgeState(false));
 	vi.mocked(getCurrentRelease).mockImplementation(async () => ({
 		release: releaseRow('rel-live', releases[0]?.buildId ?? 'b1', 'live'),
 		originUrl: 'http://127.0.0.1:41000'
@@ -138,6 +157,11 @@ beforeEach(() => {
 	vi.mocked(listReleases).mockReset();
 	vi.mocked(getCurrentRelease).mockReset();
 	vi.mocked(createRelease).mockReset();
+	vi.mocked(getSiteEdge).mockReset();
+});
+
+afterEach(() => {
+	cleanup();
 });
 
 /** antd inserts a space between two-CJK-character button labels. */
@@ -226,5 +250,109 @@ describe('ReleasesPage publish feedback and candidate binding', () => {
 		await settled();
 
 		expect(screen.getByText(zh['error.releaseBuildConflict'] as string)).toBeDefined();
+	});
+});
+
+describe('ReleasesPage isolation facts', () => {
+	it('disables publish and rollback and hides the site link while isolated', async () => {
+		const b1 = succeededBuild('b1-isolated');
+		primeState([b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		vi.mocked(getSiteEdge).mockResolvedValue(edgeState(true));
+		mount();
+		// Flush the edge promise: the isolated facts gate the write buttons.
+		await act(async () => {
+			for (let i = 0; i < 12; i++) await Promise.resolve();
+		});
+		expect(screen.getByText(zh['edge.isolatedNotice'])).toBeDefined();
+
+		expect(findButton(zh['releases.publish'] as string).disabled).toBe(true);
+		expect(findButton(zh['releases.rollback'] as string).disabled).toBe(true);
+		expect(screen.queryByText(zh['releases.open'] as string)).toBeNull();
+		// The history stays readable.
+		expect(screen.getByText(/当前生效/)).toBeDefined();
+	}, 15000);
+
+	it('keeps publish, rollback, and the site link available while enabled', async () => {
+		const b1 = succeededBuild('b1-enabled');
+		const b2 = succeededBuild('b2-enabled');
+		primeState([b2, b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		mount();
+		await waitFor(() => expect(screen.getByText(/当前生效/)).toBeDefined());
+		// The edge facts land through their own promise: wait for the notice
+		// to disappear instead of assuming the flush timing.
+		await waitFor(() => expect(screen.queryByText(zh['edge.isolatedNotice'])).toBeNull());
+
+		expect(findButton(zh['releases.publish'] as string).disabled).toBe(false);
+		expect(findButton(zh['releases.rollback'] as string).disabled).toBe(false);
+		expect(screen.getByText(zh['releases.open'] as string)).toBeDefined();
+	}, 15000);
+
+	it('shows a short failure instead of the isolation notice when the edge facts fail', async () => {
+		const b1 = succeededBuild('b1-edgefail');
+		primeState([b1], [releaseRow('rel-1', b1.id, 'live')]);
+		vi.mocked(getSiteEdge).mockRejectedValue(new Error('network down'));
+		mount();
+		await waitFor(() => expect(screen.getByText(zh['edge.loadFailed'])).toBeDefined());
+		expect(screen.queryByText(zh['edge.isolatedNotice'])).toBeNull();
+		expect(findButton(zh['releases.publish'] as string).disabled).toBe(true);
+	});
+
+	it('drops a late isolated answer for the previous site after a switch', async () => {
+		const SITE_B = '22222222-2222-2222-2222-222222222222';
+		let navigateRef: ((to: string) => void) | null = null;
+		function NavBridge() {
+			navigateRef = useNavigate();
+			return null;
+		}
+		const siteB = { ...site(), siteId: SITE_B, slug: 'other' };
+		vi.mocked(getSite).mockImplementation(async (id: string) => (id === SITE ? site() : siteB));
+		vi.mocked(listBuilds).mockImplementation(async (id: string) =>
+			id === SITE ? [succeededBuild('b1-late-a')] : [succeededBuild('b2-late-b')]
+		);
+		vi.mocked(listReleases).mockImplementation(async (id: string) =>
+			id === SITE ? [releaseRow('rel-1', 'b1-late-a', 'live')] : []
+		);
+		vi.mocked(getCurrentRelease).mockImplementation(async (id: string) => {
+			if (id === SITE) {
+				return { release: releaseRow('rel-1', 'b1-late-a', 'live'), originUrl: 'http://127.0.0.1:41000' };
+			}
+			throw new ApiError(404, 'no_live_release', '', null);
+		});
+		let resolveEdgeA!: (v: SiteEdgeState) => void;
+		vi.mocked(getSiteEdge).mockImplementation((id: string) => {
+			if (id === SITE) {
+				return new Promise<SiteEdgeState>((resolve) => {
+					resolveEdgeA = resolve;
+				});
+			}
+			return Promise.resolve({ ...edgeState(true), site: { ...edgeState(true).site, siteId: SITE_B } });
+		});
+
+		render(
+			<ConfigProvider>
+				<MemoryRouter initialEntries={[`/sites/${SITE}/releases`]}>
+					<NavBridge />
+					<Routes>
+						<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
+						<Route path="/login" element={<div>login</div>} />
+					</Routes>
+				</MemoryRouter>
+			</ConfigProvider>
+		);
+		await waitFor(() => expect(vi.mocked(listReleases)).toHaveBeenCalledWith(SITE));
+
+		await act(async () => {
+			navigateRef?.(`/sites/${SITE_B}/releases`);
+		});
+		await waitFor(() => expect(vi.mocked(listReleases)).toHaveBeenCalledWith(SITE_B));
+		await waitFor(() => expect(screen.getByText(zh['edge.isolatedNotice'])).toBeDefined());
+
+		// Site A's late deployable answer must never reach site B.
+		await act(async () => {
+			resolveEdgeA(edgeState(false));
+			for (let i = 0; i < 12; i++) await Promise.resolve();
+		});
+		await waitFor(() => expect(screen.getByText(zh['edge.isolatedNotice'])).toBeDefined());
+		expect(findButton(zh['releases.publish'] as string).disabled).toBe(true);
 	});
 });

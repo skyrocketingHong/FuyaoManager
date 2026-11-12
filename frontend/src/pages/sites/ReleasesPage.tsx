@@ -11,13 +11,15 @@ import {
 	createRelease,
 	getCurrentRelease,
 	getSite,
+	getSiteEdge,
 	listBuilds,
 	listReleases,
 	rollbackRelease,
 	type BuildTask,
 	type Release,
 	type ReleaseCreate,
-	type Site
+	type Site,
+	type SiteEdgeState
 } from '../../lib/api/management';
 import { ApiError } from '../../lib/api/client';
 import { apiErrorKey } from '../../lib/i18n/errors';
@@ -27,6 +29,13 @@ interface CurrentView {
 	release: Release;
 	originUrl: string;
 }
+
+/** Edge facts are explicit per-site state: loading and error never carry
+ * facts, so the UI cannot borrow the previous site's deployable answer. */
+type EdgeFacts =
+	| { kind: 'loading' }
+	| { kind: 'error' }
+	| { kind: 'ready'; state: SiteEdgeState };
 
 /** A publish 422 answering application/json carries a failed release record. */
 function failedReleaseOf(err: unknown): Release | null {
@@ -50,9 +59,29 @@ export default function ReleasesPage() {
 	const [rollbackTarget, setRollbackTarget] = useState<Release | null>(null);
 	const [rollingBack, setRollingBack] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
+	const [edge, setEdge] = useState<EdgeFacts>({ kind: 'loading' });
+	// The latest route param, readable from async handlers: a closure captured
+	// before a site switch still holds the old siteId.
+	const siteIdRef = useRef(siteId);
+	// Mount/site generation: bumped on every site switch and on unmount.
+	const generation = useRef(0);
 	// Request epoch: late responses for a previous site (or after unmount)
 	// can never overwrite the current state.
 	const epoch = useRef(0);
+
+	const refreshEdge = useCallback(async () => {
+		if (!siteId) return;
+		const myGen = generation.current;
+		setEdge({ kind: 'loading' });
+		try {
+			const next = await getSiteEdge(siteId);
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
+			setEdge({ kind: 'ready', state: next });
+		} catch {
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
+			setEdge({ kind: 'error' });
+		}
+	}, [siteId]);
 
 	const refresh = useCallback(async () => {
 		if (!siteId) return;
@@ -94,6 +123,7 @@ export default function ReleasesPage() {
 	useEffect(() => {
 		if (!siteId) return;
 		epoch.current++;
+		generation.current++;
 		setSite(null);
 		setCurrent(null);
 		setReleases(null);
@@ -101,6 +131,8 @@ export default function ReleasesPage() {
 		setCandidate(null);
 		setErrorKey(null);
 		setRollbackTarget(null);
+		setEdge({ kind: 'loading' });
+		siteIdRef.current = siteId;
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
@@ -113,11 +145,13 @@ export default function ReleasesPage() {
 				}
 			});
 		void refresh();
+		void refreshEdge();
 		return () => {
 			epoch.current++;
+			generation.current++;
 			cancelled = true;
 		};
-	}, [siteId, refresh, navigate]);
+	}, [siteId, refresh, refreshEdge, navigate]);
 
 	async function handlePublish() {
 		// Act on the effective candidate: the user's explicit selection when
@@ -176,6 +210,11 @@ export default function ReleasesPage() {
 	}
 
 	const editable = site !== null && canEditSite(site);
+	// Deployment facts: nothing known (loading, fetch failure) counts as
+	// deployable — the isolation presentation is the conservative default.
+	// Deployment gating: only an explicit ready answer with isolated===false
+	// opens the deployable surfaces; loading and error stay conservative.
+	const isolated = edge.kind !== 'ready' || edge.state.isolated === true;
 	// Only releases that actually back content block a build from being
 	// published again; failed attempts do not.
 	const releasedBuildIds = new Set(
@@ -208,7 +247,7 @@ export default function ReleasesPage() {
 	);
 	const headerActions = (
 		<Space size={8}>
-			{current && current.originUrl ? (
+			{!isolated && current && current.originUrl ? (
 				<Button href={current.originUrl} target="_blank">
 					<Trans text={t('releases.open')} />
 				</Button>
@@ -216,7 +255,7 @@ export default function ReleasesPage() {
 			<Button
 				type="primary"
 				loading={publishing}
-				disabled={!publishable}
+				disabled={!publishable || isolated}
 				onClick={() => void handlePublish()}
 			>
 				<Trans text={t('releases.publish')} />
@@ -259,6 +298,30 @@ export default function ReleasesPage() {
 								style={{ marginBottom: 16 }}
 							/>
 						)}
+						{edge.kind === 'loading' ? (
+							<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+								{t('common.loading')}
+							</Typography.Text>
+						) : edge.kind === 'error' ? (
+							<Alert
+								type="warning"
+								showIcon
+								title={t('edge.loadFailed')}
+								action={
+									<Button size="small" onClick={() => void refreshEdge()}>
+										{t('common.retry')}
+									</Button>
+								}
+								style={{ marginBottom: 16 }}
+							/>
+						) : edge.state.isolated ? (
+							<Alert
+								type="info"
+								showIcon
+								title={t('edge.isolatedNotice')}
+								style={{ marginBottom: 16 }}
+							/>
+						) : null}
 						{!editable ? (
 							<Alert
 								type="info"
@@ -319,7 +382,11 @@ export default function ReleasesPage() {
 												<Typography.Text type="danger">{record.failure.stage}</Typography.Text>
 											) : null}
 											{editable && record.status !== 'live' && record.status !== 'failed' ? (
-												<Button size="small" onClick={() => setRollbackTarget(record)}>
+												<Button
+													size="small"
+													disabled={isolated}
+													onClick={() => setRollbackTarget(record)}
+												>
 													{t('releases.rollback')}
 												</Button>
 											) : null}

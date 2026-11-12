@@ -3,7 +3,7 @@
  * state, the current live release, and the entry points into content,
  * configuration, and builds. No invented metrics.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Space, Switch, Typography, message } from 'antd';
@@ -32,46 +32,79 @@ type ReleaseState =
 	| { kind: 'live'; release: Release; originUrl: string }
 	| { kind: 'error' };
 
+/** Edge facts are explicit per-site state: loading and error never carry
+ * facts, so the UI cannot borrow the previous site's deployable answer. */
+type EdgeFacts =
+	| { kind: 'loading' }
+	| { kind: 'error' }
+	| { kind: 'ready'; state: SiteEdgeState };
+
 export default function SiteDetailPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const boundarySite = useCurrentSite();
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const [messageApi, contextHolder] = message.useMessage();
 	const [switching, setSwitching] = useState(false);
-	const [edge, setEdge] = useState<SiteEdgeState | null>(null);
+	const [edge, setEdge] = useState<EdgeFacts>({ kind: 'loading' });
 	const [reapplying, setReapplying] = useState(false);
 	const [release, setRelease] = useState<ReleaseState>({ kind: 'loading' });
 	// A fresh instance per siteId keeps data and error state from surviving a
 	// switch between sites.
 	const detail = useMemo(() => new SiteDetail(), [siteId]);
+	// The latest route param, readable from async handlers: a closure captured
+	// before a site switch still holds the old siteId.
+	const siteIdRef = useRef(siteId);
+	siteIdRef.current = siteId;
+	// Mount/site generation: bumped on every site switch and on unmount. A
+	// response applies only while the generation still matches, so a stale
+	// answer can never overwrite the current site's facts.
+	const generation = useRef(0);
 
 	useEffect(() => {
+		generation.current++;
 		void detail.load(siteId ?? '', async () => {});
+		return () => {
+			generation.current++;
+		};
 	}, [detail, siteId]);
 
 	const state = useSyncExternalStore(detail.subscribe, detail.getSnapshot);
 	const site = state.site ?? boundarySite;
 
+	// Deployment gating: only an explicit ready answer with isolated===false
+	// opens the deployable surfaces; loading and error stay conservative.
+	const edgeReady = edge.kind === 'ready';
+	const isolated = !edgeReady || edge.state.isolated === true;
+	const edgeEnabled = edgeReady && edge.state.enabled === true;
+
 	const refreshEdge = useCallback(async () => {
 		if (!siteId) return;
+		const myGen = generation.current;
+		setEdge({ kind: 'loading' });
 		try {
-			setEdge(await getSiteEdge(siteId));
+			const next = await getSiteEdge(siteId);
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
+			setEdge({ kind: 'ready', state: next });
 		} catch {
-			// surfaced on the next action
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
+			setEdge({ kind: 'error' });
 		}
 	}, [siteId]);
 
 	const refreshRelease = useCallback(async () => {
 		if (!siteId) return;
+		const myGen = generation.current;
 		setRelease({ kind: 'loading' });
 		try {
 			const current = await getCurrentRelease(siteId);
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
 			setRelease(
 				current.release
 					? { kind: 'live', release: current.release, originUrl: current.originUrl }
 					: { kind: 'none' }
 			);
 		} catch (err) {
+			if (siteIdRef.current !== siteId || myGen !== generation.current) return;
 			if (apiErrorKey(err) === 'error.noLiveRelease') {
 				setRelease({ kind: 'none' });
 			} else {
@@ -81,9 +114,14 @@ export default function SiteDetailPage() {
 	}, [siteId]);
 
 	useEffect(() => {
+		// A site switch starts from a clean slate: no facts from the previous
+		// site survive into the loading state. The site record itself is not
+		// a trigger — the edge and release requests depend on the siteId only.
+		setEdge({ kind: 'loading' });
+		setRelease({ kind: 'loading' });
 		void refreshEdge();
 		void refreshRelease();
-	}, [refreshEdge, refreshRelease, state.site]);
+	}, [refreshEdge, refreshRelease]);
 
 	async function handleReapply() {
 		if (!siteId) return;
@@ -175,7 +213,7 @@ export default function SiteDetailPage() {
 								checked={site.visibility === 'public'}
 								onChange={(checked) => void handleVisibility(checked)}
 								loading={switching}
-								disabled={!canEditSite(site)}
+								disabled={!canEditSite(site) || isolated}
 								checkedChildren={t('site.visibility.public')}
 								unCheckedChildren={t('site.visibility.private')}
 							/>
@@ -191,22 +229,61 @@ export default function SiteDetailPage() {
 			</Panel>
 
 			<Panel title={t('edge.title')}>
-				{edge?.site?.port ? (
+				{edge.kind === 'loading' ? (
+					<Typography.Text type="secondary">{t('common.loading')}</Typography.Text>
+				) : edge.kind === 'error' ? (
 					<Space wrap>
-						<a href={edge.site.originUrl} target="_blank" rel="noreferrer" className="version-text">
-							{edge.site.originUrl}
+						<Typography.Text type="danger">{t('edge.loadFailed')}</Typography.Text>
+						<Button size="small" onClick={() => void refreshEdge()}>
+							{t('common.retry')}
+						</Button>
+					</Space>
+				) : edge.state.isolated ? (
+					<Space orientation="vertical" style={{ width: '100%' }}>
+						<Typography.Text type="secondary">{t('edge.isolatedNotice')}</Typography.Text>
+						{edge.state.site?.port ? (
+							<Space wrap>
+								{/* Reservation, not a running origin: rendered as plain
+								    text and gated by currentOk, which only says the
+								    on-disk pointer matches the live release. */}
+								<Typography.Text className="version-text">
+									{edge.state.site.originUrl}
+								</Typography.Text>
+								<StatusTag kind={edge.state.site.currentOk ? 'success' : 'neutral'}>
+									{edge.state.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
+								</StatusTag>
+							</Space>
+						) : (
+							<Typography.Text type="secondary">{t('edge.pendingEntry')}</Typography.Text>
+						)}
+					</Space>
+				) : edge.state.site?.port ? (
+					<Space wrap>
+						<a href={edge.state.site.originUrl} target="_blank" rel="noreferrer" className="version-text">
+							{edge.state.site.originUrl}
 						</a>
-						<StatusTag kind={edge.inSync ? 'success' : 'warning'}>
-							{edge.inSync ? t('edge.inSync') : t('edge.drifted')}
+						<StatusTag kind={edge.state.inSync ? 'success' : 'warning'}>
+							{edge.state.inSync ? t('edge.inSync') : t('edge.drifted')}
 						</StatusTag>
+						<StatusTag kind={edge.state.site.currentOk ? 'success' : 'neutral'}>
+							{edge.state.site.currentOk ? t('edge.pointerMatch') : t('edge.pointerMismatch')}
+						</StatusTag>
+						{!edgeEnabled ? (
+							<Typography.Text type="secondary">{t('edge.unconfigured')}</Typography.Text>
+						) : null}
 						{canEditSite(site) ? (
-							<Button size="small" loading={reapplying} onClick={() => void handleReapply()}>
+							<Button
+								size="small"
+								loading={reapplying}
+								disabled={!edgeEnabled}
+								onClick={() => void handleReapply()}
+							>
 								{t('edge.reapply')}
 							</Button>
 						) : null}
-						{edge.lastError ? (
+						{edge.state.lastError ? (
 							<Typography.Text type="danger" style={{ fontSize: 12 }}>
-								{edge.lastError}
+								{edge.state.lastError}
 							</Typography.Text>
 						) : null}
 					</Space>
@@ -228,9 +305,13 @@ export default function SiteDetailPage() {
 						<span className="version-text">
 							{release.release.theme.themeId} @ {release.release.theme.version}
 						</span>
-						<a href={release.originUrl} target="_blank" rel="noreferrer" className="version-text">
-							{release.originUrl}
-						</a>
+						{isolated ? (
+							<Typography.Text className="version-text">{release.originUrl}</Typography.Text>
+						) : (
+							<a href={release.originUrl} target="_blank" rel="noreferrer" className="version-text">
+								{release.originUrl}
+							</a>
+						)}
 					</Space>
 				)}
 			</Panel>

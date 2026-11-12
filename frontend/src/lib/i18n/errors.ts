@@ -44,7 +44,8 @@ const codeToKey: Record<string, MessageKey> = {
 	release_build_conflict: 'error.releaseBuildConflict',
 	release_not_found: 'error.releaseNotFound',
 	release_not_rollbackable: 'error.releaseNotRollbackable',
-	no_live_release: 'error.noLiveRelease'
+	no_live_release: 'error.noLiveRelease',
+	deployment_disabled: 'error.deploymentDisabled'
 };
 
 /** Returns the message key describing the error, or null for unknown errors. */
