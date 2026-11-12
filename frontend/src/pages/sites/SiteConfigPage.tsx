@@ -191,11 +191,17 @@ export default function SiteConfigPage() {
 			// The security code is write-only: send it only when the user
 			// typed something; an explicit empty field keeps the stored value.
 			const securityCode = securityInput !== '' ? securityInput : undefined;
+			// Snapshot what this save submits: if the user kept editing while
+			// the request was in flight, the newer edits stay in the form and
+			// the editor stays dirty instead of being reset to "saved".
+			const submitted = form;
 			const saved = await putSiteConfig(siteId, next, digest, securityCode);
 			setDigest(saved.digest);
 			setSecuritySet(saved.amapSecurityCodeSet ?? false);
 			setSecurityInput('');
-			setDirty(false);
+			if (JSON.stringify(form) === JSON.stringify(submitted)) {
+				setDirty(false);
+			}
 			setConflict(false);
 			void messageApi.success(t('config.saved'));
 		} catch (err) {

@@ -128,7 +128,10 @@ export default function AlbumsPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [siteId]);
 
-	// Poll task status while anything is queued or running.
+	// Poll task status while anything is queued or running. When processing
+	// finishes, the index reload is skipped while the user has unsaved
+	// metadata edits — a completed background task must never clobber the
+	// editor. The stale index stays visible until the user saves or reloads.
 	useEffect(() => {
 		if (!siteId) return;
 		if (!tasks.some((task) => !terminalTask.has(task.status))) return;
@@ -137,14 +140,16 @@ export default function AlbumsPage() {
 				const list = await listMediaTasks(siteId);
 				setTasks((prev) => (prev.length === 0 && list.length === 0 ? prev : list));
 				if (!list.some((task) => !terminalTask.has(task.status))) {
-					void loadIndex();
+					if (!dirty) {
+						void loadIndex();
+					}
 				}
 			} catch {
 				// polling continues silently
 			}
 		}, 3000);
 		return () => window.clearInterval(timer);
-	}, [tasks, siteId, loadIndex]);
+	}, [tasks, siteId, loadIndex, dirty]);
 
 	async function refreshTasks() {
 		if (!siteId) return;
@@ -203,6 +208,23 @@ export default function AlbumsPage() {
 			[next[indexOf], next[target]] = [next[target], next[indexOf]];
 			return next;
 		});
+	}
+
+	// Conflict sync: adopt the server digest (baseline marker) while keeping
+	// the local photo edits; discarding them is the separate explicit action.
+	async function syncAfterConflict() {
+		if (!siteId || !year) return;
+		const my = ++epoch.current;
+		try {
+			const env = await getAlbumYear(siteId, year);
+			if (my !== epoch.current) return;
+			setDigest(env.digest);
+			if (!dirty) setDoc(env.year);
+			setConflict(false);
+			void messageApi.info(t('posts.conflictSynced'));
+		} catch {
+			// keep the banner
+		}
 	}
 
 	async function handleSave() {
@@ -318,9 +340,21 @@ export default function AlbumsPage() {
 					description={t('posts.conflictBody')}
 					style={{ marginBottom: 12 }}
 					action={
-						<Button size="small" onClick={() => void loadYear(year)}>
-							{t('posts.conflictAction')}
-						</Button>
+						<Space>
+							<Button size="small" onClick={() => void syncAfterConflict()}>
+								{t('posts.conflictAction')}
+							</Button>
+							<Button
+								size="small"
+								danger
+								onClick={() => {
+									setDirty(false);
+									void loadYear(year);
+								}}
+							>
+								{t('posts.discardLocal')}
+							</Button>
+						</Space>
 					}
 				/>
 			) : null}

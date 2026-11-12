@@ -85,6 +85,11 @@ export default function PostsPage() {
 	const [digest, setDigest] = useState('');
 	const [saving, setSaving] = useState(false);
 	const [conflict, setConflict] = useState(false);
+	// Server baseline and locally-touched fields for the open editor. The
+	// baseline drives 412 recovery (sync refreshes it without overwriting
+	// touched fields); untouched fields follow the server version.
+	const [baseline, setBaseline] = useState<PostForm | null>(null);
+	const [touched, setTouched] = useState<Set<keyof PostForm>>(new Set());
 	const [messageApi, contextHolder] = message.useMessage();
 	const [form] = Form.useForm<PostForm>();
 	// Request epoch guards against late responses after site switches.
@@ -133,15 +138,22 @@ export default function PostsPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [siteId]);
 
+	const editorEpoch = useRef(0);
+
 	async function openEditor(postPath?: string) {
 		setConflict(false);
 		if (!siteId) return;
+		const my = ++editorEpoch.current;
+		setTouched(new Set());
 		if (postPath) {
 			try {
 				const { post, etag } = await getPost(siteId, postPath);
+				if (my !== editorEpoch.current) return; // user closed/switched meanwhile
 				setEditing(post);
 				setDigest(etag);
-				form.setFieldsValue(toForm(post));
+				const formValues = toForm(post);
+				setBaseline(formValues);
+				form.setFieldsValue(formValues);
 			} catch (err) {
 				const key = apiErrorKey(err);
 				if (key !== null) void messageApi.warning(t(key));
@@ -151,11 +163,15 @@ export default function PostsPage() {
 			setEditing(null);
 			setDigest('');
 			form.resetFields();
-			form.setFieldsValue({
+			const initial: PostForm = {
 				category: 'tech',
-				draft: false,
-				date: new Date().toISOString()
-			});
+				slug: '',
+				title: '',
+				date: new Date().toISOString(),
+				draft: false
+			};
+			setBaseline(initial);
+			form.setFieldsValue(initial);
 		}
 		setEditorOpen(true);
 	}
@@ -164,20 +180,23 @@ export default function PostsPage() {
 		if (!siteId || !editing) return;
 		setSaving(true);
 		try {
-			const body: Partial<Post> = {
-				...values,
-				categories: (values.categories ?? '')
-					.split(',')
-					.map((s) => s.trim())
-					.filter(Boolean),
-				tags: (values.tags ?? '')
-					.split(',')
-					.map((s) => s.trim())
-					.filter(Boolean)
-			};
+			const body: Partial<Post> = toBody(values);
 			await putPost(siteId, editing.path, body, digest);
 			void messageApi.success(t('posts.saved'));
-			setEditorOpen(false);
+			// If the user kept editing while the request was in flight, the
+			// newer local values differ from what was submitted: keep the
+			// editor open with those values instead of silently discarding
+			// them behind a close.
+			const current = form.getFieldsValue();
+			if (JSON.stringify(toBody(current as PostForm)) !== JSON.stringify(body)) {
+				void messageApi.info(t('posts.newerEditsKept'));
+			} else {
+				setEditorOpen(false);
+			}
+			// The saved version becomes the new baseline for further edits.
+			const savedForm = toForm({ ...editing, ...body } as Post);
+			setBaseline(savedForm);
+			setDigest('');
 			await refresh();
 		} catch (err) {
 			if (apiErrorKey(err) === 'error.conflict') {
@@ -191,20 +210,53 @@ export default function PostsPage() {
 		}
 	}
 
-	// After a 412, reload the server version but keep local edits per field
-	// the user has not touched (antd preserves untouched form values).
+	function toBody(values: PostForm): Partial<Post> {
+		return {
+			...values,
+			categories: (values.categories ?? '')
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean),
+			tags: (values.tags ?? '')
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean)
+		};
+	}
+
+	// After a 412, adopt the server version as the new baseline and ETag
+	// while preserving every locally-touched field: only untouched fields
+	// refresh from the server. Discarding local edits is a separate action.
 	async function syncAfterConflict() {
 		if (!siteId || !editing) return;
+		const my = ++editorEpoch.current;
 		try {
 			const { post, etag } = await getPost(siteId, editing.path);
+			if (my !== editorEpoch.current) return;
+			const serverForm = toForm(post);
+			setBaseline(serverForm);
 			setDigest(etag);
 			setEditing(post);
-			form.setFieldsValue(toForm(post));
+			const merged: Record<string, unknown> = {
+				...(serverForm as unknown as Record<string, unknown>)
+			};
+			const rawForm = form as unknown as { getFieldValue: (name: string) => unknown };
+			for (const field of touched) {
+				merged[field as string] = rawForm.getFieldValue(field as string) ?? '';
+			}
+			form.setFieldsValue(merged as never);
 			setConflict(false);
 			void messageApi.info(t('posts.conflictSynced'));
 		} catch {
 			// keep the conflict banner; the user can retry manually
 		}
+	}
+
+	function discardLocal() {
+		if (!baseline) return;
+		form.setFieldsValue(baseline);
+		setTouched(new Set());
+		setConflict(false);
 	}
 
 	async function handleCreate(values: PostForm) {
@@ -341,9 +393,13 @@ export default function PostsPage() {
 			<Modal
 				title={editing ? t('posts.editTitle') : t('posts.newTitle')}
 				open={editorOpen}
-				onCancel={() => setEditorOpen(false)}
+				onCancel={() => {
+					editorEpoch.current++;
+					setEditorOpen(false);
+				}}
 				confirmLoading={saving}
 				onOk={() => form.submit()}
+				okButtonProps={{ disabled: !editable }}
 				okText={t('common.save')}
 				width={720}
 				destroyOnClose
@@ -355,14 +411,29 @@ export default function PostsPage() {
 						message={t('posts.conflictTitle')}
 						description={t('posts.conflictBody')}
 						action={
-							<Button size="small" onClick={() => void syncAfterConflict()}>
-								{t('posts.conflictAction')}
-							</Button>
+							<Space>
+								<Button size="small" onClick={() => void syncAfterConflict()}>
+									{t('posts.conflictAction')}
+								</Button>
+								<Button size="small" danger onClick={discardLocal}>
+									{t('posts.discardLocal')}
+								</Button>
+							</Space>
 						}
 						style={{ marginBottom: 16 }}
 					/>
 				) : null}
-				<Form form={form} layout="vertical" onFinish={editing ? handleSave : handleCreate}>
+				<Form
+					form={form}
+					layout="vertical"
+					onFinish={editing ? handleSave : handleCreate}
+					onValuesChange={(changed) => {
+						for (const key of Object.keys(changed)) {
+							setTouched((prev) => new Set(prev).add(key as keyof PostForm));
+						}
+					}}
+					disabled={!editable}
+				>
 					<Space size={12} style={{ display: 'flex' }} align="start">
 						<Form.Item
 							name="title"

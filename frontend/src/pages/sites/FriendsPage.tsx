@@ -1,43 +1,49 @@
 /**
  * FriendsPage: edits the site's friends document (online/offline groups)
- * as one validated whole. The document-level digest drives If-Match saves;
- * a 412 keeps the local rows and offers a resync.
+ * as one validated whole through the shared EditableDoc state machine.
+ * A save confirms only its submitted snapshot (edits made while the request
+ * is in flight stay dirty), conflict sync refreshes the baseline and ETag
+ * without discarding local edits, and discarding them is an explicit action.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Input, Popconfirm, Space, Spin, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
 import { getFriends, getSite, putFriends, type Friend, type Site } from '../../lib/api/management';
+import { EditableDoc } from '../../lib/editing/EditableDoc';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
 type Group = 'online' | 'offline';
 
+interface FriendsRows {
+	online: Friend[];
+	offline: Friend[];
+}
+
 export default function FriendsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
-	const [online, setOnline] = useState<Friend[] | null>(null);
-	const [offline, setOffline] = useState<Friend[] | null>(null);
-	const [digest, setDigest] = useState('');
-	const [dirty, setDirty] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [conflict, setConflict] = useState(false);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [messageApi, contextHolder] = message.useMessage();
+	// A fresh store per site keeps data and error state from surviving a
+	// switch between sites; the epoch guards late responses against that
+	// same switch.
+	const editor = useMemo(() => new EditableDoc<FriendsRows>(), [siteId]);
+	const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
+	const dirty = editor.isDirty();
 	const epoch = useRef(0);
 
 	const load = useCallback(async () => {
 		if (!siteId) return;
 		const my = ++epoch.current;
+		editor.markLoading();
 		try {
 			const { friends, digest } = await getFriends(siteId);
 			if (my !== epoch.current) return;
-			setOnline(friends.online ?? []);
-			setOffline(friends.offline ?? []);
-			setDigest(digest);
-			setDirty(false);
-			setConflict(false);
+			editor.load({ online: friends.online ?? [], offline: friends.offline ?? [] }, digest);
 			setErrorKey(null);
 		} catch (err) {
 			if (my !== epoch.current) return;
@@ -48,14 +54,12 @@ export default function FriendsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [siteId, navigate]);
+	}, [siteId, navigate, editor]);
 
 	useEffect(() => {
 		if (!siteId) return;
 		epoch.current++;
 		setSite(null);
-		setOnline(null);
-		setOffline(null);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
@@ -71,9 +75,10 @@ export default function FriendsPage() {
 	}, [siteId]);
 
 	function mutate(group: Group, updater: (rows: Friend[]) => Friend[]) {
-		setDirty(true);
-		if (group === 'online') setOnline((rows) => updater(rows ?? []));
-		else setOffline((rows) => updater(rows ?? []));
+		editor.mutate((current) => ({
+			...current,
+			[group]: updater(current[group] ?? [])
+		}));
 	}
 
 	function updateRow(group: Group, index: number, patch: Partial<Friend>) {
@@ -99,34 +104,51 @@ export default function FriendsPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId || online === null || offline === null) return;
-		setSaving(true);
+		if (!siteId) return;
+		const snapshot = editor.beginSave();
+		if (snapshot === null) return;
 		try {
-			const saved = await putFriends(siteId, { online, offline }, digest);
-			setDigest(saved.digest);
-			setDirty(false);
-			setConflict(false);
+			const saved = await putFriends(siteId, snapshot, state.etag);
+			editor.resolveSave(
+				{ online: saved.friends.online ?? [], offline: saved.friends.offline ?? [] },
+				saved.digest
+			);
 			void messageApi.success(t('friends.saved'));
 		} catch (err) {
 			if (apiErrorKey(err) === 'error.conflict') {
-				setConflict(true);
+				editor.rejectSave(true);
 			} else {
+				editor.rejectSave(false);
 				const key = apiErrorKey(err);
 				if (key !== null) void messageApi.warning(t(key));
 			}
-		} finally {
-			setSaving(false);
 		}
 	}
 
+	// Conflict sync adopts the server version as the new baseline and ETag
+	// while keeping the local draft: unsaved edits are never dropped here.
 	async function syncAfterConflict() {
-		await load();
-		void messageApi.info(t('friends.conflictSynced'));
+		if (!siteId) return;
+		const my = epoch.current;
+		try {
+			const { friends, digest } = await getFriends(siteId);
+			if (my !== epoch.current) return;
+			editor.syncAfterConflict(
+				{ online: friends.online ?? [], offline: friends.offline ?? [] },
+				digest
+			);
+			void messageApi.info(t('friends.conflictSynced'));
+		} catch (err) {
+			const key = apiErrorKey(err);
+			if (key !== null) void messageApi.warning(t(key));
+		}
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	const rows: FriendsRows | null = state.draft ?? state.baseline;
 
-	function groupEditor(group: Group, rows: Friend[] | null) {
+	function groupEditor(group: Group) {
+		const groupRows = rows ? rows[group] : null;
 		return (
 			<Card
 				size="small"
@@ -140,12 +162,12 @@ export default function FriendsPage() {
 				}
 				style={{ marginBottom: 12 }}
 			>
-				{rows === null ? (
+				{groupRows === null || state.loading ? (
 					<Spin size="small" />
-				) : rows.length === 0 ? (
+				) : groupRows.length === 0 ? (
 					t('friends.emptyGroup')
 				) : (
-					rows.map((row, index) => (
+					groupRows.map((row, index) => (
 						<Space key={index} style={{ display: 'flex', marginBottom: 4 }} align="center">
 							<Input
 								size="small"
@@ -209,12 +231,17 @@ export default function FriendsPage() {
 			{contextHolder}
 			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
 				<Space>
-					{conflict ? (
-						<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
+					{state.conflict ? (
+						<>
+							<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
+							<Button danger onClick={() => editor.discardLocal()}>
+								{t('posts.discardLocal')}
+							</Button>
+						</>
 					) : null}
 					<Button
 						type="primary"
-						loading={saving}
+						loading={state.saving}
 						disabled={!editable || !dirty}
 						onClick={() => void handleSave()}
 					>
@@ -222,7 +249,7 @@ export default function FriendsPage() {
 					</Button>
 				</Space>
 			</div>
-			{conflict ? (
+			{state.conflict ? (
 				<Alert
 					type="warning"
 					showIcon
@@ -234,8 +261,8 @@ export default function FriendsPage() {
 			{errorKey !== null ? (
 				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
-			{groupEditor('online', online)}
-			{groupEditor('offline', offline)}
+			{groupEditor('online')}
+			{groupEditor('offline')}
 		</>
 	);
 }

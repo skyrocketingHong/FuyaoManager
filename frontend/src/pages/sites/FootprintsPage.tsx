@@ -6,7 +6,8 @@
  * Stored coordinates are GCJ-02 — exactly what the theme's AMap view
  * consumes, so no conversion happens anywhere.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
@@ -30,6 +31,7 @@ import {
 	type FootprintPlace,
 	type Site
 } from '../../lib/api/management';
+import { EditableDoc } from '../../lib/editing/EditableDoc';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
@@ -96,11 +98,9 @@ export default function FootprintsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
-	const [doc, setDoc] = useState<{ cities: FootprintCity[] } | null>(null);
-	const [digest, setDigest] = useState('');
-	const [dirty, setDirty] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [conflict, setConflict] = useState(false);
+	const editor = useMemo(() => new EditableDoc<{ cities: FootprintCity[] }>(), [siteId]);
+	const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
+	const dirty = editor.isDirty();
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [amapKey, setAmapKey] = useState('');
 	const [amapServiceHost, setAmapServiceHost] = useState('');
@@ -118,13 +118,11 @@ export default function FootprintsPage() {
 	const load = useCallback(async () => {
 		if (!siteId) return;
 		const my = ++epoch.current;
+		editor.markLoading();
 		try {
 			const env = await getFootprints(siteId);
 			if (my !== epoch.current) return;
-			setDoc(env.footprints);
-			setDigest(env.digest);
-			setDirty(false);
-			setConflict(false);
+			editor.load(env.footprints, env.digest);
 			setErrorKey(null);
 		} catch (err) {
 			if (my !== epoch.current) return;
@@ -135,13 +133,12 @@ export default function FootprintsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [siteId, navigate]);
+	}, [siteId, navigate, editor]);
 
 	useEffect(() => {
 		if (!siteId) return;
 		epoch.current++;
 		setSite(null);
-		setDoc(null);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
@@ -193,9 +190,10 @@ export default function FootprintsPage() {
 	}, [pickedFor, amapKey]);
 
 	function applyPick(lng: number, lat: number) {
-		if (!pickedFor || !doc) return;
-		setDirty(true);
-		const cities = doc.cities.map((city, ci) => {
+		if (!pickedFor) return;
+		const current = state.draft ?? state.baseline;
+		if (!current) return;
+		const cities = current.cities.map((city, ci) => {
 			if (pickedFor.kind === 'city' && ci === pickedFor.cityIndex) {
 				return { ...city, coordinates: { lng, lat } };
 			}
@@ -209,12 +207,11 @@ export default function FootprintsPage() {
 			}
 			return city;
 		});
-		setDoc({ cities });
+		editor.setDraft({ cities });
 	}
 
 	function mutate(updater: (cities: FootprintCity[]) => FootprintCity[]) {
-		setDirty(true);
-		setDoc((prev) => (prev ? { cities: updater(prev.cities) } : prev));
+		editor.mutate((current) => ({ cities: updater(current.cities) }));
 	}
 
 	function updateCity(index: number, patch: Partial<FootprintCity>) {
@@ -271,24 +268,35 @@ export default function FootprintsPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId || !doc) return;
-		setSaving(true);
+		if (!siteId) return;
+		const snapshot = editor.beginSave();
+		if (snapshot === null) return;
 		try {
-			const saved = await putFootprints(siteId, doc, digest);
-			setDoc(saved.footprints);
-			setDigest(saved.digest);
-			setDirty(false);
-			setConflict(false);
+			const saved = await putFootprints(siteId, snapshot, state.etag);
+			editor.resolveSave(saved.footprints, saved.digest);
 			void messageApi.success(t('footprints.saved'));
 		} catch (err) {
 			if (apiErrorKey(err) === 'error.conflict') {
-				setConflict(true);
+				editor.rejectSave(true);
 			} else {
+				editor.rejectSave(false);
 				const key = apiErrorKey(err);
 				if (key !== null) void messageApi.warning(t(key));
 			}
-		} finally {
-			setSaving(false);
+		}
+	}
+
+	// Conflict sync adopts the server baseline + ETag and keeps the draft.
+	async function syncAfterConflict() {
+		if (!siteId) return;
+		const my = epoch.current;
+		try {
+			const env = await getFootprints(siteId);
+			if (my !== epoch.current) return;
+			editor.syncAfterConflict(env.footprints, env.digest);
+			void messageApi.info(t('friends.conflictSynced'));
+		} catch {
+			// keep the banner
 		}
 	}
 
@@ -343,13 +351,18 @@ export default function FootprintsPage() {
 			{contextHolder}
 			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
 				<Space>
-					{conflict ? (
-						<Button onClick={() => void load()}>{t('posts.conflictAction')}</Button>
+					{state.conflict ? (
+						<>
+							<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
+							<Button danger onClick={() => editor.discardLocal()}>
+								{t('posts.discardLocal')}
+							</Button>
+						</>
 					) : null}
 					{editable ? <Button onClick={addCity}>{t('footprints.addCity')}</Button> : null}
 					<Button
 						type="primary"
-						loading={saving}
+						loading={state.saving}
 						disabled={!editable || !dirty}
 						onClick={() => void handleSave()}
 					>
@@ -357,7 +370,7 @@ export default function FootprintsPage() {
 					</Button>
 				</Space>
 			</div>
-			{conflict ? (
+			{state.conflict ? (
 				<Alert
 					type="warning"
 					showIcon
@@ -383,15 +396,15 @@ export default function FootprintsPage() {
 					)}
 				</Card>
 			) : null}
-			{doc === null ? (
+			{(state.draft ?? state.baseline) === null || state.loading ? (
 				<p role="status">
 					<Spin /> {t('common.loading')}
 				</p>
-			) : doc.cities.length === 0 ? (
+			) : (state.draft ?? state.baseline)!.cities.length === 0 ? (
 				<p>{t('footprints.empty')}</p>
 			) : (
 				<Collapse
-					items={doc.cities.map((city, ci) => ({
+					items={(state.draft ?? state.baseline)!.cities.map((city, ci) => ({
 						key: ci,
 						label: `${city.name?.zh || city.id} · ${city.visitDate} · ${(city.places ?? []).length}`,
 						children: (

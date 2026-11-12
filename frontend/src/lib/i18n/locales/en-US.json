@@ -266,5 +266,7 @@
 	"themes.registerHint": "Registration is operator-driven: fuyao-admin register-theme --contracts <dir> <theme-root>",
 	"albums.detach": "Detach",
 	"albums.detachConfirm": "Remove this photo from the next build only? Files stay for releases still referencing them.",
-	"albums.detached": "Photo detached from future builds."
+	"albums.detached": "Photo detached from future builds.",
+	"posts.discardLocal": "Discard my edits",
+	"posts.newerEditsKept": "Saved; newer unsaved edits kept in the editor."
 }
