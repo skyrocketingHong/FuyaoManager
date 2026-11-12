@@ -28,6 +28,7 @@ export default defineConfig({
 		// Node by default; mounted-view suites opt into jsdom via their
 		// per-file `@vitest-environment jsdom` pragma.
 		include: ['tests/**/*.test.tsx', 'tests/**/*.test.ts'],
+		setupFiles: ['tests/setup.ts'],
 		environment: 'node'
 	}
 });
