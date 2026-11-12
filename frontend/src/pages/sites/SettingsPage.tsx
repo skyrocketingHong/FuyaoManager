@@ -1,9 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Alert, Button, Card, Form, Input, Select, Space } from 'antd';
+import { Alert, Button, Form, Input, Select, Space } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import PageLoading from '../../components/PageLoading';
+import { Panel } from '../../components/Panel';
 import { SettingsEditor } from '../../lib/sites/settings-editor';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { t } from '../../lib/i18n';
 
 export default function SettingsPage() {
@@ -30,16 +33,17 @@ export default function SettingsPage() {
 	const phase = state.phase;
 	const dirty = editor.dirtyFields();
 	const editable = editor.editable();
+	useUnsavedGuard(editable && dirty.length > 0);
 
 	return (
-		<>
-			<Card title={<Trans text={t('settings.title')} />} style={{ marginTop: 16 }}>
+		<div className="page-stack">
+			<Panel title={<Trans text={t('settings.title')} />}>
 				{phase.kind === 'loading' ? (
-					<p role="status">{t('common.loading')}</p>
+					<PageLoading spec="section" label={t('common.loading')} />
 				) : state.site === null ? (
 					// Load failed before the site was known: nothing to edit yet.
 					phase.kind === 'error' ? (
-						<Alert type="error" showIcon message={t(phase.key as never)} />
+						<Alert type="error" showIcon title={t(phase.key as never)} />
 					) : null
 				) : (
 					<>
@@ -47,7 +51,7 @@ export default function SettingsPage() {
 							<Alert
 								type="success"
 								showIcon
-								message={t('settings.savedAt', { revision: phase.revision })}
+								title={t('settings.savedAt', { revision: phase.revision })}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -55,7 +59,7 @@ export default function SettingsPage() {
 							<Alert
 								type="success"
 								showIcon
-								message={t('settings.savedWithEdits', { revision: phase.revision })}
+								title={t('settings.savedWithEdits', { revision: phase.revision })}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -64,7 +68,7 @@ export default function SettingsPage() {
 							<Alert
 								type="error"
 								showIcon
-								message={t(phase.key as never)}
+								title={t(phase.key as never)}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -72,7 +76,7 @@ export default function SettingsPage() {
 							<Alert
 								type="warning"
 								showIcon
-								message={<Trans text={t('settings.conflictTitle')} />}
+								title={<Trans text={t('settings.conflictTitle')} />}
 								description={
 									<>
 										{t('settings.conflictBody')}
@@ -94,11 +98,11 @@ export default function SettingsPage() {
 							<Alert
 								type="info"
 								showIcon
-								message={t('settings.viewerNotice')}
+								title={t('settings.viewerNotice')}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
-						<Form labelCol={{ span: 4 }}>
+						<Form labelCol={{ span: 4 }} className="form-narrow">
 							<Form.Item label={t('settings.name')} htmlFor="settings-name">
 								<Input
 									id="settings-name"
@@ -141,7 +145,7 @@ export default function SettingsPage() {
 						</Space>
 					</>
 				)}
-			</Card>
-		</>
+			</Panel>
+		</div>
 	);
 }

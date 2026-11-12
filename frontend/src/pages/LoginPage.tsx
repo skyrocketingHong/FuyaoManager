@@ -86,7 +86,7 @@ function CodeRedeemForm({ onDone }: { onDone: (status: string) => void }) {
 	return (
 		<Form<CodeForm> layout="vertical" onFinish={handleExchange} disabled={busy}>
 			{errorKey ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 16 }} />
+				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 16 }} />
 			) : null}
 			<Form.Item
 				name="code"
@@ -145,7 +145,7 @@ export default function LoginPage() {
 		<div className="auth-screen">
 			<Card title={t('login.title')} className="auth-card">
 				{errorKey ? (
-					<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 16 }} />
+					<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 16 }} />
 				) : null}
 				<Button
 					type="primary"

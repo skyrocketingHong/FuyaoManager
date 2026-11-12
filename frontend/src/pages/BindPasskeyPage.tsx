@@ -71,12 +71,12 @@ export default function BindPasskeyPage() {
 					<Alert
 						type="warning"
 						showIcon
-						message={t(capability === 'available' ? 'error.passkeyUnavailable' : 'bind.unavailableHint')}
+						title={t(capability === 'available' ? 'error.passkeyUnavailable' : 'bind.unavailableHint')}
 						style={{ marginBottom: 16 }}
 					/>
 				) : null}
 				{errorKey ? (
-					<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 16 }} />
+					<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 16 }} />
 				) : null}
 				<Button
 					type="primary"

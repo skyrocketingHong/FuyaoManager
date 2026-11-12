@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Popconfirm, Space, Spin, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Popconfirm, Space, Table, Typography, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import PageLoading from '../../components/PageLoading';
+import StatusTag from '../../components/StatusTag';
+import { TablePanel } from '../../components/Panel';
 import {
 	canEditSite,
 	closePreviewLink,
@@ -135,38 +139,39 @@ export default function BuildsPage() {
 
 	const editable = site !== null && canEditSite(site);
 
+	const createButton = (
+		<Popconfirm title={t('builds.create')} onConfirm={() => void handleCreate()} disabled={!editable}>
+			<Button type="primary" loading={creating} disabled={!editable}>
+				<Trans text={t('builds.create')} />
+			</Button>
+		</Popconfirm>
+	);
+	const headerActive = usePageHeader({ actions: createButton });
+
 	return (
-		<>
+		<div className="page-stack">
 			{contextHolder}
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Popconfirm
-					title={t('builds.create')}
-					onConfirm={() => void handleCreate()}
-					disabled={!editable}
-				>
-					<Button type="primary" loading={creating} disabled={!editable}>
-						<Trans text={t('builds.create')} />
-					</Button>
-				</Popconfirm>
-			</div>
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
+			) : null}
 			{errorKey !== null ? (
 				<Alert
 					type="error"
 					showIcon
-					message={t(errorKey ?? 'error.generic')}
+					title={t(errorKey ?? 'error.generic')}
 					style={{ marginBottom: 16 }}
 				/>
 			) : null}
 			{builds === null ? (
-				<p role="status">
-					<Spin /> {t('common.loading')}
-				</p>
+				<PageLoading spec="page" label={t('common.loading')} />
 			) : builds.length === 0 ? (
-				<p>{t('builds.empty')}</p>
+				<TablePanel>
+					<p>{t('builds.empty')}</p>
+				</TablePanel>
 			) : (
+				<TablePanel>
 				<Table<BuildTask>
 					rowKey="id"
-					size="small"
 					dataSource={builds}
 					pagination={false}
 					columns={[
@@ -183,19 +188,19 @@ export default function BuildsPage() {
 							title: t('builds.status'),
 							dataIndex: 'status',
 							render: (status: string) => (
-								<Tag
-									color={
+								<StatusTag
+									kind={
 										status === 'succeeded'
-											? 'green'
+											? 'success'
 											: status === 'failed'
-												? 'red'
+												? 'danger'
 												: status === 'running'
-													? 'blue'
-													: 'default'
+													? 'info'
+													: 'neutral'
 									}
 								>
 									{t(`builds.status.${status}` as never)}
-								</Tag>
+								</StatusTag>
 							)
 						},
 						{
@@ -250,7 +255,8 @@ export default function BuildsPage() {
 						}
 					]}
 				/>
+			</TablePanel>
 			)}
-		</>
+		</div>
 	);
 }

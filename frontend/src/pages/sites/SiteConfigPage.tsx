@@ -6,8 +6,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Card, Input, Space, Spin, Typography, message } from 'antd';
+import { Alert, Button, Input, Space, Typography, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
+import PageLoading from '../../components/PageLoading';
+import { Panel } from '../../components/Panel';
 import {
 	getSite,
 	getSiteConfig,
@@ -236,46 +240,48 @@ export default function SiteConfigPage() {
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	useUnsavedGuard(editable && (dirty || linksDirty || securityInput !== ''));
 
 	if (form === null) {
-		return (
-			<p role="status">
-				<Spin /> {t('common.loading')}
-			</p>
-		);
+		return <PageLoading spec="page" label={t('common.loading')} />;
 	}
 
+	const headerActions = (
+		<Space size={8}>
+			{conflict ? (
+				<Button onClick={() => void load()}>{t('posts.conflictAction')}</Button>
+			) : null}
+			<Button
+				type="primary"
+				loading={saving}
+				disabled={!editable || (!dirty && securityInput === '')}
+				onClick={() => void handleSave()}
+			>
+				<Trans text={t('common.save')} />
+			</Button>
+		</Space>
+	);
+	const headerActive = usePageHeader({ actions: headerActions });
+
 	return (
-		<>
+		<div className="page-stack">
 			{contextHolder}
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Space>
-					{conflict ? (
-						<Button onClick={() => void load()}>{t('posts.conflictAction')}</Button>
-					) : null}
-					<Button
-						type="primary"
-						loading={saving}
-						disabled={!editable || (!dirty && securityInput === '')}
-						onClick={() => void handleSave()}
-					>
-						<Trans text={t('common.save')} />
-					</Button>
-				</Space>
-			</div>
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
+			) : null}
 			{conflict ? (
 				<Alert
 					type="warning"
 					showIcon
-					message={t('posts.conflictTitle')}
+					title={t('posts.conflictTitle')}
 					description={t('posts.conflictBody')}
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}
 			{errorKey !== null ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
+				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
-			<Card size="small" title={t('config.originSection')} style={{ marginBottom: 12 }}>
+			<Panel title={t('config.originSection')}>
 				{effectiveOrigin ? (
 					<>
 						<div>{effectiveOrigin}</div>
@@ -286,8 +292,8 @@ export default function SiteConfigPage() {
 				) : (
 					<Typography.Text type="secondary">{t('config.originPending')}</Typography.Text>
 				)}
-			</Card>
-			<Card size="small" title={t('config.profileSection')} style={{ marginBottom: 12 }}>
+			</Panel>
+			<Panel title={t('config.profileSection')}>
 				<Space size={12} style={{ display: 'flex' }} align="start">
 					<div style={{ flex: 1 }}>{field(t('config.profileName'), 'profileName')}</div>
 					<div style={{ flex: 1 }}>{field(t('config.avatar'), 'avatarUrl', 'https://…')}</div>
@@ -301,8 +307,8 @@ export default function SiteConfigPage() {
 					<div style={{ flex: 1 }}>{field(`${t('config.quote')} (zh)`, 'quoteZh')}</div>
 					<div style={{ flex: 1 }}>{field(`${t('config.quote')} (en)`, 'quoteEn')}</div>
 				</Space>
-			</Card>
-			<Card size="small" title={t('config.seoSection')} style={{ marginBottom: 12 }}>
+			</Panel>
+			<Panel title={t('config.seoSection')}>
 				<Space size={12} style={{ display: 'flex' }} align="start">
 					<div style={{ flex: 1 }}>{field(t('config.seoAuthor'), 'seoAuthor')}</div>
 					<div style={{ flex: 1 }}>{field(t('config.repoName'), 'repoName')}</div>
@@ -311,8 +317,8 @@ export default function SiteConfigPage() {
 				{field(t('config.repoUrl'), 'repoUrl', 'https://github.com/…')}
 				{field(t('config.seoDescription'), 'seoDescription')}
 				{field(t('config.seoKeywords'), 'seoKeywords', 'Svelte, Go')}
-			</Card>
-			<Card size="small" title={t('config.servicesSection')} style={{ marginBottom: 12 }}>
+			</Panel>
+			<Panel title={t('config.servicesSection')}>
 				{field(t('config.wallpaper'), 'wallpaperUrl', 'https://…')}
 				<Space size={12} style={{ display: 'flex' }} align="start">
 					<div style={{ flex: 1 }}>{field('AMap Key', 'amapBrowserKey')}</div>
@@ -332,11 +338,10 @@ export default function SiteConfigPage() {
 						/>
 					</label>
 				</Space>
-			</Card>
-			<Card
-				size="small"
+			</Panel>
+			<Panel
 				title={t('config.socialSection')}
-				extra={
+				tags={
 					editable ? (
 						<Space>
 							<Button
@@ -420,7 +425,7 @@ export default function SiteConfigPage() {
 						) : null}
 					</Space>
 				))}
-			</Card>
-		</>
+			</Panel>
+		</div>
 	);
 }

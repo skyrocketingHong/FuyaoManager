@@ -1,0 +1,134 @@
+/* Page-level shared surfaces: Panel cards, the single-surface TablePanel,
+   section rhythm, form reading width, and inline feedback. */
+
+.page-stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	max-width: none;
+}
+
+/* Panel: the standard card surface. */
+.panel {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+}
+
+.panel > .ant-card-head {
+	min-height: 48px;
+	border-bottom: 1px solid var(--border);
+	padding: 0 var(--space-5);
+}
+
+.panel > .ant-card-head .ant-card-head-title {
+	font-size: var(--text-title);
+	font-weight: 600;
+	padding: var(--space-4) 0;
+}
+
+.panel > .ant-card-body {
+	padding: 0;
+}
+
+.panel-body {
+	padding: var(--space-5);
+}
+
+.panel--flush > .ant-card-body,
+.panel-body--flush {
+	padding: 0;
+}
+
+/* TablePanel: the table is the only content surface — no extra card. */
+.table-panel {
+	background: transparent;
+}
+
+.table-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-4);
+	margin-bottom: var(--space-3);
+}
+
+.table-panel-header h2 {
+	margin: 0;
+	font-size: var(--text-title);
+	font-weight: 600;
+}
+
+.table-panel-header .table-panel-tools {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.table-panel-content {
+	overflow-x: auto;
+}
+
+.table-panel-content .ant-table-wrapper,
+.table-panel-content .ant-table {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-lg);
+}
+
+/* Form reading width: editors keep a comfortable line length while list
+   pages use the full workspace. */
+.form-narrow {
+	max-width: 760px;
+}
+
+/* Inline feedback that must survive beyond a toast: persistent errors,
+   conflicts, field validation. */
+.feedback {
+	border-radius: var(--radius);
+	padding: 9px 13px;
+	font-size: var(--text-body);
+}
+
+.feedback--error {
+	color: var(--status-danger);
+	background: color-mix(in srgb, var(--status-danger) 7%, transparent);
+	border: 1px solid color-mix(in srgb, var(--status-danger) 25%, transparent);
+}
+
+.feedback--warning {
+	color: var(--status-warning);
+	background: color-mix(in srgb, var(--status-warning) 7%, transparent);
+	border: 1px solid color-mix(in srgb, var(--status-warning) 30%, transparent);
+}
+
+.feedback--info {
+	color: var(--status-info);
+	background: color-mix(in srgb, var(--status-info) 7%, transparent);
+	border: 1px solid color-mix(in srgb, var(--status-info) 25%, transparent);
+}
+
+/* The top bar's segmented page tabs. */
+.topbar-tabs .ant-segmented {
+	background: var(--muted);
+}
+
+/* Dense key/value rows used by overview and detail surfaces. */
+.fact-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: var(--space-4);
+}
+
+.fact-grid dt {
+	font-size: var(--text-caption);
+	color: var(--muted-foreground);
+	margin-bottom: 2px;
+}
+
+.fact-grid dd {
+	margin: 0;
+	font-size: var(--text-secondary);
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}

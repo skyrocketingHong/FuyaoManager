@@ -4,7 +4,6 @@ import { useSyncExternalStore } from 'react';
 import {
 	Alert,
 	Button,
-	Card,
 	Form,
 	Input,
 	InputNumber,
@@ -12,11 +11,14 @@ import {
 	Select,
 	Space,
 	Switch,
-	Tag,
 	Typography
 } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import PageLoading from '../../components/PageLoading';
+import StatusTag from '../../components/StatusTag';
+import { Panel } from '../../components/Panel';
 import { ThemeSelection } from '../../lib/themes/theme-selection';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { configTextFromFields, fieldsFromSchema } from '../../lib/themes/schemaForm';
 import { t } from '../../lib/i18n';
 
@@ -41,6 +43,7 @@ export default function ThemePage() {
 	const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
 	const phase = state.phase;
 	const editable = store.editable();
+	useUnsavedGuard(editable && store.dirty());
 
 	// Visual fields for the selected theme's declared config schema. The
 	// JSON view and the form edit the same store state (configText).
@@ -62,17 +65,17 @@ export default function ThemePage() {
 	}
 
 	return (
-		<>
-			<Card title={<Trans text={t('themes.title')} />} style={{ marginTop: 16 }}>
+		<div className="page-stack">
+			<Panel title={<Trans text={t('themes.title')} />}>
 				{phase.kind === 'loading' ? (
-					<p role="status">{t('common.loading')}</p>
+					<PageLoading spec="section" label={t('common.loading')} />
 				) : (
 					<>
 						{phase.kind === 'saved' ? (
 							<Alert
 								type="success"
 								showIcon
-								message={<Trans text={t('common.saved')} />}
+								title={<Trans text={t('common.saved')} />}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -80,7 +83,7 @@ export default function ThemePage() {
 							<Alert
 								type="error"
 								showIcon
-								message={t(phase.key as never)}
+								title={t(phase.key as never)}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -88,7 +91,7 @@ export default function ThemePage() {
 							<Alert
 								type="warning"
 								showIcon
-								message={<Trans text={t('settings.conflictTitle')} />}
+								title={<Trans text={t('settings.conflictTitle')} />}
 								description={
 									phase.synced ? (
 										t('settings.conflictSynced')
@@ -105,9 +108,11 @@ export default function ThemePage() {
 							<Form.Item label={t('themes.current')} htmlFor="theme-saved">
 								<span id="theme-saved">
 									{state.hasSelection && state.savedSelected ? (
-										<Tag color="green">{state.savedSelected.replace('@', ' @ ')}</Tag>
+										<StatusTag kind="success">
+											{state.savedSelected.replace('@', ' @ ')}
+										</StatusTag>
 									) : (
-										<Tag>{t('themes.unselected')}</Tag>
+										<StatusTag kind="neutral">{t('themes.unselected')}</StatusTag>
 									)}
 								</span>
 							</Form.Item>
@@ -118,7 +123,7 @@ export default function ThemePage() {
 									onChange={(e) => store.select(e.target.value as string)}
 									disabled={!editable}
 								>
-									<Space direction="vertical">
+									<Space orientation="vertical">
 										{state.themes.map((theme) => (
 											<Radio
 												key={`${theme.themeId}@${theme.version}`}
@@ -201,7 +206,7 @@ export default function ThemePage() {
 						</Button>
 					</>
 				)}
-			</Card>
-		</>
+			</Panel>
+		</div>
 	);
 }

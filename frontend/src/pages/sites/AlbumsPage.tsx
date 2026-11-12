@@ -9,21 +9,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
 	Button,
-	Card,
 	Input,
 	Modal,
 	Popconfirm,
 	Select,
 	Space,
-	Spin,
 	Table,
 	Tag,
-	Tabs,
 	Upload,
 	message
 } from 'antd';
 import type { UploadFile } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader, PageTabs } from '../../components/PageHeader';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
+import PageLoading from '../../components/PageLoading';
+import { TablePanel } from '../../components/Panel';
 import {
 	deleteAlbumPhoto,
 	getAlbums,
@@ -287,46 +288,67 @@ export default function AlbumsPage() {
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	useUnsavedGuard(editable && dirty);
 	const activeTask = tasks.find((task) => !terminalTask.has(task.status));
 	const lastFailure = tasks.find((task) => task.status === 'failed');
 
+	const headerActions = (
+		<Space size={8}>
+			<Upload
+				beforeUpload={(file) => {
+					void handleUpload(file);
+					return false;
+				}}
+				showUploadList={false}
+				accept="image/jpeg,image/png,image/webp"
+				disabled={!editable}
+				fileList={[] as UploadFile[]}
+			>
+				<Button loading={uploading} disabled={!editable}>
+					<Trans text={t('albums.upload')} />
+				</Button>
+			</Upload>
+			<Button
+				type="primary"
+				loading={saving}
+				disabled={!editable || !dirty}
+				onClick={() => void handleSave()}
+			>
+				<Trans text={t('common.save')} />
+			</Button>
+		</Space>
+	);
+	const yearTabs =
+		index !== null && (index.years ?? []).length > 0 ? (
+			<PageTabs
+				value={year}
+				options={(index.years ?? []).map((y) => ({ key: String(y), label: String(y), value: String(y) }))}
+				onChange={(key) => {
+					setYear(key);
+					void loadYear(key);
+				}}
+				ariaLabel={t('nav.albums')}
+			/>
+		) : undefined;
+	const headerActive = usePageHeader({ content: yearTabs, actions: headerActions });
+
 	return (
-		<>
+		<div className="page-stack">
 			{contextHolder}
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Space>
-					<Upload
-						beforeUpload={(file) => {
-							void handleUpload(file);
-							return false;
-						}}
-						showUploadList={false}
-						accept="image/jpeg,image/png,image/webp"
-						disabled={!editable}
-						fileList={[] as UploadFile[]}
-					>
-						<Button loading={uploading} disabled={!editable}>
-							<Trans text={t('albums.upload')} />
-						</Button>
-					</Upload>
-					<Button
-						type="primary"
-						loading={saving}
-						disabled={!editable || !dirty}
-						onClick={() => void handleSave()}
-					>
-						<Trans text={t('common.save')} />
-					</Button>
-				</Space>
-			</div>
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+					{yearTabs}
+					{headerActions}
+				</div>
+			) : null}
 			{activeTask ? (
-				<Alert type="info" showIcon message={t('albums.processing')} style={{ marginBottom: 12 }} />
+				<Alert type="info" showIcon title={t('albums.processing')} style={{ marginBottom: 12 }} />
 			) : null}
 			{lastFailure ? (
 				<Alert
 					type="error"
 					showIcon
-					message={t('albums.taskFailed')}
+					title={t('albums.taskFailed')}
 					description={lastFailure.failure?.message ?? ''}
 					style={{ marginBottom: 12 }}
 					action={
@@ -352,7 +374,7 @@ export default function AlbumsPage() {
 				<Alert
 					type="warning"
 					showIcon
-					message={t('posts.conflictTitle')}
+					title={t('posts.conflictTitle')}
 					description={t('posts.conflictBody')}
 					style={{ marginBottom: 12 }}
 					action={
@@ -375,14 +397,12 @@ export default function AlbumsPage() {
 				/>
 			) : null}
 			{errorKey !== null ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
+				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
 			{index === null ? (
-				<p role="status">
-					<Spin /> {t('common.loading')}
-				</p>
+				<PageLoading spec="page" label={t('common.loading')} />
 			) : (
-				<Card size="small">
+				<TablePanel>
 					{doc ? (
 						<Space wrap style={{ marginBottom: 8 }}>
 							<Input
@@ -408,16 +428,8 @@ export default function AlbumsPage() {
 							/>
 						</Space>
 					) : null}
-					<Tabs
-						activeKey={year}
-						items={(index.years ?? []).map((y) => ({ key: String(y), label: String(y) }))}
-						onChange={(key) => {
-							setYear(key);
-							void loadYear(key);
-						}}
-					/>
 					{doc === null ? (
-						<Spin size="small" />
+						<PageLoading spec="section" />
 					) : doc.photos.length === 0 ? (
 						<p>{t('albums.empty')}</p>
 					) : (
@@ -494,7 +506,7 @@ export default function AlbumsPage() {
 							]}
 						/>
 					)}
-				</Card>
+				</TablePanel>
 			)}
 			<Modal
 				title={t('albums.editTitle')}
@@ -526,6 +538,6 @@ export default function AlbumsPage() {
 					/>
 				</label>
 			</Modal>
-		</>
+		</div>
 	);
 }

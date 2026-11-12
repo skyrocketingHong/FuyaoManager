@@ -18,10 +18,12 @@ import {
 	InputNumber,
 	Popconfirm,
 	Space,
-	Spin,
 	message
 } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import PageLoading from '../../components/PageLoading';
+import { Panel } from '../../components/Panel';
 import {
 	getFootprints,
 	getSite,
@@ -32,6 +34,7 @@ import {
 	type Site
 } from '../../lib/api/management';
 import { EditableDoc } from '../../lib/editing/EditableDoc';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
@@ -301,6 +304,7 @@ export default function FootprintsPage() {
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	useUnsavedGuard(editable && dirty);
 
 	function coordInputs(
 		value: { lng: number; lat: number },
@@ -346,60 +350,63 @@ export default function FootprintsPage() {
 		);
 	}
 
-	return (
-		<>
-			{contextHolder}
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Space>
-					{state.conflict ? (
-						<>
-							<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
-							<Button danger onClick={() => editor.discardLocal()}>
-								{t('posts.discardLocal')}
-							</Button>
-						</>
-					) : null}
-					{editable ? <Button onClick={addCity}>{t('footprints.addCity')}</Button> : null}
-					<Button
-						type="primary"
-						loading={state.saving}
-						disabled={!editable || !dirty}
-						onClick={() => void handleSave()}
-					>
-						<Trans text={t('common.save')} />
+	const headerActions = (
+		<Space size={8}>
+			{state.conflict ? (
+				<>
+					<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
+					<Button danger onClick={() => editor.discardLocal()}>
+						{t('posts.discardLocal')}
 					</Button>
-				</Space>
-			</div>
+				</>
+			) : null}
+			{editable ? <Button onClick={addCity}>{t('footprints.addCity')}</Button> : null}
+			<Button
+				type="primary"
+				loading={state.saving}
+				disabled={!editable || !dirty}
+				onClick={() => void handleSave()}
+			>
+				<Trans text={t('common.save')} />
+			</Button>
+		</Space>
+	);
+	const headerActive = usePageHeader({ actions: headerActions });
+
+	return (
+		<div className="page-stack">
+			{contextHolder}
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
+			) : null}
 			{state.conflict ? (
 				<Alert
 					type="warning"
 					showIcon
-					message={t('posts.conflictTitle')}
+					title={t('posts.conflictTitle')}
 					description={t('posts.conflictBody')}
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}
 			{errorKey !== null ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
+				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
 			{pickedFor ? (
-				<Card size="small" title={t('footprints.pickerTitle')} style={{ marginBottom: 12 }}>
+				<Panel title={t('footprints.pickerTitle')}>
 					{mapState === 'failed' ? (
 						<Alert
 							type="warning"
 							showIcon
-							message={t('footprints.mapUnavailable')}
+							title={t('footprints.mapUnavailable')}
 							description={t('footprints.mapUnavailableBody')}
 						/>
 					) : (
 						<div ref={mapHostRef} style={{ height: 280 }} />
 					)}
-				</Card>
+				</Panel>
 			) : null}
 			{(state.draft ?? state.baseline) === null || state.loading ? (
-				<p role="status">
-					<Spin /> {t('common.loading')}
-				</p>
+				<PageLoading spec="page" label={t('common.loading')} />
 			) : (state.draft ?? state.baseline)!.cities.length === 0 ? (
 				<p>{t('footprints.empty')}</p>
 			) : (
@@ -533,6 +540,6 @@ export default function FootprintsPage() {
 					}))}
 				/>
 			)}
-		</>
+		</div>
 	);
 }

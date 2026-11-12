@@ -4,12 +4,11 @@
  * visibility defaulting to private), and retries failed provisioning.
  */
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import {
 	Alert,
 	Button,
-	Card,
 	Col,
 	Empty,
 	Form,
@@ -17,9 +16,7 @@ import {
 	Modal,
 	Row,
 	Select,
-	Spin,
-	Table,
-	Tag
+	Table
 } from 'antd';
 import {
 	createSite,
@@ -37,6 +34,10 @@ import {
 	subscribeSiteList,
 	upsertSite
 } from '../lib/sites/site-list';
+import { usePageHeader } from '../components/PageHeader';
+import PageLoading from '../components/PageLoading';
+import StatusTag, { type StatusKind } from '../components/StatusTag';
+import { TablePanel } from '../components/Panel';
 
 interface CreateForm {
 	slug: string;
@@ -47,23 +48,13 @@ interface CreateForm {
 	theme?: string;
 }
 
-function provisionTag(site: Site): TagRender {
-	const color =
-		site.provisionState === 'ready'
-			? 'success'
-			: site.provisionState === 'failed'
-				? 'error'
-				: 'processing';
-	return { color, key: site.provisionState };
-}
-
-interface TagRender {
-	color: 'success' | 'error' | 'processing';
-	key: string;
+function provisionKind(site: Site): StatusKind {
+	if (site.provisionState === 'ready') return 'success';
+	if (site.provisionState === 'failed') return 'danger';
+	return 'info';
 }
 
 export default function SitesPage() {
-	const navigate = useNavigate();
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const siteList = useSyncExternalStore(subscribeSiteList, siteListSnapshot);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -75,15 +66,11 @@ export default function SitesPage() {
 	const [form] = Form.useForm<CreateForm>();
 
 	useEffect(() => {
-		if (session.status === 'anonymous') {
-			navigate('/login');
-			return;
-		}
 		if (session.status !== 'authenticated') return;
 		void loadSiteList(true).then(() => {
 			if (siteListSnapshot().status === 'error') setErrorKey('error.generic');
 		});
-	}, [session.status, navigate]);
+	}, [session.status]);
 
 	useEffect(() => {
 		if (!createOpen || themes !== null) return;
@@ -100,18 +87,31 @@ export default function SitesPage() {
 		};
 	}, [createOpen, themes]);
 
-	if (
-		session.status === 'loading' ||
-		(siteList.status === 'loading' && siteList.sites.length === 0)
-	) {
-		return (
-			<p role="status">
-				<Spin /> {t('common.loading')}
-			</p>
-		);
+	const createButton = (
+		<Button type="primary" onClick={() => setCreateOpen(true)}>
+			{t('sites.create')}
+		</Button>
+	);
+	// The shell's top bar carries the primary action when the provider is
+	// present; standalone rendering (tests) keeps it local.
+	const headerActive = usePageHeader({ actions: createButton });
+
+	if (session.status === 'loading' || (siteList.status === 'loading' && siteList.sites.length === 0)) {
+		return <PageLoading spec="page" label={t('common.loading')} />;
 	}
 	if (errorKey !== null) {
-		return <Alert type="error" showIcon message={t(errorKey)} />;
+		return (
+			<Alert
+				type="error"
+				showIcon
+				title={t(errorKey)}
+				action={
+					<Button size="small" onClick={() => void loadSiteList(true)}>
+						{t('common.retry')}
+					</Button>
+				}
+			/>
+		);
 	}
 
 	async function handleCreate(values: CreateForm) {
@@ -160,81 +160,75 @@ export default function SitesPage() {
 	const sites = siteList.sites;
 
 	return (
-		<>
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Button type="primary" onClick={() => setCreateOpen(true)}>
-					{t('sites.create')}
-				</Button>
-			</div>
+		<div className="page-stack">
+			{!headerActive ? <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div> : null}
 			{sites.length === 0 ? (
-				<Card>
+				<TablePanel>
 					<Empty description={t('sites.empty')} />
-				</Card>
+				</TablePanel>
 			) : (
-				<Table<Site>
-					rowKey="siteId"
-					pagination={false}
-					dataSource={sites}
-					onRow={(site) => ({
-						onClick: () =>
-							site.provisionState !== 'provisioning' && navigate(`/sites/${site.siteId}`)
-					})}
-					columns={[
-						{
-							title: t('site.name'),
-							dataIndex: 'name',
-							render: (name: string, site) => (
-								<>
-									<div>{name}</div>
-									<div style={{ opacity: 0.65 }}>{site.slug}</div>
-								</>
-							)
-						},
-						{
-							title: t('site.role'),
-							dataIndex: 'role',
-							width: 110,
-							render: (role: string) => <Tag>{t(`role.${role}` as never)}</Tag>
-						},
-						{
-							title: t('site.visibility'),
-							dataIndex: 'visibility',
-							width: 100,
-							render: (v: string) => (
-								<Tag color={v === 'public' ? 'warning' : 'default'}>
-									{t(`site.visibility.${v}` as never)}
-								</Tag>
-							)
-						},
-						{
-							title: t('site.provisionState'),
-							dataIndex: 'provisionState',
-							width: 170,
-							render: (_: string, site) => {
-								const tag = provisionTag(site);
-								return (
-									<span>
-										<Tag color={tag.color}>
+				<TablePanel>
+					<Table<Site>
+						rowKey="siteId"
+						pagination={false}
+						dataSource={sites}
+						columns={[
+							{
+								title: t('site.name'),
+								dataIndex: 'name',
+								render: (name: string, site) => (
+									<>
+										<div>
+											<Link to={`/sites/${site.siteId}`}>{name}</Link>
+										</div>
+										<div className="version-text" style={{ color: 'var(--muted-foreground)' }}>
+											{site.slug}
+										</div>
+									</>
+								)
+							},
+							{
+								title: t('site.role'),
+								dataIndex: 'role',
+								width: 110,
+								render: (role: string) => (
+									<StatusTag kind="neutral">{t(`role.${role}` as never)}</StatusTag>
+								)
+							},
+							{
+								title: t('site.visibility'),
+								dataIndex: 'visibility',
+								width: 100,
+								render: (v: string) => (
+									<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
+										{t(`site.visibility.${v}` as never)}
+									</StatusTag>
+								)
+							},
+							{
+								title: t('site.provisionState'),
+								dataIndex: 'provisionState',
+								width: 190,
+								render: (_: string, site) => (
+									<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+										<StatusTag kind={provisionKind(site)}>
 											{t(`site.provision.${site.provisionState}` as never)}
-										</Tag>
+										</StatusTag>
 										{site.provisionState === 'failed' ? (
 											<Button
 												size="small"
 												loading={retrying === site.siteId}
-												onClick={(e) => {
-													e.stopPropagation();
-													void handleRetry(site);
-												}}
+												onClick={() => void handleRetry(site)}
 											>
 												{t('sites.retryProvision')}
 											</Button>
 										) : null}
 									</span>
-								);
+								)
 							}
-						}
-					]}
-				/>
+						]}
+					/>
+				</TablePanel>
 			)}
 			<Modal
 				title={t('sites.createTitle')}
@@ -246,7 +240,7 @@ export default function SitesPage() {
 				destroyOnClose
 			>
 				{createError ? (
-					<Alert type="error" showIcon message={t(createError)} style={{ marginBottom: 16 }} />
+					<Alert type="error" showIcon title={t(createError)} style={{ marginBottom: 16 }} />
 				) : null}
 				<Form<CreateForm>
 					form={form}
@@ -312,6 +306,6 @@ export default function SitesPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
-		</>
+		</div>
 	);
 }

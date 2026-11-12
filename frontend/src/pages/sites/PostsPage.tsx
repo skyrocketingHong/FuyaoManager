@@ -17,11 +17,13 @@ import {
 	Space,
 	Switch,
 	Table,
-	Tag,
 	Typography,
 	message
 } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import StatusTag from '../../components/StatusTag';
+import { TablePanel } from '../../components/Panel';
 import {
 	createPost,
 	deletePost,
@@ -300,28 +302,38 @@ export default function PostsPage() {
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
 
+	const searchBox = (
+		<Input.Search
+			placeholder={t('posts.searchPlaceholder')}
+			allowClear
+			style={{ width: 260 }}
+			onSearch={(value) => {
+				setQuery(value);
+				setPage(1);
+				void refresh(1, value);
+			}}
+		/>
+	);
+	const newButton = (
+		<Button type="primary" disabled={!editable} onClick={() => void openEditor()}>
+			<Trans text={t('posts.new')} />
+		</Button>
+	);
+	const headerActive = usePageHeader({ content: searchBox, actions: newButton });
+
 	return (
-		<>
+		<div className="page-stack">
 			{contextHolder}
-			<Space style={{ marginBottom: 12, width: '100%', justifyContent: 'space-between' }}>
-				<Input.Search
-					placeholder={t('posts.searchPlaceholder')}
-					allowClear
-					style={{ maxWidth: 320 }}
-					onSearch={(value) => {
-						setQuery(value);
-						setPage(1);
-						void refresh(1, value);
-					}}
-				/>
-				<Button type="primary" disabled={!editable} onClick={() => void openEditor()}>
-					<Trans text={t('posts.new')} />
-				</Button>
-			</Space>
-			{errorKey !== null ? <Alert type="error" showIcon message={t(errorKey)} /> : null}
+			{!headerActive ? (
+				<Space style={{ width: '100%', justifyContent: 'space-between' }}>
+					{searchBox}
+					{newButton}
+				</Space>
+			) : null}
+			{errorKey !== null ? <Alert type="error" showIcon title={t(errorKey)} /> : null}
+			<TablePanel>
 			<Table<Post>
 				rowKey="path"
-				size="small"
 				dataSource={posts ?? []}
 				loading={posts === null}
 				pagination={{
@@ -352,21 +364,24 @@ export default function PostsPage() {
 						width: 90,
 						render: (draft: boolean) =>
 							draft ? (
-								<Tag color="orange">{t('posts.draft')}</Tag>
+								<StatusTag kind="warning">{t('posts.draft')}</StatusTag>
 							) : (
-								<Tag color="green">{t('posts.published')}</Tag>
+								<StatusTag kind="success">{t('posts.published')}</StatusTag>
 							)
 					},
 					{ title: t('posts.dateColumn'), dataIndex: 'date', width: 170 },
 					{
 						title: t('posts.tagsColumn'),
 						dataIndex: 'tags',
-						render: (tags: string[]) =>
-							(tags ?? []).map((tag) => (
-								<Tag key={tag} style={{ marginInlineEnd: 4 }}>
-									{tag}
-								</Tag>
-							))
+						render: (tags: string[]) => (
+							<span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+								{(tags ?? []).map((tag) => (
+									<StatusTag key={tag} kind="neutral">
+										{tag}
+									</StatusTag>
+								))}
+							</span>
+						)
 					},
 					{
 						width: 170,
@@ -390,6 +405,7 @@ export default function PostsPage() {
 					}
 				]}
 			/>
+			</TablePanel>
 			<Modal
 				title={editing ? t('posts.editTitle') : t('posts.newTitle')}
 				open={editorOpen}
@@ -408,7 +424,7 @@ export default function PostsPage() {
 					<Alert
 						type="warning"
 						showIcon
-						message={t('posts.conflictTitle')}
+						title={t('posts.conflictTitle')}
 						description={t('posts.conflictBody')}
 						action={
 							<Space>
@@ -509,6 +525,6 @@ export default function PostsPage() {
 					</Form.Item>
 				</Form>
 			</Modal>
-		</>
+		</div>
 	);
 }

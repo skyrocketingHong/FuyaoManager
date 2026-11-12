@@ -2,48 +2,44 @@
  * ThemesCatalogPage: the platform-scope registered-theme catalog — versions,
  * adapters, capabilities, URL conventions, required artifacts, and whether a
  * config schema is declared. Registration itself stays operator-driven
- * (CLI), so this page is read-only by design.
+ * (`fuyao-admin register-theme`), so this page is read-only by design. An
+ * empty catalog is a real state with the registration hint; a load failure
+ * is never disguised as an empty catalog.
  */
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Alert, Space, Table, Tag, Typography } from 'antd';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, Button, Empty, Table, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { listThemes, type Theme } from '../lib/api/management';
 import { apiErrorKey } from '../lib/i18n/errors';
 import { t, type MessageKey } from '../lib/i18n';
 import { sessionSnapshot, subscribeSession } from '../lib/session';
 import { useSyncExternalStore } from 'react';
+import StatusTag from '../components/StatusTag';
+import { TablePanel } from '../components/Panel';
 
 export default function ThemesCatalogPage() {
-	const navigate = useNavigate();
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const [themes, setThemes] = useState<Theme[] | null>(null);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 
-	useEffect(() => {
-		if (session.status === 'anonymous') {
-			navigate('/login');
-			return;
-		}
+	const load = useCallback(() => {
 		if (session.status !== 'authenticated') return;
 		let cancelled = false;
+		setErrorKey(null);
 		listThemes()
 			.then((list) => {
 				if (!cancelled) setThemes(list);
 			})
 			.catch((err) => {
 				if (cancelled) return;
-				const key = apiErrorKey(err);
-				if (key === 'error.unauthenticated') {
-					navigate('/login');
-					return;
-				}
-				setErrorKey(key);
+				setErrorKey(apiErrorKey(err) ?? 'error.generic');
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [session.status, navigate]);
+	}, [session.status]);
+
+	useEffect(() => load(), [load]);
 
 	const columns: ColumnsType<Theme> = [
 		{
@@ -51,22 +47,27 @@ export default function ThemesCatalogPage() {
 			render: (_, theme) => (
 				<>
 					<div>{theme.name ?? theme.themeId}</div>
-					<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+					<Typography.Text className="version-text" type="secondary" style={{ fontSize: 12 }}>
 						{theme.themeId} @ {theme.version}
 					</Typography.Text>
 				</>
 			)
 		},
-		{ title: t('themes.adapterColumn'), dataIndex: 'adapter', width: 200 },
+		{
+			title: t('themes.adapterColumn'),
+			dataIndex: 'adapter',
+			width: 200,
+			render: (adapter: string) => <span className="version-text">{adapter}</span>
+		},
 		{
 			title: t('themes.capabilitiesColumn'),
 			dataIndex: 'capabilities',
 			render: (caps: string[]) => (
-				<span>
+				<span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
 					{(caps ?? []).map((cap) => (
-						<Tag key={cap} style={{ marginInlineEnd: 4 }}>
+						<StatusTag key={cap} kind="neutral">
 							{cap}
-						</Tag>
+						</StatusTag>
 					))}
 				</span>
 			)
@@ -87,32 +88,53 @@ export default function ThemesCatalogPage() {
 			width: 120,
 			render: (_, theme) =>
 				theme.configSchema ? (
-					<Tag color="green">{t('themes.schemaDeclared')}</Tag>
+					<StatusTag kind="success">{t('themes.schemaDeclared')}</StatusTag>
 				) : (
-					<Tag>{t('themes.emptyConfigOnly')}</Tag>
+					<StatusTag kind="neutral">{t('themes.emptyConfigOnly')}</StatusTag>
 				)
 		}
 	];
 
 	return (
-		<>
+		<div className="page-stack">
 			{errorKey !== null ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
+				<Alert
+					type="error"
+					showIcon
+					title={t(errorKey)}
+					action={
+						<Button
+							size="small"
+							onClick={() => {
+								setThemes(null);
+								load();
+							}}
+						>
+							{t('common.retry')}
+						</Button>
+					}
+				/>
 			) : null}
-			<Table<Theme>
-				rowKey="id"
-				size="small"
-				columns={columns}
-				dataSource={themes ?? []}
-				loading={themes === null}
-				pagination={false}
-				locale={{ emptyText: t('themes.emptyCatalog') }}
-			/>
-			<Space style={{ marginTop: 12 }}>
-				<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-					{t('themes.registerHint')}
-				</Typography.Text>
-			</Space>
-		</>
+			{errorKey === null ? (
+				<TablePanel
+					tools={
+						<Tooltip title={t('themes.registerHint')}>
+							<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+								{t('themes.registerHintShort')}
+							</Typography.Text>
+						</Tooltip>
+					}
+				>
+					<Table<Theme>
+						rowKey="id"
+						columns={columns}
+						dataSource={themes ?? []}
+						loading={themes === null}
+						pagination={false}
+						locale={{ emptyText: <Empty description={t('themes.emptyCatalog')} /> }}
+					/>
+				</TablePanel>
+			) : null}
+		</div>
 	);
 }

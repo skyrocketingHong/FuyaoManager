@@ -8,10 +8,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Alert, Button, Card, Input, Popconfirm, Space, Spin, message } from 'antd';
+import { Alert, Button, Input, Popconfirm, Space, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import PageLoading from '../../components/PageLoading';
+import { Panel } from '../../components/Panel';
 import { getFriends, getSite, putFriends, type Friend, type Site } from '../../lib/api/management';
 import { EditableDoc } from '../../lib/editing/EditableDoc';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
@@ -145,25 +149,46 @@ export default function FriendsPage() {
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	useUnsavedGuard(editable && dirty);
 	const rows: FriendsRows | null = state.draft ?? state.baseline;
+
+	const headerActions = (
+		<Space size={8}>
+			{state.conflict ? (
+				<>
+					<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
+					<Button danger onClick={() => editor.discardLocal()}>
+						{t('posts.discardLocal')}
+					</Button>
+				</>
+			) : null}
+			<Button
+				type="primary"
+				loading={state.saving}
+				disabled={!editable || !dirty}
+				onClick={() => void handleSave()}
+			>
+				<Trans text={t('common.save')} />
+			</Button>
+		</Space>
+	);
+	const headerActive = usePageHeader({ actions: headerActions });
 
 	function groupEditor(group: Group) {
 		const groupRows = rows ? rows[group] : null;
 		return (
-			<Card
-				size="small"
+			<Panel
 				title={group === 'online' ? t('friends.online') : t('friends.offline')}
-				extra={
+				tags={
 					editable ? (
 						<Button size="small" onClick={() => addRow(group)}>
 							{t('friends.add')}
 						</Button>
 					) : null
 				}
-				style={{ marginBottom: 12 }}
 			>
 				{groupRows === null || state.loading ? (
-					<Spin size="small" />
+					<PageLoading spec="section" />
 				) : groupRows.length === 0 ? (
 					t('friends.emptyGroup')
 				) : (
@@ -222,47 +247,30 @@ export default function FriendsPage() {
 						</Space>
 					))
 				)}
-			</Card>
+			</Panel>
 		);
 	}
 
 	return (
-		<>
+		<div className="page-stack">
 			{contextHolder}
-			<div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-				<Space>
-					{state.conflict ? (
-						<>
-							<Button onClick={() => void syncAfterConflict()}>{t('posts.conflictAction')}</Button>
-							<Button danger onClick={() => editor.discardLocal()}>
-								{t('posts.discardLocal')}
-							</Button>
-						</>
-					) : null}
-					<Button
-						type="primary"
-						loading={state.saving}
-						disabled={!editable || !dirty}
-						onClick={() => void handleSave()}
-					>
-						<Trans text={t('common.save')} />
-					</Button>
-				</Space>
-			</div>
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
+			) : null}
 			{state.conflict ? (
 				<Alert
 					type="warning"
 					showIcon
-					message={t('posts.conflictTitle')}
+					title={t('posts.conflictTitle')}
 					description={t('posts.conflictBody')}
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}
 			{errorKey !== null ? (
-				<Alert type="error" showIcon message={t(errorKey)} style={{ marginBottom: 12 }} />
+				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
 			{groupEditor('online')}
 			{groupEditor('offline')}
-		</>
+		</div>
 	);
 }

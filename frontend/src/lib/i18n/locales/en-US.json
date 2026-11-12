@@ -314,5 +314,15 @@
 	"site.boundary.loadBody": "Check the network connection and retry.",
 	"site.boundary.backToSites": "Back to sites",
 	"account.passkeyBound": "Passkey bound",
-	"account.passkeyUnbound": "No passkey bound"
+	"account.passkeyUnbound": "No passkey bound",
+	"themes.registerHintShort": "Registration via CLI (hover)",
+	"overview.stateTitle": "Site state",
+	"overview.currentRelease": "Current release",
+	"overview.noRelease": "Nothing published yet.",
+	"overview.live": "Live",
+	"overview.actionsTitle": "Manage",
+	"draft.leaveTitle": "Unsaved changes",
+	"draft.leaveBody": "Your edits are not saved yet and will be lost if you leave now.",
+	"draft.leaveConfirm": "Leave",
+	"draft.leaveCancel": "Keep editing"
 }

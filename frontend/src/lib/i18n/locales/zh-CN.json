@@ -314,5 +314,15 @@
 	"site.boundary.loadBody": "请检查网络连接后重试。",
 	"site.boundary.backToSites": "返回站点管理",
 	"account.passkeyBound": "已绑定通行密钥",
-	"account.passkeyUnbound": "未绑定通行密钥"
+	"account.passkeyUnbound": "未绑定通行密钥",
+	"themes.registerHintShort": "主题登记见 CLI（悬停查看）",
+	"overview.stateTitle": "站点状态",
+	"overview.currentRelease": "当前发布",
+	"overview.noRelease": "尚未发布任何版本。",
+	"overview.live": "生效中",
+	"overview.actionsTitle": "进入管理",
+	"draft.leaveTitle": "有未保存的修改",
+	"draft.leaveBody": "当前编辑尚未保存，离开后修改将丢失。确定离开吗？",
+	"draft.leaveConfirm": "离开",
+	"draft.leaveCancel": "继续编辑"
 }

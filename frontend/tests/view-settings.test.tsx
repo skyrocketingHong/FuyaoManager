@@ -7,7 +7,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import type { Site, SiteSettings } from '../src/lib/api/management';
 
@@ -86,14 +86,16 @@ function saveLabelText(): string {
 }
 
 function mountView() {
+	const router = createMemoryRouter(
+		[
+			{ path: '/sites/:siteId/settings', element: <SettingsPage /> },
+			{ path: '/login', element: <div>login</div> }
+		],
+		{ initialEntries: [`/sites/${baseSite.siteId}/settings`] }
+	);
 	return render(
 		<ConfigProvider>
-			<MemoryRouter initialEntries={[`/sites/${baseSite.siteId}/settings`]}>
-				<Routes>
-					<Route path="/sites/:siteId/settings" element={<SettingsPage />} />
-					<Route path="/login" element={<div>login</div>} />
-				</Routes>
-			</MemoryRouter>
+			<RouterProvider router={router} />
 		</ConfigProvider>
 	);
 }

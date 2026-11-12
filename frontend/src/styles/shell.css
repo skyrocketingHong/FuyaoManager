@@ -1,0 +1,206 @@
+/* App shell: sidebar (brand -> scope -> menu -> footer), the 44px top bar
+   (page slots + session controls on one line, horizontal scroll when tight),
+   and the workspace as the single vertical scroll region. */
+
+.app-shell {
+	height: 100vh;
+	overflow: hidden;
+}
+
+.shell-aside {
+	background: var(--sidebar-bg) !important;
+	border-inline-end: 1px solid var(--border);
+	height: 100vh;
+	position: sticky;
+	top: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.shell-aside .ant-layout-sider-children {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.brand-row {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-4) var(--space-4) var(--space-2);
+	font-size: var(--text-title);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.site-context {
+	padding: var(--space-2) var(--space-4) var(--space-3);
+	border-bottom: 1px solid var(--border);
+}
+
+.site-context .site-name {
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.site-context .site-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	margin-top: 2px;
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.site-context .site-switch {
+	margin-top: var(--space-2);
+	font-size: var(--text-caption);
+}
+
+.shell-nav {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	padding: var(--space-1) var(--space-1) var(--space-4);
+}
+
+.shell-nav .ant-menu {
+	border-inline-end: none !important;
+	background: transparent;
+}
+
+.shell-nav .ant-menu-item {
+	padding-inline: var(--space-4) !important;
+}
+
+.shell-nav .ant-menu-item-group-title {
+	padding: var(--space-3) var(--space-4) var(--space-1);
+	font-size: var(--text-caption);
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
+
+.shell-foot {
+	padding: var(--space-2) var(--space-4);
+	border-top: 1px solid var(--border);
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+	overflow-wrap: anywhere;
+}
+
+.shell-main {
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.shell-header {
+	height: var(--topbar-height);
+	line-height: normal;
+	padding: 0 var(--space-4);
+	background: var(--card);
+	border-bottom: 1px solid var(--border);
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	position: sticky;
+	top: 0;
+	z-index: 30;
+}
+
+.topbar-main {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	overflow-x: auto;
+	scrollbar-width: none;
+	white-space: nowrap;
+}
+
+.topbar-main::-webkit-scrollbar {
+	display: none;
+}
+
+.topbar-main .page-title {
+	font-size: var(--text-title);
+	font-weight: 600;
+}
+
+.topbar-content,
+.topbar-actions {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.topbar-session {
+	display: flex;
+	align-items: center;
+	gap: var(--space-1);
+	white-space: nowrap;
+}
+
+.account-avatar {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	margin-inline-end: 6px;
+	background: var(--muted);
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+	font-weight: 600;
+}
+
+.account-meta {
+	color: var(--muted-foreground);
+	margin-inline-start: 4px;
+}
+
+.shell-content {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	scrollbar-gutter: stable;
+	padding: var(--space-4);
+	box-sizing: border-box;
+}
+
+/* Narrow screens: the sidebar becomes a full-width block above the
+   workspace; the menu stays reachable inside its own scroll region. */
+@media (max-width: 991px) {
+	.app-shell {
+		height: auto;
+		min-height: 100vh;
+		overflow: visible;
+	}
+
+	.shell-aside {
+		position: relative;
+		width: 100% !important;
+		max-width: 100% !important;
+		height: auto;
+		border-inline-end: none;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.shell-nav {
+		max-height: 45vh;
+	}
+
+	.shell-main {
+		height: auto;
+		min-height: 0;
+	}
+
+	.shell-content {
+		overflow: visible;
+	}
+}

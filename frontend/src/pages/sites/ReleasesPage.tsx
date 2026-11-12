@@ -1,19 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-	Alert,
-	Button,
-	Card,
-	Modal,
-	Select,
-	Space,
-	Spin,
-	Table,
-	Tag,
-	Typography,
-	message
-} from 'antd';
+import { Alert, Button, Modal, Select, Space, Table, Typography, message } from 'antd';
 import Trans from '../../components/i18n/Trans';
+import { usePageHeader } from '../../components/PageHeader';
+import PageLoading from '../../components/PageLoading';
+import StatusTag from '../../components/StatusTag';
+import { Panel, TablePanel } from '../../components/Panel';
 import {
 	canEditSite,
 	createRelease,
@@ -204,56 +196,66 @@ export default function ReleasesPage() {
 	const publishable =
 		editable && effectiveCandidate !== null && !releasedBuildIds.has(effectiveCandidate);
 
-	return (
-		<>
-			{contextHolder}
-			<Card
-				title={<Trans text={t('releases.title')} />}
-				extra={
-					<Space>
-						{current && current.originUrl ? (
-							<Button href={current.originUrl} target="_blank">
-								<Trans text={t('releases.open')} />
-							</Button>
-						) : null}
-						<Button
-							type="primary"
-							loading={publishing}
-							disabled={!publishable}
-							onClick={() => void handlePublish()}
-						>
-							<Trans text={t('releases.publish')} />
-						</Button>
-					</Space>
-				}
-				style={{ marginTop: 16 }}
+	const headerContent = editable && succeeded.length > 0 && (
+		<Select
+			id="release-candidate"
+			style={{ minWidth: 220 }}
+			value={effectiveCandidate}
+			onChange={setCandidate}
+			options={candidateOptions}
+			aria-label={t('releases.candidate')}
+		/>
+	);
+	const headerActions = (
+		<Space size={8}>
+			{current && current.originUrl ? (
+				<Button href={current.originUrl} target="_blank">
+					<Trans text={t('releases.open')} />
+				</Button>
+			) : null}
+			<Button
+				type="primary"
+				loading={publishing}
+				disabled={!publishable}
+				onClick={() => void handlePublish()}
 			>
+				<Trans text={t('releases.publish')} />
+			</Button>
+		</Space>
+	);
+	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
+
+	return (
+		<div className="page-stack">
+			{contextHolder}
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>{headerActions}</div>
+			) : null}
+			<Panel title={<Trans text={t('releases.title')} />}>
 				{errorKey !== null ? (
 					<Alert
 						type="error"
 						showIcon
-						message={t(errorKey ?? 'error.generic')}
+						title={t(errorKey ?? 'error.generic')}
 						style={{ marginBottom: 16 }}
 					/>
 				) : null}
 				{releases === null ? (
-					<p role="status">
-						<Spin /> {t('common.loading')}
-					</p>
+					<PageLoading spec="section" label={t('common.loading')} />
 				) : (
 					<>
 						{current ? (
 							<Alert
 								type="success"
 								showIcon
-								message={`${t('releases.current')}: ${current.release.theme.themeId} @ ${current.release.theme.version}`}
+								title={`${t('releases.current')}: ${current.release.theme.themeId} @ ${current.release.theme.version}`}
 								style={{ marginBottom: 16 }}
 							/>
 						) : (
 							<Alert
 								type="info"
 								showIcon
-								message={t('error.noLiveRelease')}
+								title={t('error.noLiveRelease')}
 								style={{ marginBottom: 16 }}
 							/>
 						)}
@@ -261,7 +263,7 @@ export default function ReleasesPage() {
 							<Alert
 								type="info"
 								showIcon
-								message={t('releases.roleNotice')}
+								title={t('releases.roleNotice')}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
@@ -269,33 +271,26 @@ export default function ReleasesPage() {
 							<Alert
 								type="info"
 								showIcon
-								message={t('releases.noSucceededBuild')}
+								title={t('releases.noSucceededBuild')}
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
-						{editable && succeeded.length > 0 ? (
-							<Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+						{!headerActive && editable && succeeded.length > 0 ? (
+							<Space orientation="vertical" style={{ width: '100%', marginBottom: 16 }}>
 								<label htmlFor="release-candidate">{t('releases.candidate')}</label>
-								<Select
-									id="release-candidate"
-									style={{ maxWidth: 360 }}
-									value={effectiveCandidate}
-									onChange={setCandidate}
-									options={candidateOptions}
-									aria-label={t('releases.candidate')}
-								/>
+								{headerContent}
 							</Space>
 						) : null}
+						<TablePanel>
 						<Table<Release>
 							rowKey="id"
-							size="small"
 							dataSource={releases}
 							pagination={false}
 							columns={[
 								{
 									title: t('releases.buildColumn'),
 									render: (_, record) => (
-										<Typography.Text code>{record.buildId.slice(0, 8)}</Typography.Text>
+										<Typography.Text className="version-text">{record.buildId.slice(0, 8)}</Typography.Text>
 									)
 								},
 								{
@@ -306,11 +301,11 @@ export default function ReleasesPage() {
 									title: t('builds.status'),
 									dataIndex: 'status',
 									render: (status: string) => (
-										<Tag
-											color={status === 'live' ? 'green' : status === 'failed' ? 'red' : 'default'}
+										<StatusTag
+											kind={status === 'live' ? 'success' : status === 'failed' ? 'danger' : 'neutral'}
 										>
 											{t(`releases.status.${status}` as never)}
-										</Tag>
+										</StatusTag>
 									)
 								},
 								{
@@ -333,9 +328,10 @@ export default function ReleasesPage() {
 								}
 							]}
 						/>
+						</TablePanel>
 					</>
 				)}
-			</Card>
+			</Panel>
 			<Modal
 				open={rollbackTarget !== null}
 				title={t('releases.rollback')}
@@ -346,6 +342,6 @@ export default function ReleasesPage() {
 			>
 				<p>{t('releases.rollbackConfirm')}</p>
 			</Modal>
-		</>
+		</div>
 	);
 }

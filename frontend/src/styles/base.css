@@ -1,0 +1,217 @@
+/* Base layer: pre-JS fallback tokens (light palette, replaced at runtime by
+   AppearanceProvider), document scaffolding, focus, motion, and the small
+   shared primitives (status tags, version text, loading, auth screens).
+   Spacing steps 4/8/10/12/16, radii 4/8/12, weights 400/600. */
+
+:root {
+	--background: #f2f5fa;
+	--foreground: #1e293b;
+	--card: #ffffff;
+	--surface: #f6f8fc;
+	--elevated: #ffffff;
+	--muted: #e9eef5;
+	--muted-foreground: #526176;
+	--border: #d8e1ee;
+	--control-border: #7b8a9e;
+	--sidebar-bg: #f9fbff;
+	--primary: #1677ff;
+	--primary-fill: #1677ff;
+	--primary-foreground: #ffffff;
+	--accent: #e6f4ff;
+	--good: #237b4b;
+	--warning: #946200;
+	--danger: #c63742;
+	--info: #1668dc;
+	--status-success: #237b4b;
+	--status-warning: #946200;
+	--status-danger: #c63742;
+	--status-info: #1668dc;
+	--status-neutral: #526176;
+	--font-sans: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+	--font-mono: Menlo, 'SFMono-Regular', Consolas, monospace;
+	--radius: 8px;
+	--radius-sm: 4px;
+	--radius-lg: 12px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 10px;
+	--space-4: 12px;
+	--space-5: 16px;
+	--text-caption: 12px;
+	--text-secondary: 13px;
+	--text-body: 14px;
+	--text-title: 16px;
+	--text-page: 20px;
+	--motion-fast: 100ms;
+	--motion-mid: 200ms;
+	--motion-slow: 300ms;
+	--topbar-height: 44px;
+	--topbar-control-height: 32px;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--background);
+	color: var(--foreground);
+	font-family: var(--font-sans);
+	font-size: var(--text-body);
+	-webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+code,
+.code-hint,
+.version-text {
+	font-family: var(--font-mono);
+}
+
+.code-hint {
+	overflow-wrap: anywhere;
+}
+
+.version-text {
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
+/* StatusTag: five semantics, independent of the accent color. */
+.status-tag {
+	display: inline-flex;
+	align-items: center;
+	height: 22px;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	font-size: var(--text-caption);
+	font-weight: 400;
+	line-height: 1;
+	border: 1px solid transparent;
+	white-space: nowrap;
+}
+
+.status-tag--success {
+	color: var(--status-success);
+	background: color-mix(in srgb, var(--status-success) 6%, transparent);
+	border-color: color-mix(in srgb, var(--status-success) 30%, transparent);
+}
+
+.status-tag--warning {
+	color: var(--status-warning);
+	background: color-mix(in srgb, var(--status-warning) 6%, transparent);
+	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
+}
+
+.status-tag--danger {
+	color: var(--status-danger);
+	background: color-mix(in srgb, var(--status-danger) 6%, transparent);
+	border-color: color-mix(in srgb, var(--status-danger) 30%, transparent);
+}
+
+.status-tag--info {
+	color: var(--status-info);
+	background: color-mix(in srgb, var(--status-info) 6%, transparent);
+	border-color: color-mix(in srgb, var(--status-info) 30%, transparent);
+}
+
+.status-tag--neutral {
+	color: var(--status-neutral);
+	background: color-mix(in srgb, var(--status-neutral) 8%, transparent);
+	border-color: color-mix(in srgb, var(--status-neutral) 30%, transparent);
+}
+
+/* PageLoading specs: page / section / fill. */
+.page-loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-4);
+	color: var(--muted-foreground);
+}
+
+.page-loading--page {
+	min-height: 16rem;
+}
+
+.page-loading--section {
+	min-height: 8rem;
+}
+
+.page-loading--fill {
+	position: absolute;
+	inset: 0;
+	background: color-mix(in srgb, var(--card) 60%, transparent);
+}
+
+/* Auth screens (login, passkey binding, session error). */
+.auth-screen {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px 16px;
+	box-sizing: border-box;
+	background: var(--background);
+}
+
+.auth-card {
+	width: 100%;
+	max-width: 480px;
+}
+
+.auth-stack {
+	width: 100%;
+	max-width: 480px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+}
+
+.auth-stack .auth-card {
+	max-width: none;
+}
+
+.boundary-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 16rem;
+}
+
+/* Locale-switch text fade: a quick opacity ease-in on the re-keyed text
+   node only (never on form controls, which must not remount). */
+.i18n-fade {
+	animation: i18n-fade-in var(--motion-mid) ease-out both;
+}
+
+@keyframes i18n-fade-in {
+	from {
+		opacity: 0.35;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+/* Respect the system "reduce motion" preference for every transition,
+   including antd's. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

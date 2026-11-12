@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import FriendsPage from '../src/pages/sites/FriendsPage';
 import PostsPage from '../src/pages/sites/PostsPage';
@@ -87,13 +87,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 function mount(element: React.ReactElement, section: string, siteId = site.siteId) {
-	render(
-		<MemoryRouter initialEntries={[`/sites/${siteId}/${section}`]}>
-			<Routes>
-				<Route path={'/sites/:siteId/' + section} element={element} />
-			</Routes>
-		</MemoryRouter>
+	const router = createMemoryRouter(
+		[{ path: '/sites/:siteId/' + section, element }],
+		{ initialEntries: [`/sites/${siteId}/${section}`] }
 	);
+	render(<RouterProvider router={router} />);
 }
 
 describe('editing state (R5)', () => {
@@ -191,11 +189,12 @@ describe('editing state (R5)', () => {
 			});
 
 		const { unmount } = render(
-			<MemoryRouter initialEntries={[`/sites/${site.siteId}/friends`]}>
-				<Routes>
-					<Route path="/sites/:siteId/friends" element={<FriendsPage />} />
-				</Routes>
-			</MemoryRouter>
+			<RouterProvider
+				router={createMemoryRouter(
+					[{ path: '/sites/:siteId/friends', element: <FriendsPage /> }],
+					{ initialEntries: [`/sites/${site.siteId}/friends`] }
+				)}
+			/>
 		);
 		// The user leaves the page (site switch / unmount) before the slow
 		// response for the old site arrives.
