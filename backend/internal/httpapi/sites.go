@@ -519,10 +519,12 @@ func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth s
 		// The entry host changed with the visibility: keep site.yaml's
 		// canonical URL aligned so RSS/Sitemap/canonical outputs of the next
 		// build use the real entry (a rebuild is required to re-emit them).
-		if entry, err := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); err == nil {
-			newURL := a.edge.EntryURL(body.Visibility, entry.Port)
-			if err := a.content.UpdateSiteBaseURL(siteID, newURL); err != nil {
-				a.logger.Error("rewrite site base url after visibility change", "siteId", siteID, "error", err)
+		if a.content != nil {
+			if entry, err := a.store.NetworkEntries.GetSiteEntry(r.Context(), siteID); err == nil {
+				newURL := a.edge.EntryURL(body.Visibility, entry.Port)
+				if err := a.content.UpdateSiteBaseURL(siteID, newURL); err != nil {
+					a.logger.Error("rewrite site base url after visibility change", "siteId", siteID, "error", err)
+				}
 			}
 		}
 	}
