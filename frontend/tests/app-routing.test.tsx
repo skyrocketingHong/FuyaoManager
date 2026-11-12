@@ -1,0 +1,221 @@
+/**
+ * App-level routing tests: the three authentication states drive guards,
+ * deep links render the right site scope with the right menu selection, and
+ * an unknown site shows its own state instead of bouncing to the list.
+ */
+// @vitest-environment jsdom
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
+import zh from '../src/lib/i18n/locales/zh-CN.json';
+
+const alice = { id: '11111111-1111-1111-1111-111111111111', username: 'alice', displayName: 'Alice' };
+const siteAbc = {
+	siteId: 'abc',
+	slug: 'abc',
+	visibility: 'private',
+	provisionState: 'ready',
+	name: 'ABC Site',
+	description: '',
+	defaultLocale: 'zh-CN',
+	role: 'owner',
+	settingsRevision: 1,
+	createdAt: '2026-01-01T00:00:00Z',
+	updatedAt: '2026-01-01T00:00:00Z'
+};
+
+let mockSession: {
+	status: string;
+	user: typeof alice | null;
+	platformInitialized: boolean;
+	passkeyBound: boolean;
+	passkeyAvailable: boolean;
+};
+
+vi.mock('../src/lib/session', () => ({
+	subscribeSession: () => () => undefined,
+	sessionSnapshot: () => mockSession,
+	signInWithCode: vi.fn(),
+	signInWithPasskey: vi.fn(),
+	bindPasskey: vi.fn(),
+	signOut: vi.fn(),
+	loadSession: vi.fn()
+}));
+
+let mockSiteListState: { status: string; sites: (typeof siteAbc)[]; errorKey: null };
+vi.mock('../src/lib/sites/site-list', () => ({
+	subscribeSiteList: () => () => undefined,
+	siteListSnapshot: () => mockSiteListState,
+	loadSiteList: vi.fn(),
+	upsertSite: vi.fn()
+}));
+
+const getSite = vi.fn();
+vi.mock('../src/lib/api/management', () => ({
+	getSite: (...args: unknown[]) => getSite(...args)
+}));
+vi.mock('../src/lib/api/client', () => ({
+	ApiError: class ApiError extends Error {
+		constructor(
+			public status: number,
+			public code: string
+		) {
+			super(code);
+		}
+	}
+}));
+
+// Marker doubles keep the test focused on routing, not page internals.
+vi.mock('../src/pages/LoginPage', () => ({ default: () => <div>page-login</div> }));
+vi.mock('../src/pages/BindPasskeyPage', () => ({ default: () => <div>page-bind</div> }));
+vi.mock('../src/pages/SitesPage', () => ({ default: () => <div>page-sites</div> }));
+vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-themes</div> }));
+vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
+vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
+vi.mock('../src/pages/sites/SiteConfigPage', () => ({ default: () => <div>page-config</div> }));
+vi.mock('../src/pages/sites/PostsPage', () => ({ default: () => <div>page-posts</div> }));
+vi.mock('../src/pages/sites/FriendsPage', () => ({ default: () => <div>page-friends</div> }));
+vi.mock('../src/pages/sites/AlbumsPage', () => ({ default: () => <div>page-albums</div> }));
+vi.mock('../src/pages/sites/FootprintsPage', () => ({ default: () => <div>page-footprints</div> }));
+vi.mock('../src/pages/sites/ThemePage', () => ({ default: () => <div>page-theme</div> }));
+vi.mock('../src/pages/sites/BuildsPage', () => ({ default: () => <div>page-builds</div> }));
+vi.mock('../src/pages/sites/ReleasesPage', () => ({ default: () => <div>page-releases</div> }));
+
+import App from '../src/App';
+import { setLocale } from '../src/lib/i18n';
+
+beforeAll(() => {
+	if (!window.matchMedia) {
+		Object.defineProperty(window, 'matchMedia', {
+			writable: true,
+			value: (query: string) => ({
+				matches: false,
+				media: query,
+				onchange: null,
+				addListener: () => undefined,
+				removeListener: () => undefined,
+				addEventListener: () => undefined,
+				removeEventListener: () => undefined,
+				dispatchEvent: () => false
+			})
+		});
+	}
+});
+
+beforeEach(() => {
+	vi.clearAllMocks();
+	localStorage.clear();
+	setLocale('zh-CN');
+	mockSiteListState = { status: 'ready', sites: [siteAbc], errorKey: null };
+	getSite.mockResolvedValue(siteAbc);
+	window.history.pushState({}, '', '/');
+});
+
+afterEach(() => {
+	cleanup();
+});
+
+function authenticated() {
+	mockSession = {
+		status: 'authenticated',
+		user: alice,
+		platformInitialized: true,
+		passkeyBound: true,
+		passkeyAvailable: true
+	};
+}
+
+function renderAt(path: string) {
+	return render(
+		<ConfigProvider>
+			<MemoryRouter initialEntries={[path]}>
+				<App />
+			</MemoryRouter>
+		</ConfigProvider>
+	);
+}
+
+describe('guards', () => {
+	it('redirects an anonymous browser from business routes to login', async () => {
+		mockSession = {
+			status: 'anonymous',
+			user: null,
+			platformInitialized: true,
+			passkeyBound: false,
+			passkeyAvailable: true
+		};
+		renderAt('/sites/abc/posts');
+		await waitFor(() => expect(screen.getByText('page-login')).toBeDefined());
+	});
+
+	it('confines a restricted session to the binding page', async () => {
+		mockSession = {
+			status: 'restricted',
+			user: alice,
+			platformInitialized: true,
+			passkeyBound: false,
+			passkeyAvailable: true
+		};
+		renderAt('/sites');
+		await waitFor(() => expect(screen.getByText('page-bind')).toBeDefined());
+	});
+
+	it('sends an authenticated session away from /login to the sites list', async () => {
+		authenticated();
+		renderAt('/login');
+		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
+	});
+});
+
+describe('deep links and menu selection', () => {
+	beforeEach(() => authenticated());
+
+	it('renders the themes catalog from the menu-reachable route', async () => {
+		renderAt('/themes');
+		await waitFor(() => expect(screen.getByText('page-themes')).toBeDefined());
+		await waitFor(() => {
+			const selected = document.querySelector('.ant-menu-item-selected');
+			expect(selected?.textContent).toContain(zh['nav.themesCatalog']);
+		});
+	});
+
+	it.each([
+		['/sites/abc', 'page-overview', 'nav.overview'],
+		['/sites/abc/posts', 'page-posts', 'nav.posts'],
+		['/sites/abc/albums', 'page-albums', 'nav.albums'],
+		['/sites/abc/footprints', 'page-footprints', 'nav.footprints'],
+		['/sites/abc/settings', 'page-settings', 'nav.settings'],
+		['/sites/abc/config', 'page-config', 'nav.config'],
+		['/sites/abc/theme', 'page-theme', 'nav.theme'],
+		['/sites/abc/builds', 'page-builds', 'nav.builds'],
+		['/sites/abc/releases', 'page-releases', 'nav.releases']
+	])('deep link %s renders its page with menu selection', async (path, marker, titleKey) => {
+		renderAt(path);
+		await waitFor(() => expect(screen.getByText(marker)).toBeDefined());
+		await waitFor(() => {
+			const selected = document.querySelector('.ant-menu-item-selected');
+			expect(selected?.textContent).toContain(zh[titleKey as keyof typeof zh]);
+		});
+	});
+
+	it('shows the current site block in site scope', async () => {
+		renderAt('/sites/abc/posts');
+		await waitFor(() => expect(screen.getByText('page-posts')).toBeDefined());
+		expect(screen.getByText('ABC Site')).toBeDefined();
+	});
+
+	it('renders a not-found state for an unknown site instead of bouncing', async () => {
+		const { ApiError } = await import('../src/lib/api/client');
+		const notFound = new (ApiError as unknown as new (status: number, code: string) => Error)(
+			404,
+			'not_found'
+		);
+		getSite.mockRejectedValue(notFound);
+		renderAt('/sites/ghost/posts');
+		await waitFor(() =>
+			expect(screen.getByText(zh['site.boundary.notFoundTitle'])).toBeDefined()
+		);
+		expect(screen.queryByText('page-sites')).toBeNull();
+	});
+});

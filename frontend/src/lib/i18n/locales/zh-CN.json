@@ -304,5 +304,15 @@
 	"error.passkeyBindingRequired": "请先完成通行密钥绑定。",
 	"error.credentialDuplicate": "该通行密钥已注册。",
 	"error.sessionRotated": "发起登记的会话已失效，请重新登录后重试。",
-	"error.passkeyUnavailable": "当前部署未启用通行密钥（需要域名 RP 配置）。"
+	"error.passkeyUnavailable": "当前部署未启用通行密钥（需要域名 RP 配置）。",
+	"nav.group.content": "内容管理",
+	"nav.group.settings": "站点设置",
+	"nav.group.delivery": "构建与发布",
+	"site.boundary.notFoundTitle": "站点不存在或没有访问权限",
+	"site.boundary.notFoundBody": "该站点可能已被删除，或当前账号不是其成员。",
+	"site.boundary.loadTitle": "站点加载失败",
+	"site.boundary.loadBody": "请检查网络连接后重试。",
+	"site.boundary.backToSites": "返回站点管理",
+	"account.passkeyBound": "已绑定通行密钥",
+	"account.passkeyUnbound": "未绑定通行密钥"
 }

@@ -4,8 +4,10 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Button, Card, Result, Spin } from 'antd';
 import AppShell from './components/layout/AppShell';
+import SiteBoundary from './components/layout/SiteBoundary';
 import { initLocale, t } from './lib/i18n';
 import { initTheme } from './lib/theme';
+import { navItems } from './lib/navigation';
 import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
 import LoginPage from './pages/LoginPage';
 import BindPasskeyPage from './pages/BindPasskeyPage';
@@ -21,6 +23,23 @@ import AlbumsPage from './pages/sites/AlbumsPage';
 import FootprintsPage from './pages/sites/FootprintsPage';
 import BuildsPage from './pages/sites/BuildsPage';
 import ReleasesPage from './pages/sites/ReleasesPage';
+
+/** Page components keyed by navigation item id; the route table consumes
+ * the same metadata as the sidebar menu, so they cannot drift apart. */
+const pageByNavId: Record<string, ReactNode> = {
+	sites: <SitesPage />,
+	themes: <ThemesCatalogPage />,
+	'site.overview': <SiteDetailPage />,
+	'site.settings': <SettingsPage />,
+	'site.config': <SiteConfigPage />,
+	'site.posts': <PostsPage />,
+	'site.friends': <FriendsPage />,
+	'site.albums': <AlbumsPage />,
+	'site.footprints': <FootprintsPage />,
+	'site.theme': <ThemePage />,
+	'site.builds': <BuildsPage />,
+	'site.releases': <ReleasesPage />
+};
 
 type Status = ReturnType<typeof sessionSnapshot>['status'];
 
@@ -112,18 +131,22 @@ export default function App() {
 					<RequireFull status={status}>
 						<AppShell>
 							<Routes>
-								<Route path="/sites" element={<SitesPage />} />
-								<Route path="/themes" element={<ThemesCatalogPage />} />
-								<Route path="/sites/:siteId" element={<SiteDetailPage />} />
-								<Route path="/sites/:siteId/settings" element={<SettingsPage />} />
-								<Route path="/sites/:siteId/config" element={<SiteConfigPage />} />
-								<Route path="/sites/:siteId/posts" element={<PostsPage />} />
-								<Route path="/sites/:siteId/friends" element={<FriendsPage />} />
-								<Route path="/sites/:siteId/albums" element={<AlbumsPage />} />
-								<Route path="/sites/:siteId/footprints" element={<FootprintsPage />} />
-								<Route path="/sites/:siteId/theme" element={<ThemePage />} />
-								<Route path="/sites/:siteId/builds" element={<BuildsPage />} />
-								<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
+								{navItems.map((item) => {
+									const page = pageByNavId[item.id];
+									return (
+										<Route
+											key={item.id}
+											path={item.path}
+											element={
+												item.scope === 'site' ? (
+													<SiteBoundary>{page}</SiteBoundary>
+												) : (
+													page
+												)
+											}
+										/>
+									);
+								})}
 								<Route path="*" element={<Navigate to="/sites" replace />} />
 							</Routes>
 						</AppShell>

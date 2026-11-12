@@ -1,14 +1,15 @@
 /**
  * AppShell: desktop-app layout with a grouped sidebar (platform scope,
- * current-site scope), a sticky top bar carrying the page title and account
- * actions, and a normally scrolling content workspace. Brand mark from
- * Simple Icons; everything else is stock Ant Design.
+ * current-site scope), a sticky top bar carrying the page context and the
+ * account menu, and a normally scrolling content workspace. All navigation
+ * facts — routes, menu entries, selection — come from lib/navigation.
  */
 import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Button, Layout, Menu, Space } from 'antd';
+import { Button, Dropdown, Layout, Menu } from 'antd';
+import type { MenuProps } from 'antd';
 import { siGithub } from 'simple-icons';
 import Trans from '../i18n/Trans';
 import {
@@ -22,6 +23,7 @@ import {
 import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
 import { loadSiteList, siteListSnapshot, subscribeSiteList } from '../../lib/sites/site-list';
+import { itemPath, matchRoute, navItems, selectedPath, siteNavGroups } from '../../lib/navigation';
 
 function GitHubMark() {
 	return (
@@ -46,48 +48,24 @@ function GitHubMark() {
 	);
 }
 
-type SiteSection =
-	| 'overview'
-	| 'settings'
-	| 'config'
-	| 'theme'
-	| 'posts'
-	| 'friends'
-	| 'albums'
-	| 'footprints'
-	| 'builds'
-	| 'releases';
+type AntdMenuItem = Required<MenuProps>['items'][number];
 
-const siteSections: { key: SiteSection; path: string }[] = [
-	{ key: 'overview', path: '' },
-	{ key: 'settings', path: '/settings' },
-	{ key: 'config', path: '/config' },
-	{ key: 'posts', path: '/posts' },
-	{ key: 'friends', path: '/friends' },
-	{ key: 'albums', path: '/albums' },
-	{ key: 'footprints', path: '/footprints' },
-	{ key: 'theme', path: '/theme' },
-	{ key: 'builds', path: '/builds' },
-	{ key: 'releases', path: '/releases' }
-];
+function menuEntry(itemId: string, siteId: string | null): AntdMenuItem {
+	const item = navItems.find((entry) => entry.id === itemId);
+	if (!item) throw new Error(`unknown nav item ${itemId}`);
+	return {
+		key: itemPath(item, siteId),
+		label: <Trans text={t(item.titleKey)} />
+	};
+}
 
-/** Resolves the current route into (siteId, section) and the page title key. */
-function useRouteScope(): {
-	siteId: string | null;
-	section: SiteSection | null;
-	titleKey: MessageKey;
-} {
-	const { pathname } = useLocation();
-	const siteMatch = pathname.match(
-		/^\/sites\/([^/]+)(\/(settings|config|posts|friends|theme|builds|releases))?\/?$/
-	);
-	if (siteMatch) {
-		const section = (siteMatch[3] as SiteSection | undefined) ?? 'overview';
-		return { siteId: siteMatch[1], section, titleKey: `nav.${section}` as MessageKey };
-	}
-	if (pathname === '/sites')
-		return { siteId: null, section: null, titleKey: 'nav.sites' as MessageKey };
-	return { siteId: null, section: null, titleKey: 'app.title' as MessageKey };
+function menuGroup(groupKey: string, titleKey: MessageKey, children: AntdMenuItem[]): AntdMenuItem {
+	return {
+		key: groupKey,
+		type: 'group',
+		label: <Trans text={t(titleKey)} />,
+		children
+	};
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
@@ -96,77 +74,73 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const siteList = useSyncExternalStore(subscribeSiteList, siteListSnapshot);
 	const navigate = useNavigate();
-	const scope = useRouteScope();
+	const { pathname } = useLocation();
 
 	useEffect(() => {
 		if (session.status === 'authenticated') void loadSiteList();
 	}, [session.status]);
 
 	const other: Locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN';
-	const currentSite = scope.siteId
-		? (siteList.sites.find((s) => s.siteId === scope.siteId) ?? null)
+
+	// The URL is the authoritative site identity: the site-scope menu renders
+	// for any /sites/:siteId/* path even while the site list is still loading.
+	const match = matchRoute(pathname);
+	const siteId = match && match.item.scope === 'site' ? match.siteId : null;
+	const currentSite = siteId
+		? (siteList.sites.find((site) => site.siteId === siteId) ?? null)
 		: null;
 
-	const menuItems =
-		scope.siteId && currentSite
-			? [
-					{ label: <Trans text={t('nav.siteGroup')} />, key: 'site-group', type: 'group' as const },
-					...siteSections.map((s) => ({
-						label: <Trans text={t(`nav.${s.key}` as MessageKey)} />,
-						key: `/sites/${scope.siteId}${s.path}`
-					})),
-					{
-						label: <Trans text={t('nav.platformGroup')} />,
-						key: 'platform-group',
-						type: 'group' as const
-					},
-					{ label: <Trans text={t('nav.sites')} />, key: '/sites' }
-				]
-			: [
-					{
-						label: <Trans text={t('nav.platformGroup')} />,
-						key: 'platform-group',
-						type: 'group' as const
-					},
-					{ label: <Trans text={t('nav.sites')} />, key: '/sites' }
-				];
+	const platformGroup = menuGroup('platform-group', 'nav.platformGroup', [
+		menuEntry('sites', null),
+		menuEntry('themes', null)
+	]);
+	const menuItems: AntdMenuItem[] = siteId
+		? [
+				menuEntry('site.overview', siteId),
+				...siteNavGroups
+					.filter((group) => group.id !== 'overview')
+					.map((group) =>
+						menuGroup(
+							`site-${group.id}`,
+							group.titleKey,
+							navItems
+								.filter((item) => item.scope === 'site' && item.group === group.id)
+								.map((item) => menuEntry(item.id, siteId))
+						)
+					),
+				platformGroup
+			]
+		: [platformGroup];
 
-	const selectedKey = scope.siteId
-		? scope.section === 'overview'
-			? `/sites/${scope.siteId}`
-			: `/sites/${scope.siteId}/${scope.section}`
-		: scope.titleKey === ('nav.themesCatalog' as MessageKey)
-			? '/themes'
-			: '/sites';
+	const selected = selectedPath(pathname);
+	const titleKey: MessageKey = match ? match.item.titleKey : 'app.title';
 
 	return (
-		<Layout style={{ minHeight: '100vh' }}>
-			<Layout.Sider
-				width={232}
-				theme="dark"
-				className="shell-aside"
-				breakpoint="lg"
-				collapsedWidth={72}
-			>
+		<Layout className="app-shell">
+			<Layout.Sider width={208} theme="light" className="shell-aside" trigger={null}>
 				<div className="brand-row">
 					<span className="brand">
 						<Trans text={t('app.title')} />
 					</span>
 					<GitHubMark />
 				</div>
-				{currentSite ? (
+				{siteId ? (
 					<div className="site-context">
-						<div className="site-name">{currentSite.name}</div>
-						<div className="site-meta">
-							<span>{currentSite.slug}</span>
-						</div>
+						<div className="site-name">{currentSite?.name ?? siteId}</div>
+						{currentSite ? (
+							<div className="site-meta">
+								<span>{currentSite.slug}</span>
+								<span>{t(`role.${currentSite.role}` as MessageKey)}</span>
+							</div>
+						) : null}
 					</div>
 				) : null}
-				<nav aria-label={t('app.title')}>
+				<nav aria-label={t('app.title')} className="shell-nav">
 					<Menu
-						theme="dark"
+						theme="light"
 						mode="inline"
-						selectedKeys={[selectedKey]}
+						inlineIndent={0}
+						selectedKeys={selected ? [selected] : []}
 						items={menuItems}
 						onClick={({ key }) => navigate(String(key))}
 					/>
@@ -174,17 +148,18 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			</Layout.Sider>
 			<Layout className="shell-main">
 				<Layout.Header className="shell-header">
-					<span className="page-title">
-						<Trans
-							text={
-								currentSite && scope.section
-									? `${currentSite.name} · ${t(`nav.${scope.section}` as MessageKey)}`
-									: t(scope.titleKey)
-							}
-						/>
-					</span>
-					<span style={{ flex: 1 }} />
-					<Space wrap size={[4, 8]}>
+					<div className="topbar-main">
+						<span className="page-title">
+							<Trans
+								text={
+									currentSite && match?.item.scope === 'site'
+										? `${currentSite.name} · ${t(titleKey)}`
+										: t(titleKey)
+								}
+							/>
+						</span>
+					</div>
+					<div className="topbar-session">
 						<Button type="text" onClick={() => setLocale(other)} aria-label={other}>
 							<Trans text={t('app.localeSwitch')} />
 						</Button>
@@ -195,18 +170,53 @@ export default function AppShell({ children }: { children: ReactNode }) {
 							/>
 						</Button>
 						{session.status === 'authenticated' && session.user ? (
-							<Button
-								type="text"
-								onClick={async () => {
-									await signOut();
-									navigate('/login');
+							<Dropdown
+								menu={{
+									items: [
+										{
+											key: 'identity',
+											label: (
+												<span>
+													{session.user.displayName || session.user.username}
+													<span className="account-meta"> @{session.user.username}</span>
+												</span>
+											),
+											disabled: true
+										},
+										{
+											key: 'binding',
+											label: (
+												<Trans
+													text={t(
+														session.passkeyBound
+															? 'account.passkeyBound'
+															: 'account.passkeyUnbound'
+													)}
+												/>
+											),
+											disabled: true
+										},
+										{ type: 'divider' },
+										{
+											key: 'signout',
+											label: <Trans text={t('app.signOut')} />,
+											onClick: () => {
+												void signOut().then(() => navigate('/login', { replace: true }));
+											}
+										}
+									]
 								}}
-								aria-label={`${session.user.username}: ${t('app.signOut')}`}
+								trigger={['click']}
 							>
-								<Trans text={`${session.user.username} · ${t('app.signOut')}`} />
-							</Button>
+								<Button type="text" aria-label={session.user.username}>
+									<span className="account-avatar" aria-hidden>
+										{(session.user.displayName || session.user.username).slice(0, 1).toUpperCase()}
+									</span>
+									{session.user.username}
+								</Button>
+							</Dropdown>
 						) : null}
-					</Space>
+					</div>
 				</Layout.Header>
 				<Layout.Content className="shell-content">{children}</Layout.Content>
 			</Layout>

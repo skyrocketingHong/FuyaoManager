@@ -1,0 +1,79 @@
+/**
+ * Navigation metadata tests: every business route resolves to exactly one
+ * item with the right scope, group, and site context; the menu selection is
+ * derived from the same source, so drift shows up here.
+ */
+import { describe, expect, it } from 'vitest';
+import { itemPath, matchRoute, navItems, selectedPath } from '../src/lib/navigation';
+
+describe('navigation metadata', () => {
+	it('covers every business path exactly once', () => {
+		const paths = navItems.map((item) => item.path);
+		expect(new Set(paths).size).toBe(paths.length);
+		expect(paths).toContain('/sites');
+		expect(paths).toContain('/themes');
+		for (const sub of ['', '/settings', '/config', '/posts', '/friends', '/albums', '/footprints', '/theme', '/builds', '/releases']) {
+			expect(paths).toContain(`/sites/:siteId${sub}`);
+		}
+	});
+
+	it('resolves platform routes', () => {
+		expect(matchRoute('/sites')?.item.id).toBe('sites');
+		expect(matchRoute('/themes')?.item.id).toBe('themes');
+		expect(matchRoute('/themes')?.siteId).toBeNull();
+	});
+
+	it('resolves every site-scoped route with its site id', () => {
+		const cases: [string, string][] = [
+			['/sites/abc', 'site.overview'],
+			['/sites/abc/settings', 'site.settings'],
+			['/sites/abc/config', 'site.config'],
+			['/sites/abc/posts', 'site.posts'],
+			['/sites/abc/friends', 'site.friends'],
+			['/sites/abc/albums', 'site.albums'],
+			['/sites/abc/footprints', 'site.footprints'],
+			['/sites/abc/theme', 'site.theme'],
+			['/sites/abc/builds', 'site.builds'],
+			['/sites/abc/releases', 'site.releases']
+		];
+		for (const [path, id] of cases) {
+			const match = matchRoute(path);
+			expect(match?.item.id, path).toBe(id);
+			expect(match?.siteId, path).toBe('abc');
+			expect(match?.item.scope, path).toBe('site');
+		}
+	});
+
+	it('assigns groups per the information architecture', () => {
+		const groupOf = (id: string) => navItems.find((item) => item.id === id)?.group;
+		expect(groupOf('sites')).toBe('platform');
+		expect(groupOf('themes')).toBe('platform');
+		expect(groupOf('site.overview')).toBe('overview');
+		for (const id of ['site.posts', 'site.friends', 'site.albums', 'site.footprints']) {
+			expect(groupOf(id), id).toBe('content');
+		}
+		for (const id of ['site.settings', 'site.config', 'site.theme']) {
+			expect(groupOf(id), id).toBe('settings');
+		}
+		for (const id of ['site.builds', 'site.releases']) {
+			expect(groupOf(id), id).toBe('delivery');
+		}
+	});
+
+	it('derives the selected menu path from the same source', () => {
+		expect(selectedPath('/sites/abc/albums')).toBe('/sites/abc/albums');
+		expect(selectedPath('/sites/abc')).toBe('/sites/abc');
+		expect(selectedPath('/themes')).toBe('/themes');
+		expect(selectedPath('/nowhere')).toBeNull();
+	});
+
+	it('fills concrete paths', () => {
+		const albums = navItems.find((item) => item.id === 'site.albums');
+		expect(albums && itemPath(albums, 'xyz')).toBe('/sites/xyz/albums');
+	});
+
+	it('does not let a site id swallow another segment', () => {
+		expect(matchRoute('/sites/abc/extra/segments')).toBeNull();
+		expect(matchRoute('/sites/abc/albums/edit')).toBeNull();
+	});
+});

@@ -304,5 +304,15 @@
 	"error.passkeyBindingRequired": "Bind a passkey first.",
 	"error.credentialDuplicate": "This passkey is already registered.",
 	"error.sessionRotated": "The session that started the registration is no longer active; sign in again to retry.",
-	"error.passkeyUnavailable": "Passkeys are not enabled on this deployment (a domain relying party is required)."
+	"error.passkeyUnavailable": "Passkeys are not enabled on this deployment (a domain relying party is required).",
+	"nav.group.content": "Content",
+	"nav.group.settings": "Site settings",
+	"nav.group.delivery": "Build & release",
+	"site.boundary.notFoundTitle": "Site not found or not accessible",
+	"site.boundary.notFoundBody": "The site may have been deleted, or this account is not a member.",
+	"site.boundary.loadTitle": "Failed to load the site",
+	"site.boundary.loadBody": "Check the network connection and retry.",
+	"site.boundary.backToSites": "Back to sites",
+	"account.passkeyBound": "Passkey bound",
+	"account.passkeyUnbound": "No passkey bound"
 }
