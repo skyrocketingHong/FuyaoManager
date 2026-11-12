@@ -271,5 +271,15 @@
 	"posts.newerEditsKept": "已保存；请求期间的新编辑仍保留在编辑器中。",
 	"config.originSection": "站点地址",
 	"config.originHint": "入口随可见性设置变化；公开/私有切换会变更主机，需重新构建以更新 canonical/RSS/Sitemap 地址。",
-	"config.originPending": "首次发布后显示受管入口。"
+	"config.originPending": "首次发布后显示受管入口。",
+	"edge.title": "地址",
+	"edge.inSync": "已应用",
+	"edge.drifted": "待应用",
+	"edge.reapply": "重新应用入口",
+	"edge.applied": "入口配置已应用。",
+	"edge.pendingEntry": "首次发布后显示受管入口。",
+	"themes.configJson": "配置（JSON）",
+	"themes.noSchemaFields": "该主题未声明可视化选项；如支持配置可编辑 JSON。",
+	"albums.yearTitlePlaceholder": "相册标题（可选）",
+	"albums.coverPlaceholder": "封面照片"
 }

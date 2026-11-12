@@ -456,6 +456,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/edge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the managed entry state
+         * @description Reports the site's managed reverse-proxy entry: the effective origin
+         *     for the current visibility, the platform port, apply health
+         *     (in-sync, last apply time, last error), and the operator-approved
+         *     snippet path and bind hosts. Read-only; `reapply` is the recovery
+         *     path. The platform renders entries only within operator-approved
+         *     roots — no arbitrary Caddy text or system paths are exposed or
+         *     accepted.
+         */
+        get: operations["getSiteEdge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/edge/reapply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-apply the managed entry configuration
+         * @description Re-runs render + validate + reload for the managed snippet (all
+         *     sites' entries, this one included) and reports the real outcome. The
+         *     last good configuration keeps serving on failure. Owners and editors
+         *     only.
+         */
+        post: operations["reapplySiteEdge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/site-config": {
         parameters: {
             query?: never;
@@ -1061,7 +1110,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "internal_error";
+            code: "unauthenticated" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "edge_unavailable" | "internal_error";
             detail?: string;
         };
         User: {
@@ -1158,6 +1207,24 @@ export interface components {
         SocialLinksEnvelope: {
             links: components["schemas"]["SocialLink"][];
             digest: string;
+        };
+        SiteEdgeState: {
+            site: {
+                siteId?: string;
+                slug?: string;
+                /** @enum {string} */
+                visibility?: "public" | "private";
+                port?: number;
+                originUrl?: string;
+            };
+            /** @description The managed snippet on disk matches the desired render. */
+            inSync: boolean;
+            lastAppliedAt?: string;
+            lastError?: string;
+            /** @description Operator-configured managed snippet path (server-side fact). */
+            snippetPath?: string;
+            privateBind?: string;
+            publicHost?: string;
         };
         SiteConfigEnvelope: {
             config: components["schemas"]["SiteConfig"];
@@ -1276,6 +1343,10 @@ export interface components {
         AlbumYearEnvelope: {
             year: {
                 year: number;
+                /** @description Managed album title (indexer-preserved; empty falls back to the year). */
+                title?: string;
+                /** @description Managed cover photo filename of this year (empty falls back to the first thumbnail). */
+                cover?: string;
                 photos: components["schemas"]["AlbumPhotoEntry"][];
             };
             digest: string;
@@ -2827,6 +2898,89 @@ export interface operations {
             };
             428: components["responses"]["PreconditionRequired"];
             /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSiteEdge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Edge state for the site. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteEdgeState"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description Edge management is not configured (`edge_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    reapplySiteEdge: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Applied successfully. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The apply failed; the last good configuration keeps serving (`edge_apply_failed`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Edge management is not configured (`edge_unavailable`). */
             503: {
                 headers: {
                     [name: string]: unknown;

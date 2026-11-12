@@ -47,8 +47,12 @@ func (a *API) handleGetAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 	writeJSON(w, http.StatusOK, map[string]any{"year": doc, "digest": digest})
 }
 
-// yearEditBody is the editable projection of one year document.
+// yearEditBody is the editable projection of one year document: the
+// year-level managed title/cover plus the per-photo managed fields in the
+// authoritative submitted order.
 type yearEditBody struct {
+	Title  string `json:"title"`
+	Cover  string `json:"cover"`
 	Photos []struct {
 		Filename    string `json:"filename"`
 		Title       string `json:"title"`
@@ -80,6 +84,22 @@ func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 		if len(body.Photos) != len(doc.Photos) {
 			return errors.New("the photo list changed after it was read; fetch again and retry")
 		}
+		// Year-level managed fields. The cover must name an existing photo
+		// of this year (or be empty to fall back to the first thumbnail).
+		if body.Cover != "" {
+			found := false
+			for _, photo := range doc.Photos {
+				if photo.Filename == body.Cover {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return errors.New("cover must be an existing photo filename of this year")
+			}
+		}
+		doc.Title = body.Title
+		doc.Cover = body.Cover
 		edits := make(map[string]struct {
 			title, description, alt string
 		}, len(body.Photos))

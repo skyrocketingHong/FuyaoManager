@@ -55,9 +55,13 @@ type AlbumVariant struct {
 	Type   string `json:"type"`
 }
 
-// AlbumYear is one year metadata document.
+// AlbumYear is one year metadata document. Title and Cover are managed
+// (human) fields preserved across indexer regeneration; photos carry the
+// importer-owned identity plus per-photo managed fields.
 type AlbumYear struct {
 	Year   int          `json:"year"`
+	Title  string       `json:"title,omitempty"`
+	Cover  string       `json:"cover,omitempty"`
 	Photos []AlbumPhoto `json:"photos"`
 	raw    []byte
 }
@@ -147,15 +151,20 @@ func (s *Store) saveAlbumYearLocked(siteID uuid.UUID, year string, expectedDiges
 	// Re-marshal through the raw entries so importer-owned fields survive
 	// verbatim; entries pair by filename (never by index) so reordering and
 	// deletion are both safe.
-	var raw struct {
-		Year   int              `json:"year"`
-		Photos []map[string]any `json:"photos"`
-	}
+	var raw map[string]any
 	if err := json.Unmarshal(doc.raw, &raw); err != nil {
 		return AlbumYear{}, "", err
 	}
-	byFilename := make(map[string]map[string]any, len(raw.Photos))
-	for _, entry := range raw.Photos {
+	if raw == nil {
+		raw = map[string]any{}
+	}
+	rawPhotos, _ := raw["photos"].([]any)
+	byFilename := make(map[string]map[string]any, len(rawPhotos))
+	for _, entryAny := range rawPhotos {
+		entry, ok := entryAny.(map[string]any)
+		if !ok {
+			continue
+		}
 		if name, ok := entry["filename"].(string); ok {
 			byFilename[name] = entry
 		}
@@ -171,7 +180,10 @@ func (s *Store) saveAlbumYearLocked(siteID uuid.UUID, year string, expectedDiges
 		setStr(entry, "alt", photo.Alt)
 		emitted = append(emitted, entry)
 	}
-	raw.Photos = emitted
+	raw["photos"] = emitted
+	// Year-level managed fields ride along at the document root.
+	setStr(raw, "title", doc.Title)
+	setStr(raw, "cover", doc.Cover)
 	out, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return AlbumYear{}, "", err

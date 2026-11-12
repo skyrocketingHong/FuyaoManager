@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoHomepage/admin/backend/internal/store"
 )
@@ -48,6 +49,8 @@ type Config struct {
 	ReleasesRoot     string
 }
 
+var _ = edge.State{} // keep the edge import next to the interface above
+
 // SiteProvisioner provisions the per-site on-disk tree at site creation.
 // baseURL is the site's real managed entry used to seed site.yaml.
 type SiteProvisioner interface {
@@ -59,6 +62,8 @@ type SiteProvisioner interface {
 type EdgeManager interface {
 	EntryURL(visibility string, port int) string
 	Reconcile(ctx context.Context) error
+	// State reports the desired-vs-applied health of the managed entries.
+	State(ctx context.Context) edge.State
 }
 
 // ContentStore is the single authority for per-site editable content that
@@ -165,6 +170,8 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPut, "/api/v1/sites/{siteId}/content/friends", "putFriends", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutFriends)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/content/social-links", "getSocialLinks", a.requireAuth(a.contentRoute(a.handleGetSocialLinks))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/content/social-links", "putSocialLinks", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSocialLinks)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/edge", "getSiteEdge", a.requireAuth(a.handleGetSiteEdge)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/edge/reapply", "reapplySiteEdge", a.requireAuth(a.withCSRF(a.handleReapplySiteEdge))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/site-config", "getSiteConfig", a.requireAuth(a.contentRoute(a.handleGetSiteConfig))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/site-config", "putSiteConfig", a.requireAuth(a.withCSRF(a.contentRoute(a.handlePutSiteConfig)))},
 

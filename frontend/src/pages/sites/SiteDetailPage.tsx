@@ -1,9 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Alert, Button, Descriptions, Space, Spin, Switch, Tag, message } from 'antd';
+import { Alert, Button, Descriptions, Space, Spin, Switch, Tag, Typography, message } from 'antd';
 import { SiteDetail } from '../../lib/sites/site-detail';
-import { canEditSite, provisionSite, putSiteVisibility } from '../../lib/api/management';
+import {
+	canEditSite,
+	getSiteEdge,
+	provisionSite,
+	putSiteVisibility,
+	reapplySiteEdge,
+	type SiteEdgeState
+} from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
 import { upsertSite } from '../../lib/sites/site-list';
@@ -14,6 +21,8 @@ export default function SiteDetailPage() {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const [messageApi, contextHolder] = message.useMessage();
 	const [switching, setSwitching] = useState(false);
+	const [edge, setEdge] = useState<SiteEdgeState | null>(null);
+	const [reapplying, setReapplying] = useState(false);
 	// A fresh instance per siteId keeps data and error state from surviving a
 	// switch between sites.
 	const detail = useMemo(() => new SiteDetail(), [siteId]);
@@ -30,6 +39,34 @@ export default function SiteDetailPage() {
 	// Visibility gates the site's entry binding: private answers only on the
 	// private network, public on all interfaces. The switch re-applies the
 	// managed edge configuration server-side.
+	const refreshEdge = useCallback(async () => {
+		if (!siteId) return;
+		try {
+			setEdge(await getSiteEdge(siteId));
+		} catch {
+			// surfaced on the next action
+		}
+	}, [siteId]);
+
+	useEffect(() => {
+		void refreshEdge();
+	}, [refreshEdge, state.site]);
+
+	async function handleReapply() {
+		if (!siteId) return;
+		setReapplying(true);
+		try {
+			await reapplySiteEdge(siteId);
+			void messageApi.success(t('edge.applied'));
+		} catch (err) {
+			const key = apiErrorKey(err);
+			if (key !== null) void messageApi.warning(t(key));
+		} finally {
+			await refreshEdge();
+			setReapplying(false);
+		}
+	}
+
 	async function handleVisibility(publicOn: boolean) {
 		if (!siteId || !site) return;
 		setSwitching(true);
@@ -37,6 +74,7 @@ export default function SiteDetailPage() {
 			const updated = await putSiteVisibility(siteId, publicOn ? 'public' : 'private');
 			upsertSite(updated);
 			await detail.load(siteId, async () => {});
+			await refreshEdge();
 		} catch (err) {
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
@@ -63,6 +101,30 @@ export default function SiteDetailPage() {
 			{site ? (
 				<Descriptions column={1} bordered size="small">
 					<Descriptions.Item label={t('site.slug')}>{site.slug}</Descriptions.Item>
+					<Descriptions.Item label={t('edge.title')}>
+						{edge?.site?.port ? (
+							<Space wrap>
+								<a href={edge.site.originUrl} target="_blank" rel="noreferrer">
+									{edge.site.originUrl}
+								</a>
+								<Tag color={edge.inSync ? 'success' : 'warning'}>
+									{edge.inSync ? t('edge.inSync') : t('edge.drifted')}
+								</Tag>
+								{edge.lastError ? (
+									<Typography.Text type="danger" style={{ fontSize: 12 }}>
+										{edge.lastError}
+									</Typography.Text>
+								) : null}
+								{canEditSite(site) ? (
+									<Button size="small" loading={reapplying} onClick={() => void handleReapply()}>
+										{t('edge.reapply')}
+									</Button>
+								) : null}
+							</Space>
+						) : (
+							<Typography.Text type="secondary">{t('edge.pendingEntry')}</Typography.Text>
+						)}
+					</Descriptions.Item>
 					<Descriptions.Item label={t('site.role')}>
 						<Tag>{t(`role.${site.role}` as never)}</Tag>
 					</Descriptions.Item>

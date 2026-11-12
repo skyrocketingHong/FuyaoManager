@@ -13,6 +13,7 @@ import {
 	Input,
 	Modal,
 	Popconfirm,
+	Select,
 	Space,
 	Spin,
 	Table,
@@ -51,6 +52,7 @@ export default function AlbumsPage() {
 	const [doc, setDoc] = useState<AlbumYear | null>(null);
 	const [digest, setDigest] = useState('');
 	const [dirty, setDirty] = useState(false);
+	const [page, setPage] = useState(1);
 	const [tasks, setTasks] = useState<MediaTask[]>([]);
 	const [uploading, setUploading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -180,7 +182,14 @@ export default function AlbumsPage() {
 	function mutateDoc(updater: (photos: AlbumPhotoEntry[]) => AlbumPhotoEntry[]) {
 		if (!doc) return;
 		setDirty(true);
+		setPage(1);
 		setDoc({ ...doc, photos: updater(doc.photos) });
+	}
+
+	function patchYear(patch: Partial<Pick<AlbumYear, 'title' | 'cover'>>) {
+		if (!doc) return;
+		setDirty(true);
+		setDoc({ ...doc, ...patch });
 	}
 
 	function openEditor(photo: AlbumPhotoEntry) {
@@ -237,7 +246,14 @@ export default function AlbumsPage() {
 				description: p.description ?? '',
 				alt: p.alt ?? ''
 			}));
-			const saved = await putAlbumYear(siteId, year, photos, digest);
+			const saved = await putAlbumYear(
+				siteId,
+				year,
+				photos,
+				digest,
+				doc.title ?? '',
+				doc.cover ?? ''
+			);
 			setDoc(saved.year);
 			setDigest(saved.digest);
 			setDirty(false);
@@ -367,6 +383,31 @@ export default function AlbumsPage() {
 				</p>
 			) : (
 				<Card size="small">
+					{doc ? (
+						<Space wrap style={{ marginBottom: 8 }}>
+							<Input
+								size="small"
+								style={{ width: 220 }}
+								placeholder={t('albums.yearTitlePlaceholder')}
+								value={doc.title ?? ''}
+								disabled={!editable}
+								onChange={(e) => patchYear({ title: e.target.value })}
+							/>
+							<Select
+								size="small"
+								style={{ width: 200 }}
+								placeholder={t('albums.coverPlaceholder')}
+								value={doc.cover || undefined}
+								disabled={!editable}
+								allowClear
+								options={doc.photos.map((p) => ({
+									value: p.filename,
+									label: p.title || p.filename
+								}))}
+								onChange={(value: string | undefined) => patchYear({ cover: value ?? '' })}
+							/>
+						</Space>
+					) : null}
 					<Tabs
 						activeKey={year}
 						items={(index.years ?? []).map((y) => ({ key: String(y), label: String(y) }))}
@@ -384,7 +425,12 @@ export default function AlbumsPage() {
 							rowKey="filename"
 							size="small"
 							dataSource={doc.photos}
-							pagination={false}
+							pagination={{
+								current: page,
+								pageSize: 20,
+								showSizeChanger: false,
+								onChange: setPage
+							}}
 							columns={[
 								{
 									title: t('albums.photoColumn'),

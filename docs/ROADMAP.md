@@ -6,6 +6,19 @@ Agile ledger for the content management platform. Each work package lands a runn
 
 ## Done
 
+## Review 2026-11-12 (Codex acceptance, changes required)
+
+The N1-N5 delivery claims below were audited against independent probes
+(`.fuyao/cms-n/verification/codex-review-20261112/`). The earlier "all
+verified, no outstanding items" statements were overclaims: concurrent
+content saves lost updates, the edge could regress under delayed publish
+callbacks, private sites still bound wildcard listeners, album ordering and
+managed fields did not survive the loop, previews leaked capacity on expiry,
+and the React editors discarded in-flight drafts. Repairs R1-R8 (commits
+from `fix(edge,content)...` onward) land the corrections with regressions;
+the entries below are kept as the original delivery record and are
+superseded where they conflict with this section.
+
 1. **Backend MVP (local development)** (`admin/backend`): PostgreSQL + SQL migrations, passkey-only WebAuthn auth (discoverable credentials, UV required), CLI (`migrate`, `serve`, `bootstrap-admin`, `create-site`), cookie sessions with CSRF/Origin enforcement, site list/detail/settings with transactional ETag concurrency. Loopback-only. Contract: `contracts/openapi/management.yaml`.
 2. **Hardening pass**: transactional first-enrollment closure (advisory lock; concurrent completions admit exactly one), permit expiry re-checked at verify time, full-ETag If-Match binding (wildcard rejected), stable per-session CSRF token (multi-tab safe), request limits and single-object JSON on verify paths, loud TTL validation, CORS ETag exposure.
 3. **Admin frontend MVP** (`admin/frontend`): enrollment, login/logout, site list/detail/settings with dirty-field patches, 412 conflict recovery, and viewer read-only; generated API types with drift check; zh-CN/en-US with Crossfade; day/night themes; same-origin dev proxy topology (port 5174 pinned, loopback only). The non-browser protocol integration (backend serve + dev proxy + cookie/origin flows) is exercised by this package's verification; real platform-authenticator ceremonies and visual acceptance remain with the user.

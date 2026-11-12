@@ -6,6 +6,16 @@
 
 ## 已完成
 
+## 复核 2026-11-12（Codex 验收，需修改）
+
+下方 N1-N5 的交付结论经独立探针审计
+（`.fuyao/cms-n/verification/codex-review-20261112/`）。此前“全部验证、无未
+完成项”的说法属于过度声明：并发内容保存丢失更新、迟到发布回调可使边缘
+回退、私有站点仍为通配监听、相册排序与人工字段未在闭环中保留、预览到期
+占用容量、React 编辑器丢弃请求期间的新草稿。R1-R8 修复（自
+`fix(edge,content)...` 起的提交）已连同回归测试落地；下方条目保留为原始
+交付记录，与本节冲突处以本节为准。
+
 1. **后端 MVP（本地开发）**（`admin/backend`）：PostgreSQL + SQL migrations、仅 Passkey 的 WebAuthn 认证（可发现凭据、强制 UV）、CLI（`migrate`、`serve`、`bootstrap-admin`、`create-site`）、带 CSRF/Origin 校验的 Cookie 会话、事务化 ETag 并发的站点列表/详情/配置。仅回环监听。契约：`contracts/openapi/management.yaml`。
 2. **加固轮**：事务化首次登记闭环（咨询锁，并发完成仅一者成功）、verify 时点重检许可有效期、完整 ETag 的 If-Match 绑定（拒绝通配）、会话内稳定 CSRF 令牌（多标签页可用）、verify 路径请求体限额与单对象 JSON、TTL 配置错误显式失败、CORS 暴露 ETag。
 3. **管理前端 MVP**（`admin/frontend`）：登记、登录/注销、站点列表/详情/配置（dirty 字段提交、412 冲突恢复、viewer 只读）；由契约生成的 API 类型与漂移检查；中英文 Crossfade；日夜主题；同源开发代理拓扑（5174 端口固定、仅回环）。非浏览器的协议联调（后端 serve + 开发代理 + Cookie/Origin 流程）已在本包验证中覆盖；真实平台认证器仪式与视觉验收仍由用户执行。

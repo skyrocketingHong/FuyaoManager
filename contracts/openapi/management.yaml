@@ -1371,6 +1371,87 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/edge:
+    get:
+      operationId: getSiteEdge
+      tags: [Sites]
+      summary: Read the managed entry state
+      description: |
+        Reports the site's managed reverse-proxy entry: the effective origin
+        for the current visibility, the platform port, apply health
+        (in-sync, last apply time, last error), and the operator-approved
+        snippet path and bind hosts. Read-only; `reapply` is the recovery
+        path. The platform renders entries only within operator-approved
+        roots — no arbitrary Caddy text or system paths are exposed or
+        accepted.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Edge state for the site.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SiteEdgeState'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: Edge management is not configured (`edge_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/edge/reapply:
+    post:
+      operationId: reapplySiteEdge
+      tags: [Sites]
+      summary: Re-apply the managed entry configuration
+      description: |
+        Re-runs render + validate + reload for the managed snippet (all
+        sites' entries, this one included) and reports the real outcome. The
+        last good configuration keeps serving on failure. Owners and editors
+        only.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      responses:
+        '204':
+          description: Applied successfully.
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The apply failed; the last good configuration keeps serving (`edge_apply_failed`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Edge management is not configured (`edge_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/site-config:
     get:
       operationId: getSiteConfig
@@ -2929,6 +3010,7 @@ components:
             - invalid_content_path
             - photo_in_use
             - reference_scan_failed
+            - edge_unavailable
             - internal_error
         detail:
           type: string
@@ -3139,6 +3221,33 @@ components:
         digest:
           type: string
 
+    SiteEdgeState:
+      type: object
+      required: [site, inSync]
+      properties:
+        site:
+          type: object
+          properties:
+            siteId: { type: string }
+            slug: { type: string }
+            visibility: { type: string, enum: [public, private] }
+            port: { type: integer }
+            originUrl: { type: string }
+        inSync:
+          type: boolean
+          description: The managed snippet on disk matches the desired render.
+        lastAppliedAt:
+          type: string
+        lastError:
+          type: string
+        snippetPath:
+          type: string
+          description: Operator-configured managed snippet path (server-side fact).
+        privateBind:
+          type: string
+        publicHost:
+          type: string
+
     SiteConfigEnvelope:
       type: object
       required: [config, digest]
@@ -3321,6 +3430,12 @@ components:
           required: [year, photos]
           properties:
             year: { type: integer }
+            title:
+              type: string
+              description: Managed album title (indexer-preserved; empty falls back to the year).
+            cover:
+              type: string
+              description: Managed cover photo filename of this year (empty falls back to the first thumbnail).
             photos:
               type: array
               items:

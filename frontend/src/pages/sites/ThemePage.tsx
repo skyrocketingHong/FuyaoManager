@@ -1,9 +1,23 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Alert, Button, Card, Form, Input, Radio, Space, Tag, Typography } from 'antd';
+import {
+	Alert,
+	Button,
+	Card,
+	Form,
+	Input,
+	InputNumber,
+	Radio,
+	Select,
+	Space,
+	Switch,
+	Tag,
+	Typography
+} from 'antd';
 import Trans from '../../components/i18n/Trans';
 import { ThemeSelection } from '../../lib/themes/theme-selection';
+import { configTextFromFields, fieldsFromSchema } from '../../lib/themes/schemaForm';
 import { t } from '../../lib/i18n';
 
 export default function ThemePage() {
@@ -27,6 +41,25 @@ export default function ThemePage() {
 	const state = useSyncExternalStore(store.subscribe, store.getSnapshot);
 	const phase = state.phase;
 	const editable = store.editable();
+
+	// Visual fields for the selected theme's declared config schema. The
+	// JSON view and the form edit the same store state (configText).
+	const selectedTheme = state.themes.find((th) => `${th.themeId}@${th.version}` === state.selected);
+	const schemaFields = fieldsFromSchema(selectedTheme?.configSchema);
+	const configValues = (() => {
+		try {
+			return JSON.parse(state.configText || '{}') as Record<string, unknown>;
+		} catch {
+			return {};
+		}
+	})();
+	function setFieldValue(key: string, value: unknown) {
+		const next = configTextFromFields(state.configText, schemaFields, {
+			...configValues,
+			[key]: value
+		});
+		if (next !== null) store.setConfig(next);
+	}
 
 	return (
 		<>
@@ -101,7 +134,51 @@ export default function ThemePage() {
 									</Space>
 								</Radio.Group>
 							</Form.Item>
-							<Form.Item label={t('themes.config')} htmlFor="theme-config">
+							{schemaFields.length > 0 ? (
+								schemaFields.map((field) => (
+									<Form.Item
+										key={field.key}
+										label={field.label}
+										htmlFor={`theme-field-${field.key}`}
+									>
+										{field.type === 'boolean' ? (
+											<Switch
+												id={`theme-field-${field.key}`}
+												checked={Boolean(configValues[field.key])}
+												disabled={!editable}
+												onChange={(checked) => setFieldValue(field.key, checked)}
+											/>
+										) : field.type === 'enum' ? (
+											<Select
+												id={`theme-field-${field.key}`}
+												value={configValues[field.key] as string | undefined}
+												disabled={!editable}
+												options={(field.options ?? []).map((opt) => ({ value: opt, label: opt }))}
+												onChange={(value) => setFieldValue(field.key, value)}
+												allowClear
+											/>
+										) : field.type === 'number' ? (
+											<InputNumber
+												id={`theme-field-${field.key}`}
+												value={configValues[field.key] as number | undefined}
+												disabled={!editable}
+												onChange={(value) => setFieldValue(field.key, value)}
+											/>
+										) : (
+											<Input
+												id={`theme-field-${field.key}`}
+												value={configValues[field.key] as string | undefined}
+												disabled={!editable}
+												placeholder={field.placeholder}
+												onChange={(e) => setFieldValue(field.key, e.target.value)}
+											/>
+										)}
+									</Form.Item>
+								))
+							) : (
+								<Typography.Text type="secondary">{t('themes.noSchemaFields')}</Typography.Text>
+							)}
+							<Form.Item label={t('themes.configJson')} htmlFor="theme-config">
 								<Input.TextArea
 									id="theme-config"
 									value={state.configText}
@@ -110,7 +187,7 @@ export default function ThemePage() {
 									rows={6}
 									spellCheck={false}
 									style={{ fontFamily: 'monospace' }}
-									aria-label={t('themes.config')}
+									aria-label={t('themes.configJson')}
 								/>
 							</Form.Item>
 						</Form>

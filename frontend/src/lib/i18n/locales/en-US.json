@@ -271,5 +271,15 @@
 	"posts.newerEditsKept": "Saved; newer unsaved edits kept in the editor.",
 	"config.originSection": "Site address",
 	"config.originHint": "The managed entry follows the visibility setting; switching public/private changes the host and requires a rebuild for canonical/RSS/Sitemap URLs.",
-	"config.originPending": "The managed entry appears after the first publish."
+	"config.originPending": "The managed entry appears after the first publish.",
+	"edge.title": "Address",
+	"edge.inSync": "applied",
+	"edge.drifted": "needs apply",
+	"edge.reapply": "Re-apply entry",
+	"edge.applied": "Entry configuration applied.",
+	"edge.pendingEntry": "The managed entry appears after the first publish.",
+	"themes.configJson": "Configuration (JSON)",
+	"themes.noSchemaFields": "This theme declares no visual options; edit the JSON if it accepts any.",
+	"albums.yearTitlePlaceholder": "Album title (optional)",
+	"albums.coverPlaceholder": "Cover photo"
 }
