@@ -153,6 +153,7 @@
 	"builds.previewClose": "Close preview",
 	"builds.previewCloseConfirm": "Closing revokes every preview link of this build and releases its resources. A later preview mints a fresh link.",
 	"builds.previewClosed": "Preview closed.",
+	"builds.previewBlocked": "The browser blocked the preview window. Allow pop-ups and retry.",
 	"error.edgeApplyFailed": "The database switched but the site entry update failed; retry or contact the operator.",
 	"nav.posts": "Posts",
 	"nav.friends": "Friends",

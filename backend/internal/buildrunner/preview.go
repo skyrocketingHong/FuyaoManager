@@ -80,13 +80,17 @@ func (o *previewOrigin) cookieName() string {
 }
 
 // previewOrigin is one build's private loopback origin: its own listener,
-// its own token set. Because each build gets its own port, the theme's
-// root-absolute asset, data, and deep-route URLs behave exactly as in
-// production, and two builds can never serve each other's files.
+// its own token set, and its own instance id. Because each build gets its
+// own port, the theme's root-absolute asset, data, and deep-route URLs
+// behave exactly as in production, and two builds can never serve each
+// other's files. The instance id distinguishes consecutive incarnations of
+// the same build (or a reused port): a page opened by an earlier incarnation
+// cannot ride a later one's cookie past its probe.
 type previewOrigin struct {
 	server      *PreviewServer
 	siteID      uuid.UUID
 	buildID     uuid.UUID
+	instanceID  string
 	mu          sync.Mutex
 	tokens      map[string]time.Time
 	ln          net.Listener
@@ -166,6 +170,7 @@ func (p *PreviewServer) sweepLoop() {
 // so other builds can allocate it.
 func (p *PreviewServer) sweepExpired() {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	var expired []*previewOrigin
 	for id, origin := range p.origins {
 		if origin.expired() {
@@ -173,7 +178,6 @@ func (p *PreviewServer) sweepExpired() {
 			delete(p.origins, id)
 		}
 	}
-	p.mu.Unlock()
 	for _, origin := range expired {
 		origin.revoke()
 		_ = origin.httpSrv.Close()
@@ -242,7 +246,9 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 	// long-expired preview cannot pin MaxOrigins.
 	p.sweepExpired()
 
-	origin, err := p.originFor(siteID, buildID, resolvedArtifact, spaFallback)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	origin, err := p.originForLocked(siteID, buildID, resolvedArtifact, spaFallback)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -269,11 +275,14 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 // and never touches other builds' or sites' previews.
 func (p *PreviewServer) CloseOrigin(siteID, buildID uuid.UUID) error {
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	origin, ok := p.origins[buildID]
+	if ok && origin.siteID != siteID {
+		return ErrPreviewNotReady
+	}
 	if ok {
 		delete(p.origins, buildID)
 	}
-	p.mu.Unlock()
 	if ok {
 		origin.revoke()
 		_ = origin.httpSrv.Close()
@@ -286,6 +295,17 @@ func (p *PreviewServer) CloseOrigin(siteID, buildID uuid.UUID) error {
 		return p.cfg.Ports.ReleasePreview(ctx, buildID)
 	}
 	return nil
+}
+
+// IsActive reports whether this process currently serves the build's
+// private preview origin with at least one unexpired token. It reflects
+// live in-process state only — never a stale platform port assignment —
+// so the management API can label a task with a truthful previewActive.
+func (p *PreviewServer) IsActive(siteID, buildID uuid.UUID) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	o := p.origins[buildID]
+	return o != nil && o.siteID == siteID && !o.expired()
 }
 
 // Close stops the sweeper and tears every origin down. Listeners and
@@ -325,9 +345,7 @@ func (p *PreviewServer) Close() {
 }
 
 // originFor returns (creating on first use) the per-build origin listener.
-func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFallback string) (*previewOrigin, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+func (p *PreviewServer) originForLocked(siteID, buildID uuid.UUID, artifactDir, spaFallback string) (*previewOrigin, error) {
 	if p.closed {
 		return nil, ErrPreviewNotReady
 	}
@@ -365,6 +383,7 @@ func (p *PreviewServer) originFor(siteID, buildID uuid.UUID, artifactDir, spaFal
 		server:      p,
 		siteID:      siteID,
 		buildID:     buildID,
+		instanceID:  uuid.NewString(),
 		tokens:      make(map[string]time.Time),
 		ln:          ln,
 		port:        port,
@@ -402,6 +421,15 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// no-referrer here would unconditionally break them in previews.
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 	w.Header().Set("Cache-Control", "private, no-store")
+	// A preview must not install a service worker that could keep serving a
+	// closed origin from its offline cache. The registration fetch is the
+	// only request the browser marks with "Service-Worker: script", so
+	// rejection is path-independent instead of guessing file names; ordinary
+	// script resources at the same paths still serve.
+	if strings.EqualFold(r.Header.Get("Service-Worker"), "script") {
+		http.NotFound(w, r)
+		return
+	}
 
 	// Token entry: exchange and redirect to the origin root.
 	if strings.HasPrefix(r.URL.Path, "/__preview__/") {
@@ -425,6 +453,22 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	token := ""
 	if c, err := r.Cookie(o.cookieName()); err == nil {
 		token = c.Value
+	}
+	if r.URL.Path == previewStatusPath {
+		// The probe must carry this origin's instance id on top of a valid
+		// cookie: after a close-and-reopen on the same port (same build or a
+		// reused one), a stale page must die even when the fresh incarnation
+		// shares its cookie name. The fresh instance's cookies are untouched.
+		if r.URL.Query().Get(previewInstanceParam) != o.instanceID {
+			w.WriteHeader(http.StatusGone)
+			return
+		}
+		if r.Method != http.MethodGet || !o.validToken(token) {
+			w.WriteHeader(http.StatusGone)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	if !o.validToken(token) {
 		http.NotFound(w, r)
@@ -601,6 +645,10 @@ func (o *previewOrigin) serveFile(w http.ResponseWriter, r *http.Request, root f
 		return
 	}
 	if seeker, ok := file.(io.ReadSeeker); ok {
+		if strings.EqualFold(filepath.Ext(name), ".html") {
+			servePreviewHTML(w, r, info, seeker, o.instanceID)
+			return
+		}
 		http.ServeContent(w, r, info.Name(), info.ModTime(), seeker)
 		return
 	}

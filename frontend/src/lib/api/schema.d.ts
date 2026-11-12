@@ -1074,6 +1074,14 @@ export interface components {
             startedAt?: string | null;
             /** Format: date-time */
             finishedAt?: string | null;
+            /**
+             * @description Whether the server process currently serves this build's private
+             *     preview origin with an unexpired token (live in-process state,
+             *     never a persisted or port-based flag). Always false until a
+             *     preview link is issued and again after the preview is closed,
+             *     expires, or the server restarts.
+             */
+            previewActive: boolean;
         };
         /** @description A short-lived private preview URL on a per-build loopback origin. */
         PreviewLink: {

@@ -67,7 +67,8 @@ const succeededBuild = (id: string): BuildTask => ({
 	startedAt: null,
 	finishedAt: null,
 	sourceDigest: null,
-	sourceFileCount: null
+	sourceFileCount: null,
+	previewActive: false
 });
 
 const releaseRow = (id: string, buildId: string, status: Release['status']): Release => ({

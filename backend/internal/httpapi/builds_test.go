@@ -127,6 +127,16 @@ func (l *latePreviews) Issue(siteID, buildID uuid.UUID) (string, time.Time, erro
 	return p.Issue(siteID, buildID)
 }
 
+func (l *latePreviews) IsActive(siteID, buildID uuid.UUID) bool {
+	l.mu.Lock()
+	p := l.p
+	l.mu.Unlock()
+	if p == nil {
+		return false
+	}
+	return p.IsActive(siteID, buildID)
+}
+
 // setupBuilds provisions a test world whose handler is wired to a real
 // buildrunner.Runner and PreviewServer. BuildsRoot lives inside the
 // repository tree so the task's private source copy resolves the repository
@@ -209,6 +219,7 @@ type buildResp struct {
 	SiteSettings    json.RawMessage  `json:"siteSettings"`
 	SourceDigest    *string          `json:"sourceDigest"`
 	SourceFileCount *int64           `json:"sourceFileCount"`
+	PreviewActive   bool             `json:"previewActive"`
 }
 
 // TestBuildPreviewClosedLoop drives the real closed loop end to end: an owner
@@ -360,6 +371,34 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	}
 	originBase := link.URL[:strings.Index(link.URL, "/__preview__/")]
 
+	// The task's previewActive tracks the live origin: true right after the
+	// link was issued, from both the single-task and list views.
+	status, _, raw = ownerClient.do("GET", buildPath, nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get build after preview issue: status %d", status)
+	}
+	var active buildResp
+	decodeJSONBody(t, raw, &active)
+	if !active.PreviewActive {
+		t.Fatal("previewActive must be true while the origin is live")
+	}
+	status, _, raw = ownerClient.do("GET", "/api/v1/sites/"+site.Site.ID.String()+"/builds", nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("list builds after preview issue: status %d", status)
+	}
+	var listed struct {
+		Builds []buildResp `json:"builds"`
+	}
+	decodeJSONBody(t, raw, &listed)
+	for _, b := range listed.Builds {
+		if b.ID == created.ID && !b.PreviewActive {
+			t.Fatal("list view must report previewActive for the live origin")
+		}
+		if b.ID == created.ID && b.Status != "succeeded" {
+			t.Fatalf("list view returned stale task status %q", b.Status)
+		}
+	}
+
 	// Open the issued URL exactly as a browser would: the entry swaps the
 	// Redeem the entry URL exactly as a browser would: one shared cookie
 	// jar and default redirect following store the origin's uniquely named
@@ -506,6 +545,26 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 			t.Fatalf("anonymous preview root %s: err=%v status=%v", origin, err, anonResp)
 		}
 		anonResp.Body.Close()
+	}
+
+	// Closing the first preview flips previewActive back to false while the
+	// second build's origin stays active.
+	status, _, raw = ownerClient.do("POST", buildPath+"/preview-close", map[string]string{}, nil)
+	if status != http.StatusNoContent {
+		t.Fatalf("preview close: status %d body %s", status, raw)
+	}
+	status, _, raw = ownerClient.do("GET", buildPath, nil, nil)
+	if status != http.StatusOK {
+		t.Fatalf("get build after close: status %d", status)
+	}
+	decodeJSONBody(t, raw, &active)
+	if active.PreviewActive {
+		t.Fatal("previewActive must be false after the close")
+	}
+	status, _, raw = ownerClient.do("GET", "/api/v1/sites/"+site.Site.ID.String()+"/builds/"+second.ID, nil, nil)
+	decodeJSONBody(t, raw, &active)
+	if status != http.StatusOK || !active.PreviewActive {
+		t.Fatalf("second preview must stay active: status %d active=%v", status, active.PreviewActive)
 	}
 
 	// The registered source and its shared working trees are byte-identical

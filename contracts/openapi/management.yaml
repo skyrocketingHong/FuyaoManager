@@ -2893,7 +2893,8 @@ components:
           siteSettings,
           siteSettingsRevision,
           themeSelectionRevision,
-          createdAt
+          createdAt,
+          previewActive
         ]
       properties:
         id: { type: string, format: uuid }
@@ -2956,6 +2957,14 @@ components:
         createdAt: { type: string, format: date-time }
         startedAt: { type: string, format: date-time, nullable: true }
         finishedAt: { type: string, format: date-time, nullable: true }
+        previewActive:
+          type: boolean
+          description: |
+            Whether the server process currently serves this build's private
+            preview origin with an unexpired token (live in-process state,
+            never a persisted or port-based flag). Always false until a
+            preview link is issued and again after the preview is closed,
+            expires, or the server restarts.
 
     PreviewLink:
       type: object

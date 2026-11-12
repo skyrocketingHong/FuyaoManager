@@ -153,6 +153,7 @@
 	"builds.previewClose": "关闭预览",
 	"builds.previewCloseConfirm": "关闭将撤销此构建的所有预览链接并释放其资源。之后可重新开启，使用新链接。",
 	"builds.previewClosed": "预览已关闭。",
+	"builds.previewBlocked": "浏览器拦截了预览窗口，请允许弹出窗口后重试。",
 	"error.edgeApplyFailed": "数据库已切换但站点入口更新失败，请重试或联系运维。",
 	"nav.posts": "博客",
 	"nav.friends": "友链",

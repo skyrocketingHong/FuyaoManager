@@ -20,13 +20,15 @@ type BuildEnqueuer interface {
 	Enqueue(buildID uuid.UUID)
 }
 
-// PreviewIssuer mints and closes private preview links. buildrunner's
-// PreviewServer implements it; Issue returns the ready-to-open URL on the
-// build's private preview origin, ClosePreview tears that one origin down
-// (tokens revoked, listener stopped, port released) idempotently.
+// PreviewIssuer mints, closes, and reports private preview links.
+// buildrunner's PreviewServer implements it; Issue returns the ready-to-open
+// URL on the build's private preview origin, CloseOrigin tears that one
+// origin down (tokens revoked, listener stopped, port released)
+// idempotently, and IsActive reports live in-process serving state.
 type PreviewIssuer interface {
 	Issue(siteID, buildID uuid.UUID) (url string, expiresAt time.Time, err error)
 	CloseOrigin(siteID, buildID uuid.UUID) error
+	IsActive(siteID, buildID uuid.UUID) bool
 }
 
 var errRunnerNotConfigured = errors.New("build runner not configured")
@@ -43,7 +45,10 @@ type buildFailureDTO struct {
 }
 
 // buildDTO is the public representation of a build task. It never exposes
-// filesystem paths: the artifact location stays server-side.
+// filesystem paths: the artifact location stays server-side. PreviewActive
+// is runtime state filled in per request from the live preview server
+// (always false for a freshly created task — previews need succeeded
+// artifacts).
 type buildDTO struct {
 	ID                     string           `json:"id"`
 	SiteID                 string           `json:"siteId"`
@@ -61,6 +66,7 @@ type buildDTO struct {
 	FinishedAt             *string          `json:"finishedAt"`
 	SourceDigest           *string          `json:"sourceDigest"`
 	SourceFileCount        *int64           `json:"sourceFileCount"`
+	PreviewActive          bool             `json:"previewActive"`
 }
 
 func toBuildDTO(b model.Build) buildDTO {
@@ -167,7 +173,11 @@ func (a *API) handleListBuilds(w http.ResponseWriter, r *http.Request, auth stor
 	}
 	out := make([]buildDTO, 0, len(builds))
 	for _, b := range builds {
-		out = append(out, toBuildDTO(b))
+		dto := toBuildDTO(b)
+		if a.previews != nil {
+			dto.PreviewActive = a.previews.IsActive(siteID, b.ID)
+		}
+		out = append(out, dto)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"builds": out})
 }
@@ -192,7 +202,11 @@ func (a *API) handleGetBuild(w http.ResponseWriter, r *http.Request, auth store.
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the build task.")
 		return
 	}
-	writeJSON(w, http.StatusOK, toBuildDTO(build))
+	dto := toBuildDTO(build)
+	if a.previews != nil {
+		dto.PreviewActive = a.previews.IsActive(siteID, build.ID)
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 // handleCreatePreviewLink mints a short-lived preview URL for a succeeded
