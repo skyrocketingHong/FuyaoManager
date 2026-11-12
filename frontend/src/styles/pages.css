@@ -1,5 +1,10 @@
 /* Page-level shared surfaces: Panel cards, the single-surface TablePanel,
-   section rhythm, form reading width, and inline feedback. */
+   section rhythm, form reading width, and inline feedback.
+   General visual rules (panel anatomy, table header/cell density, control
+   density, button reset) are ported from the robot platform's
+   styles/shared/{panel,forms,controls}.css (read-only reference), adapted
+   to this console's tokens: --surface-high maps to --surface, --font-body
+   maps to --text-body; no device business, no 16:9 stage grid. */
 
 .page-stack {
 	display: flex;
@@ -10,9 +15,11 @@
 
 /* Panel: the standard card surface. */
 .panel {
+	min-width: 0;
 	background: var(--card);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	overflow: visible;
 }
 
 .panel > .ant-card-head {
@@ -21,14 +28,31 @@
 	padding: 0 var(--space-5);
 }
 
-.panel > .ant-card-head .ant-card-head-title {
-	font-size: var(--text-title);
-	font-weight: 600;
-	padding: var(--space-4) 0;
+.panel > .ant-card-head .ant-card-head-wrapper {
+	gap: var(--space-3);
+	align-items: center;
+	flex-wrap: wrap;
+	padding-block: var(--space-2);
+}
+
+	/* The vertical rhythm lives on .ant-card-head-wrapper (padding-block
+	   var(--space-2)); the title carries no extra padding, or the two
+	   stack into a double-height header. */
+	.panel > .ant-card-head .ant-card-head-title {
+		white-space: normal;
+		overflow-wrap: anywhere;
+		font-size: var(--text-title);
+		font-weight: 600;
+	}
+
+.panel .ant-card-extra {
+	max-width: 100%;
+	margin-inline-start: auto;
 }
 
 .panel > .ant-card-body {
 	padding: 0;
+	display: flow-root;
 }
 
 .panel-body {
@@ -43,10 +67,26 @@
 .panel-tags {
 	display: inline-flex;
 	align-items: center;
+	flex-wrap: wrap;
 	gap: var(--space-2);
+	min-width: 0;
 }
 
-/* TablePanel: the table is the only content surface — no extra card. */
+/* Table cells wrap long identifiers; sticky headers keep context while the
+   panel body scrolls. */
+.panel .ant-table-cell {
+	overflow-wrap: anywhere;
+}
+
+.panel .ant-table-thead > tr > th {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+}
+
+/* TablePanel: the table is the only content surface — no extra card. The
+   border lives on the .ant-table-wrapper alone; the inner .ant-table stays
+   transparent, so the surface is drawn exactly once. */
 .table-panel {
 	background: transparent;
 }
@@ -54,8 +94,9 @@
 .table-panel-header {
 	display: flex;
 	align-items: center;
+	flex-wrap: wrap;
 	justify-content: space-between;
-	gap: var(--space-4);
+	gap: var(--space-3);
 	margin-bottom: var(--space-3);
 }
 
@@ -69,17 +110,102 @@
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
+	margin-inline-start: auto;
 }
 
 .table-panel-content {
+	min-width: 0;
 	overflow-x: auto;
 }
 
-.table-panel-content .ant-table-wrapper,
-.table-panel-content .ant-table {
+.table-panel-content .ant-table-wrapper {
 	background: var(--card);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
+	overflow: hidden;
+}
+
+.table-panel-content .ant-table-wrapper .ant-table {
+	background: transparent;
+}
+
+/* Table density: compact header and cell metrics shared by every list page
+   (ported from the reference forms.css). */
+.ant-table-thead > tr > th {
+	height: 32px;
+	background: var(--surface);
+	color: var(--muted-foreground);
+	padding: 4px 12px;
+	font-size: var(--text-secondary);
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.ant-table-cell {
+	padding: 6px 12px;
+	font-size: var(--text-secondary);
+	overflow-wrap: anywhere;
+}
+
+.ant-table-row:hover > .ant-table-cell {
+	background: var(--surface);
+}
+
+.ant-empty-description,
+.ant-table-placeholder .ant-table-cell {
+	color: var(--muted-foreground);
+}
+
+.ant-table-cell code {
+	font-size: var(--text-caption);
+}
+
+/* Control density: inputs and selects share one comfortable height with the
+   reference console; affix wrappers keep a single border. */
+.ant-input,
+.ant-select-selector {
+	font-size: var(--text-body);
+	min-height: max(44px, calc(1.5em + 12px));
+	height: auto;
+	line-height: 1.5;
+	border-color: var(--control-border);
+	border-radius: var(--radius);
+	background: var(--card);
+	color: var(--foreground);
+}
+
+.ant-input-affix-wrapper .ant-input {
+	min-height: 0;
+	border: none;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+}
+
+.ant-input::placeholder {
+	color: var(--muted-foreground);
+	opacity: 0.8;
+}
+
+/* Button reset: drop the fake 3D shadow and keep icon glyphs at 16px. */
+.ant-btn {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	box-shadow: none;
+}
+
+.ant-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* Dropdown overlays share the Select shadow so floating layers read at one
+   elevation. */
+.ant-dropdown .ant-dropdown-menu {
+	box-shadow:
+		0 6px 16px rgba(0, 0, 0, 0.08),
+		0 3px 6px -4px rgba(0, 0, 0, 0.12),
+		0 9px 28px 8px rgba(0, 0, 0, 0.05);
 }
 
 /* Form reading width: editors keep a comfortable line length while list
