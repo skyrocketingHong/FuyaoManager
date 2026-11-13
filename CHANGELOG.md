@@ -4,13 +4,19 @@ English | [简体中文](./CHANGELOG_ZH.md)
 
 All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
-project uses `MAJOR.MINOR` marketing versions (`MAJOR.MINOR.PATCH`
-internally).
+product uses the `Y.M.P` version scheme. API and theme-contract versions
+are maintained separately.
 
-## Unreleased
+## 0.2.0 - 2026-11-13
 
 ### Added
 
+- Account-management backend foundation: platform admin/member roles,
+  guarded account lifecycle and onboarding codes, credential revocation,
+  and last-administrator and active-site-owner protection. The management
+  HTTP/UI and audit-log feature remain pending.
+- Route-aware `Fuyao Manager - <page>` titles and a shared SVG favicon for
+  the console and independent public entrance.
 - Self-service account rename: `PATCH /api/v1/account/profile` renames the
   caller's own account atomically (a collision answers 409
   `username_taken`); an account-settings page is reached from the account
@@ -27,6 +33,13 @@ internally).
 
 ### Changed
 
+- Platform home and site overview now have separate fixed sidebar actions;
+  generic sidebar components and shared surfaces reuse the robot console
+  patterns.
+- Closing a preview revokes its tokens, stops its listener, releases its
+  port, and ends its page lifecycle. Instance-specific probes prevent an
+  old page from surviving port reuse; preview service-worker registration
+  is blocked.
 - Session handling: a business-request 401 expires the stale session at
   the client boundary so routing reaches the login screen; ceremony
   failures and network errors never sign the user out, and generation
