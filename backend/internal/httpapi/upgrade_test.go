@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"testing"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/testauth"
 )
@@ -22,6 +24,25 @@ func setupAtVersion(t *testing.T, version int) *testEnv {
 			t.Fatalf("apply migrations up to %d: %v", version, err)
 		}
 	})
+}
+
+// insertV1User writes a schema-0001 user row directly: the store layer is
+// compiled against the current schema, so upgrade scenarios seed the v1 world
+// with raw SQL (same pattern as insertV1Session and seedPasskey).
+func insertV1User(t *testing.T, env *testEnv, username, status string) model.User {
+	t.Helper()
+	handle := make([]byte, 32)
+	if _, err := rand.Read(handle); err != nil {
+		t.Fatalf("read randomness: %v", err)
+	}
+	id := uuid.New()
+	if _, err := env.pool.Exec(context.Background(),
+		`INSERT INTO users (id, username, display_name, webauthn_user_handle, status)
+		 VALUES ($1, $2, $2, $3, $4)`,
+		id, username, handle, status); err != nil {
+		t.Fatalf("insert v1 user: %v", err)
+	}
+	return model.User{ID: id, Username: username, DisplayName: username, WebAuthnUserHandle: handle, Status: status}
 }
 
 // insertV1Session writes a schema-0001 session row (csrf_hash digest, no
@@ -59,13 +80,7 @@ func TestSessionUpgradeFromV1(t *testing.T) {
 	env := setupAtVersion(t, 1)
 	ctx := context.Background()
 
-	user, err := env.store.Users.Create(ctx, "legacy", "legacy")
-	if err != nil {
-		t.Fatalf("create user: %v", err)
-	}
-	if err := env.store.Users.Activate(ctx, user.ID); err != nil {
-		t.Fatalf("activate user: %v", err)
-	}
+	user := insertV1User(t, env, "legacy", "active")
 	legacyToken := "legacy-session-token-value"
 	insertV1Session(t, env, user.ID, legacyToken)
 	auth := testauth.New()

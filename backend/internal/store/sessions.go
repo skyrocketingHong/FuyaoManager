@@ -68,12 +68,12 @@ func (s *SessionStore) GetAndTouch(ctx context.Context, tokenHash []byte) (AuthS
 		   AND s.expires_at > clock_timestamp()
 		   AND s.csrf_token <> ''
 		 RETURNING s.id, s.user_id, s.kind, s.csrf_token, s.created_at, s.last_seen_at, s.expires_at,
-		           u.id, u.username, u.display_name, u.webauthn_user_handle, u.status, u.created_at, u.updated_at`,
+		           u.id, u.username, u.display_name, u.webauthn_user_handle, u.status, u.platform_role, u.deleted_at, u.created_at, u.updated_at`,
 		tokenHash,
 	).Scan(&out.Session.ID, &out.Session.UserID, &out.Session.Kind, &out.Session.CSRFToken, &out.Session.CreatedAt,
 		&out.Session.LastSeen, &out.Session.ExpiresAt,
 		&out.User.ID, &out.User.Username, &out.User.DisplayName, &out.User.WebAuthnUserHandle,
-		&out.User.Status, &out.User.CreatedAt, &out.User.UpdatedAt)
+		&out.User.Status, &out.User.PlatformRole, &out.User.DeletedAt, &out.User.CreatedAt, &out.User.UpdatedAt)
 	if err != nil {
 		return AuthSession{}, ErrNotFound
 	}

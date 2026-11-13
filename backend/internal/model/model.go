@@ -12,10 +12,23 @@ import (
 )
 
 // User statuses. A user starts as pending during bootstrap and becomes active
-// once a passkey has been registered.
+// once a passkey has been registered. disabled deactivates an account
+// (sessions and one-time codes are revoked; login is refused); deleted is the
+// soft delete — the row and its history stay queryable, the account can never
+// log in again.
 const (
-	UserStatusPending = "pending"
-	UserStatusActive  = "active"
+	UserStatusPending  = "pending"
+	UserStatusActive   = "active"
+	UserStatusDisabled = "disabled"
+	UserStatusDeleted  = "deleted"
+)
+
+// Platform roles. Every pre-migration account is an admin (bootstrap
+// administrator); accounts created afterwards default to member, the minimal
+// privilege level.
+const (
+	PlatformRoleAdmin  = "admin"
+	PlatformRoleMember = "member"
 )
 
 // Site membership roles. Viewers have read-only access; editors and owners may
@@ -29,13 +42,17 @@ const (
 // Supported site locales.
 var SupportedLocales = []string{"zh-CN", "en-US"}
 
-// User is an administrator account.
+// User is an account of the management platform. PlatformRole distinguishes
+// the bootstrap administrators (admin) from accounts created afterwards
+// (member, the minimal privilege); DeletedAt records a soft delete.
 type User struct {
 	ID                 uuid.UUID
 	Username           string
 	DisplayName        string
 	WebAuthnUserHandle []byte
 	Status             string
+	PlatformRole       string
+	DeletedAt          *time.Time
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }

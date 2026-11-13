@@ -76,13 +76,13 @@ func (a *API) handleRegisterOptions(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req, false) {
 		return
 	}
-	hasActive, err := a.store.Users.HasActiveUser(r.Context())
+	initialized, err := a.store.Users.HasInitializedUser(r.Context())
 	if err != nil {
-		a.logger.Error("check active administrators", "error", err)
+		a.logger.Error("check platform initialization", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to start registration.")
 		return
 	}
-	if hasActive {
+	if initialized {
 		writeProblem(w, http.StatusConflict, "bootstrap_closed", "An administrator is already registered; enrollment is closed.")
 		return
 	}
@@ -155,7 +155,7 @@ func (a *API) handleRegisterVerify(w http.ResponseWriter, r *http.Request) {
 
 	pk := wa.FromCredential(user.ID, credential)
 	pk.RPID = a.cfg.RPID
-	err = a.store.CompleteEnrollment(r.Context(), *state.PermitID, user, pk)
+	user, err = a.store.CompleteEnrollment(r.Context(), *state.PermitID, user, pk)
 	switch {
 	case err == nil:
 	case errors.Is(err, store.ErrPermitUsed):
@@ -224,7 +224,7 @@ func (a *API) handleLoginVerify(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return nil, errors.New("unknown user handle")
 		}
-		if user.Status != "active" {
+		if user.Status != model.UserStatusActive {
 			return nil, errors.New("user is not active")
 		}
 		passkeys, err := a.store.Passkeys.ListByUser(r.Context(), user.ID)
@@ -276,7 +276,7 @@ func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.Use
 // handleSession reports the current session. The CSRF token is stable for
 // the lifetime of the session, so concurrent tabs all stay writable.
 func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
-	initialized, err := a.store.Users.HasActiveUser(r.Context())
+	initialized, err := a.store.Users.HasInitializedUser(r.Context())
 	if err != nil {
 		a.logger.Error("check platform initialization", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to read the session.")

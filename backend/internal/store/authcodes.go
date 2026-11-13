@@ -139,10 +139,10 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 
 	var user model.User
 	err = tx.QueryRow(ctx,
-		`SELECT id, username, display_name, webauthn_user_handle, status, created_at, updated_at
+		`SELECT id, username, display_name, webauthn_user_handle, status, platform_role, deleted_at, created_at, updated_at
 		 FROM users WHERE id = $1 FOR UPDATE`, userID,
 	).Scan(&user.ID, &user.Username, &user.DisplayName, &user.WebAuthnUserHandle,
-		&user.Status, &user.CreatedAt, &user.UpdatedAt)
+		&user.Status, &user.PlatformRole, &user.DeletedAt, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		return ExchangeResult{}, err
 	}
@@ -150,25 +150,32 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 	switch purpose {
 	case AuthCodePurposeInit:
 		// First-administrator closure mirrors CompleteEnrollment: the
-		// advisory lock makes "no active administrator" and the activation
-		// one atomic step.
+		// advisory lock makes "the platform is not yet initialized" and the
+		// activation one atomic step. A disabled or deleted target never
+		// passes the pending check below, and once any account is no longer
+		// pending the window stays closed for good.
 		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, EnrollmentLockKey); err != nil {
 			return ExchangeResult{}, err
 		}
 		if user.Status != model.UserStatusPending {
 			return ExchangeResult{}, ErrCodePurpose
 		}
-		var hasActive bool
+		var initialized bool
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM users WHERE status = 'active' AND id <> $1)`, userID,
-		).Scan(&hasActive); err != nil {
+			`SELECT EXISTS (SELECT 1 FROM users WHERE status <> 'pending' AND id <> $1)`, userID,
+		).Scan(&initialized); err != nil {
 			return ExchangeResult{}, err
 		}
-		if hasActive {
+		if initialized {
 			return ExchangeResult{}, ErrBootstrapClosed
 		}
+		// The activation is also the role assignment: first initialization
+		// promotes the account to admin in the same statement, so a reused
+		// pending member row (created by a non-bootstrap path) can never be
+		// activated as the sole account while staying a member.
 		tag, err := tx.Exec(ctx,
-			`UPDATE users SET status = 'active', updated_at = now() WHERE id = $1 AND status = 'pending'`, userID)
+			`UPDATE users SET status = 'active', platform_role = 'admin', updated_at = now()
+			 WHERE id = $1 AND status = 'pending'`, userID)
 		if err != nil {
 			return ExchangeResult{}, err
 		}
@@ -176,6 +183,7 @@ func (s *Store) ExchangeCode(ctx context.Context, code string, sessionTTL time.D
 			return ExchangeResult{}, ErrConflict
 		}
 		user.Status = model.UserStatusActive
+		user.PlatformRole = model.PlatformRoleAdmin
 	case AuthCodePurposeLogin:
 		if user.Status != model.UserStatusActive {
 			return ExchangeResult{}, ErrCodePurpose

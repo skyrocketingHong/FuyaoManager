@@ -16,32 +16,51 @@ import (
 // another account's (the users.username UNIQUE constraint).
 var ErrUsernameTaken = errors.New("username already taken")
 
-// UserStore persists administrator accounts.
+// UserStore persists platform accounts.
 type UserStore struct {
 	pool *pgxpool.Pool
 }
 
-const userColumns = `id, username, display_name, webauthn_user_handle, status, created_at, updated_at`
+const userColumns = `id, username, display_name, webauthn_user_handle, status, platform_role, deleted_at, created_at, updated_at`
 
 func scanUser(row pgx.Row) (model.User, error) {
 	var u model.User
-	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status,
+		&u.PlatformRole, &u.DeletedAt, &u.CreatedAt, &u.UpdatedAt)
 	return u, err
 }
 
-// Create inserts a pending user with a fresh random WebAuthn user handle.
+// Create inserts a pending account with a fresh random WebAuthn user handle
+// and the minimal platform privilege: every account created after the
+// bootstrap administrators is a member.
 func (s *UserStore) Create(ctx context.Context, username, displayName string) (model.User, error) {
 	var u model.User
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO users (id, username, display_name, webauthn_user_handle)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO users (id, username, display_name, webauthn_user_handle, platform_role)
+		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING `+userColumns,
-		newUUID(), username, displayName, randomBytes(32),
-	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+		newUUID(), username, displayName, randomBytes(32), model.PlatformRoleMember,
+	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status,
+		&u.PlatformRole, &u.DeletedAt, &u.CreatedAt, &u.UpdatedAt)
 	return u, err
 }
 
-// GetByID loads a user by primary key.
+// CreateAdmin inserts a pending bootstrap administrator account. It is the
+// only creation path of init-admin/bootstrap-admin, so every row it returns
+// (or that a retry reuses from an earlier call) carries the admin role.
+func (s *UserStore) CreateAdmin(ctx context.Context, username, displayName string) (model.User, error) {
+	var u model.User
+	err := s.pool.QueryRow(ctx,
+		`INSERT INTO users (id, username, display_name, webauthn_user_handle, platform_role)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING `+userColumns,
+		newUUID(), username, displayName, randomBytes(32), model.PlatformRoleAdmin,
+	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status,
+		&u.PlatformRole, &u.DeletedAt, &u.CreatedAt, &u.UpdatedAt)
+	return u, err
+}
+
+// GetByID loads an account by primary key.
 func (s *UserStore) GetByID(ctx context.Context, id uuid.UUID) (model.User, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id)
 	u, err := scanUser(row)
@@ -51,7 +70,7 @@ func (s *UserStore) GetByID(ctx context.Context, id uuid.UUID) (model.User, erro
 	return u, err
 }
 
-// GetByUsername loads a user by username.
+// GetByUsername loads an account by username.
 func (s *UserStore) GetByUsername(ctx context.Context, username string) (model.User, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE username = $1`, username)
 	u, err := scanUser(row)
@@ -61,7 +80,7 @@ func (s *UserStore) GetByUsername(ctx context.Context, username string) (model.U
 	return u, err
 }
 
-// GetByHandle loads a user by WebAuthn user handle.
+// GetByHandle loads an account by WebAuthn user handle.
 func (s *UserStore) GetByHandle(ctx context.Context, handle []byte) (model.User, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE webauthn_user_handle = $1`, handle)
 	u, err := scanUser(row)
@@ -82,7 +101,8 @@ func (s *UserStore) UpdateUsername(ctx context.Context, id uuid.UUID, username s
 		 WHERE id = $1
 		 RETURNING `+userColumns,
 		id, username,
-	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status,
+		&u.PlatformRole, &u.DeletedAt, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
@@ -96,17 +116,26 @@ func (s *UserStore) UpdateUsername(ctx context.Context, id uuid.UUID, username s
 	return u, nil
 }
 
-// HasActiveUser reports whether any administrator has completed passkey
-// registration. First-run bootstrap is only allowed while this is false.
-func (s *UserStore) HasActiveUser(ctx context.Context) (bool, error) {
+// HasInitializedUser reports whether the platform has been initialized: any
+// account that is no longer pending exists (active, disabled, or deleted).
+// First-run bootstrap is only allowed while this is false, and the window
+// stays closed once initialization happened — deactivating or deleting the
+// last administrator never reopens anonymous bootstrap. Pending rows from
+// failed first-run attempts do not close the window, so a retry with another
+// username stays possible.
+func (s *UserStore) HasInitializedUser(ctx context.Context) (bool, error) {
 	var exists bool
-	err := s.pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM users WHERE status = 'active')`).Scan(&exists)
+	err := s.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE status <> 'pending')`).Scan(&exists)
 	return exists, err
 }
 
-// ListActive returns every active administrator.
+// ListActive returns every active platform administrator.
 func (s *UserStore) ListActive(ctx context.Context) ([]model.User, error) {
-	rows, err := s.pool.Query(ctx, `SELECT `+userColumns+` FROM users WHERE status = 'active' ORDER BY username`)
+	rows, err := s.pool.Query(ctx,
+		`SELECT `+userColumns+` FROM users
+		 WHERE platform_role = 'admin' AND status = 'active'
+		 ORDER BY username`)
 	if err != nil {
 		return nil, err
 	}
@@ -123,15 +152,26 @@ func (s *UserStore) ListActive(ctx context.Context) ([]model.User, error) {
 	return out, rows.Err()
 }
 
-// CountActive returns the number of active administrators.
+// CountActive returns the number of active platform administrators.
 func (s *UserStore) CountActive(ctx context.Context) (int, error) {
 	var n int
-	err := s.pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE status = 'active'`).Scan(&n)
+	err := s.pool.QueryRow(ctx,
+		`SELECT count(*) FROM users WHERE platform_role = 'admin' AND status = 'active'`).Scan(&n)
 	return n, err
 }
 
-// Activate marks a pending user active.
+// Activate marks a pending account active and refuses anything else: a
+// disabled or deleted account is never reactivated through this generic
+// path — an authorized re-enable belongs to a dedicated, audited store
+// method of the account-management surface.
 func (s *UserStore) Activate(ctx context.Context, id uuid.UUID) error {
-	_, err := s.pool.Exec(ctx, `UPDATE users SET status = 'active', updated_at = now() WHERE id = $1`, id)
-	return err
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE users SET status = 'active', updated_at = now() WHERE id = $1 AND status = 'pending'`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrConflict
+	}
+	return nil
 }

@@ -49,6 +49,20 @@ func (s *Store) CompletePasskeyBind(ctx context.Context, sessionID, userID uuid.
 		return ExchangeResult{}, ErrSessionNotEligible
 	}
 
+	// The account must still be active: a session that was valid when the
+	// ceremony started cannot complete once the account was deactivated or
+	// soft-deleted in between. Locked row read keeps the check race-free
+	// against a concurrent status change.
+	var userStatus string
+	if err := tx.QueryRow(ctx,
+		`SELECT status FROM users WHERE id = $1 FOR UPDATE`, userID,
+	).Scan(&userStatus); err != nil {
+		return ExchangeResult{}, ErrSessionNotEligible
+	}
+	if userStatus != model.UserStatusActive {
+		return ExchangeResult{}, ErrSessionNotEligible
+	}
+
 	pk.UserID = userID
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO passkeys (`+passkeyColumns+`)
@@ -85,10 +99,10 @@ func (s *Store) CompletePasskeyBind(ctx context.Context, sessionID, userID uuid.
 
 	var user model.User
 	if err := tx.QueryRow(ctx,
-		`SELECT id, username, display_name, webauthn_user_handle, status, created_at, updated_at
+		`SELECT id, username, display_name, webauthn_user_handle, status, platform_role, deleted_at, created_at, updated_at
 		 FROM users WHERE id = $1`, userID,
 	).Scan(&user.ID, &user.Username, &user.DisplayName, &user.WebAuthnUserHandle,
-		&user.Status, &user.CreatedAt, &user.UpdatedAt); err != nil {
+		&user.Status, &user.PlatformRole, &user.DeletedAt, &user.CreatedAt, &user.UpdatedAt); err != nil {
 		return ExchangeResult{}, err
 	}
 
