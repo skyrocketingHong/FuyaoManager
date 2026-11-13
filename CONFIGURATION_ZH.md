@@ -45,6 +45,10 @@
 | `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | 空                                          | 启用受管 Caddy 片段（由数据库状态渲染）；发布开关关闭时不生效。                                |
 | `FUYAO_ADMIN_CADDY_CONTROL_CMD` | 空 | 运维固定的逗号分隔 argv，调用 root 拥有的源配置能力，经 stdin 接收受限 JSON；HTTP 不可选择命令或路径。 |
 | `FUYAO_ADMIN_CADDY_MANAGEMENT_ENABLED` | `false` | 仅启用已登记静态网站的源配置校验后部署和回退，与主题发布流水线分开控制。 |
+| `FUYAO_ADMIN_PLATFORM_CONTENT_ROOT` | 站点根旁的 `platform-content` | 独立平台内容库，不放进网站目录；已有数据须在首次启动前导入。 |
+| `FUYAO_ADMIN_PLATFORM_MEDIA_THEME_ROW_ID` | 已登记的 FuyaoHomepage 索引器（若存在） | 运维选择规范相册索引器的登记主题行，每个媒体任务冻结该身份。 |
+| `FUYAO_ADMIN_TRAFFIC_STATS_URL` | 空 | 可选的固定 loopback `/api/stats/cloudflare` 只读来源，不向管理台传入供应商 token。 |
+| `FUYAO_ADMIN_TRAFFIC_STATS_SITE_ID` | 空 | 使用上述来源最新单日统计的网站，其余网站保持未配置。 |
 | `FUYAO_ADMIN_EDGE_APPLY_CMD`                    | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | 运维控制的校验 + reload 命令（固定参数）。                                                    |
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND`                 | `127.0.0.1`                                 | 私有站点入口的精确绑定地址。                                                                  |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                  | 空                                          | 公开入口绑定（空 = 全接口）。                                                                 |

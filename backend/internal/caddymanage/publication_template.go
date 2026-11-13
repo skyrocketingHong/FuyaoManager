@@ -17,6 +17,9 @@ func AttachPublication(source []byte, primaryRoot string, publication Publicatio
 	if len(publication.Paths) != 0 {
 		return nil, nil, ErrPermission
 	}
+	if publication.FallbackMarker != "" {
+		return nil, nil, ErrPermission
+	}
 	if !filepath.IsAbs(primaryRoot) || strings.ContainsAny(primaryRoot, "{}\r\n") {
 		return nil, nil, ErrUnsupported
 	}
@@ -25,7 +28,8 @@ func AttachPublication(source []byte, primaryRoot string, publication Publicatio
 			return nil, nil, ErrPermission
 		}
 	}
-	tokens, err := sourceTokens(source)
+	view := maskSettingsSlots(source)
+	tokens, err := sourceTokens(view)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -72,6 +76,32 @@ func AttachPublication(source []byte, primaryRoot string, publication Publicatio
 		replacements = append(replacements, replacement{argument.start, argument.end, marker})
 	}
 	if !primary || len(matchedMedia) != len(mediaRoots) {
+		return nil, nil, ErrUnsupported
+	}
+	blocks, err := extractBlocks(view)
+	if err != nil {
+		return nil, nil, err
+	}
+	var block *sourceBlock
+	for _, item := range replacements {
+		for _, candidate := range blocks {
+			if item.start >= candidate.start && item.end <= candidate.end {
+				if block != nil && block.start != candidate.start {
+					return nil, nil, ErrUnsupported
+				}
+				copied := candidate
+				block = &copied
+			}
+		}
+	}
+	if block == nil {
+		return nil, nil, ErrUnsupported
+	}
+	if simpleStaticBlock(view[block.start:block.end]) {
+		publication.FallbackMarker = PublicationFallbackMarker
+		publication.ExistingRouting = false
+		replacements = append(replacements, replacement{block.open, block.open, PublicationFallbackMarker})
+	} else if !publication.ExistingRouting {
 		return nil, nil, ErrUnsupported
 	}
 	if err := validatePublication(&publication); err != nil {

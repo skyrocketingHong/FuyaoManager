@@ -51,6 +51,7 @@ func run() error {
 	builds := flags.String("builds-root", "/srv/fuyao-admin/data/builds", "Operator-bound frozen build root")
 	account := flags.String("source-user", "fuyao-admin", "Owner of frozen build and release inputs")
 	configure := flags.Bool("configure-publication", false, "Add finite theme publication to an existing registration")
+	preserveRouting := flags.Bool("preserve-routing", false, "Operator-reviewed complex theme routes already provide the required URL behavior")
 	media := mediaMappings{}
 	flags.Var(&media, "media-map", "Operator-reviewed mediaRelative=existingRoot; may repeat")
 	if err := flags.Parse(os.Args[1:]); err != nil {
@@ -70,7 +71,7 @@ func run() error {
 		if err != nil {
 			return caddymanage.ErrPermission
 		}
-		options.Publication = &caddymanage.Publication{SiteID: *siteID, ReleasesRoot: *releases, BuildsRoot: *builds, SourceUID: uint32(uid), AllowedThemes: strings.Split(*themes, ",")}
+		options.Publication = &caddymanage.Publication{SiteID: *siteID, ReleasesRoot: *releases, BuildsRoot: *builds, SourceUID: uint32(uid), AllowedThemes: strings.Split(*themes, ","), ExistingRouting: *preserveRouting}
 	} else if len(media) != 0 {
 		return caddymanage.ErrInvalidRequest
 	}

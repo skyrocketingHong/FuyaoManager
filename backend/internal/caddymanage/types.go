@@ -90,12 +90,14 @@ type Registration struct {
 // Publication is installed only by the root operator. All source paths and
 // template slots remain outside the unprivileged request contract.
 type Publication struct {
-	SiteID        string        `json:"siteId"`
-	ReleasesRoot  string        `json:"releasesRoot"`
-	BuildsRoot    string        `json:"buildsRoot"`
-	SourceUID     uint32        `json:"sourceUid"`
-	AllowedThemes []string      `json:"allowedThemes"`
-	Paths         []PublishPath `json:"paths"`
+	SiteID          string        `json:"siteId"`
+	ReleasesRoot    string        `json:"releasesRoot"`
+	BuildsRoot      string        `json:"buildsRoot"`
+	SourceUID       uint32        `json:"sourceUid"`
+	AllowedThemes   []string      `json:"allowedThemes"`
+	Paths           []PublishPath `json:"paths"`
+	FallbackMarker  string        `json:"fallbackMarker,omitempty"`
+	ExistingRouting bool          `json:"existingRouting,omitempty"`
 }
 
 type PublishPath struct {

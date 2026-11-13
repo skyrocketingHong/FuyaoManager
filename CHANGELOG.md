@@ -7,6 +7,23 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.6.0 - 2026-11-13
+
+### Added
+
+- Independent platform blogs, albums, places and friends, with per-site platform or independent source selection and real content statistics.
+- Directory-backed managed static websites can select registered themes, edit theme parameters and full website configuration, build, preview and publish through explicit workspace capabilities.
+- Equivalent Caddy source registration and root-sealed theme publication, preserving complex site rules and coordinating activation with database commit and failure compensation.
+- Latest daily Cloudflare statistics from an operator-bound existing read-only source, with explicit cache status and unavailable states.
+- Operator real-data import, independent content scopes and frozen media tasks (migrations 0018 and 0019).
+
+### Fixed
+
+- Caddy deep links remain available across content modes. Native Caddy sites display real release status without legacy visibility/edge controls.
+- Preview and publication serve the same frozen images and album media; production never falls back to live content. CI previews retain bundled artifacts.
+- Website configuration preserves unmodeled YAML fields and exposes previously missing service and URL fields.
+- Protected management endpoints are explicitly excluded from website conversion.
+
 ## 0.5.0 - 2026-11-13
 
 ### Added

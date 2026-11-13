@@ -1,7 +1,7 @@
 {
 	"name": "fuyao-manager",
 	"private": true,
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"type": "module",
 	"description": "Convenience scripts for the FuyaoManager repository; the frontend owns its own isolated lockfile.",
 	"scripts": {

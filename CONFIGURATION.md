@@ -47,6 +47,10 @@ the server template. Real DSNs and secrets never enter the repository.
 | `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | empty                                       | Enables the managed Caddy snippet (rendered from database state); has no effect while the deployment switch is off.            |
 | `FUYAO_ADMIN_CADDY_CONTROL_CMD` | empty | Operator-fixed comma-separated argv for the root-owned source capability; accepts bounded JSON on stdin. No HTTP command or path selection. |
 | `FUYAO_ADMIN_CADDY_MANAGEMENT_ENABLED` | `false` | Enables validated source deployment and rollback only for registered static sites. Independent of the theme publishing pipeline. |
+| `FUYAO_ADMIN_PLATFORM_CONTENT_ROOT` | `platform-content` beside the sites root | Independent shared-library storage, outside website directories. Import existing data before first startup. |
+| `FUYAO_ADMIN_PLATFORM_MEDIA_THEME_ROW_ID` | registered FuyaoHomepage importer when present | Operator-selected registered theme row for the canonical album indexer; frozen per media task. |
+| `FUYAO_ADMIN_TRAFFIC_STATS_URL` | empty | Optional fixed loopback `/api/stats/cloudflare` read source; no token is passed to the manager. |
+| `FUYAO_ADMIN_TRAFFIC_STATS_SITE_ID` | empty | Website receiving that source's latest daily statistics; other websites remain unconfigured. |
 | `FUYAO_ADMIN_EDGE_APPLY_CMD`                    | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | Operator-controlled validate + reload command (fixed arguments).                                                               |
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND`                 | `127.0.0.1`                                 | Exact bind address for private site entries.                                                                                   |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                  | empty                                       | Bind for public entries (empty = all interfaces).                                                                              |

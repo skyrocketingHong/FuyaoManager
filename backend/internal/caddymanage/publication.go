@@ -26,6 +26,12 @@ func validatePublication(value *Publication) error {
 	if value == nil {
 		return nil
 	}
+	if value.FallbackMarker != "" && value.FallbackMarker != PublicationFallbackMarker {
+		return ErrPermission
+	}
+	if value.FallbackMarker == "" && !value.ExistingRouting {
+		return ErrUnsupported
+	}
 	if !canonicalUUID(value.SiteID) || value.SourceUID == 0 || len(value.AllowedThemes) == 0 || len(value.AllowedThemes) > 16 || len(value.Paths) == 0 || len(value.Paths) > 16 {
 		return ErrPermission
 	}
@@ -87,7 +93,39 @@ func (e *Engine) renderPublication(p policy, settings Settings, release string) 
 		}
 		paths[path.Marker] = strconv.Quote(target)
 	}
+	if marker := p.Publication.FallbackMarker; marker != "" {
+		exists, err := e.sealedFallbackExists(filepath.Join(root, "site"))
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			paths[marker] = publicationFallback
+		}
+	}
 	return render(p.Registration, settings, p.base, paths)
+}
+
+func (e *Engine) sealedFallbackExists(root string) (bool, error) {
+	if _, err := os.Lstat(filepath.Join(root, "200.html")); os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		return false, ErrPermission
+	}
+	dir, err := publicationmedia.OpenDirectory(root)
+	if err != nil {
+		return false, ErrPermission
+	}
+	defer dir.Close()
+	file, err := publicationmedia.OpenFile(dir, "200.html", e.ownerUID)
+	if err != nil {
+		return false, ErrPermission
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil || info.Mode().Perm()&0222 != 0 {
+		return false, ErrPermission
+	}
+	return true, nil
 }
 
 func readPublicationFile(directory, name string, uid uint32, limit int64) ([]byte, error) {

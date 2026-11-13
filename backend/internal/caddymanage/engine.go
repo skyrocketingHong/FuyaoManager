@@ -138,6 +138,16 @@ func render(reg Registration, settings Settings, template []byte, publicationPat
 			}
 			value = strings.Replace(value, path.Marker, replacement, 1)
 		}
+		if marker := reg.Publication.FallbackMarker; marker != "" {
+			if marker != PublicationFallbackMarker || strings.Count(value, marker) != 1 {
+				return nil, ErrPermission
+			}
+			replacement := ""
+			if publicationPaths != nil {
+				replacement = publicationPaths[marker]
+			}
+			value = strings.Replace(value, marker, replacement, 1)
+		}
 	}
 	if strings.Contains(value, "__FUYAO_") {
 		return nil, ErrPermission

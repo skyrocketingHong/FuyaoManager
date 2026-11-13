@@ -166,7 +166,7 @@ func TestPublicationTemplatePreservesUnmappedRootsAndProxyRules(t *testing.T) {
 		t.Skip("publication source cannot be root")
 	}
 	source := []byte("example.test {\nroot * /srv/old/current\nhandle /images/* {\nroot /srv/old/content/images\nfile_server\n}\nhandle /legacy/* {\nroot /srv/old/legacy\nfile_server\n}\nimport shared_amap\nreverse_proxy /api/* 127.0.0.1:3191\n}\n")
-	pub := Publication{SiteID: "e55df730-947b-4fa7-b05a-2c29cf2f3149", ReleasesRoot: "/srv/manager/releases", BuildsRoot: "/srv/manager/builds", SourceUID: uint32(os.Geteuid()), AllowedThemes: []string{"fuyao-homepage"}}
+	pub := Publication{SiteID: "e55df730-947b-4fa7-b05a-2c29cf2f3149", ReleasesRoot: "/srv/manager/releases", BuildsRoot: "/srv/manager/builds", SourceUID: uint32(os.Geteuid()), AllowedThemes: []string{"fuyao-homepage"}, ExistingRouting: true}
 	base, policy, err := AttachPublication(source, "/srv/old/current", pub, map[string]string{"images": "/srv/old/content/images"})
 	if err != nil || len(policy.Paths) != 2 {
 		t.Fatal(err)

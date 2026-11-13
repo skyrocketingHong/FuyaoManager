@@ -26,7 +26,7 @@ func setupPublication(t *testing.T) (fixture, Request) {
 	base = bytes.Replace(base, []byte("root /unchanged"), []byte("root "+f.reg.StaticRoot), 1)
 	base = bytes.Replace(base, []byte("__FUYAO_SECURITY_HEADERS__root"), []byte("__FUYAO_SECURITY_HEADERS__\nroot"), 1)
 	parent := filepath.Dir(f.reg.StaticRoot)
-	pub := Publication{SiteID: uuid.NewString(), ReleasesRoot: filepath.Join(parent, "inputs-releases"), BuildsRoot: filepath.Join(parent, "inputs-builds"), SourceUID: uint32(os.Geteuid()), AllowedThemes: []string{"manager-test-theme"}}
+	pub := Publication{SiteID: uuid.NewString(), ReleasesRoot: filepath.Join(parent, "inputs-releases"), BuildsRoot: filepath.Join(parent, "inputs-builds"), SourceUID: uint32(os.Geteuid()), AllowedThemes: []string{"manager-test-theme"}, ExistingRouting: true}
 	base, f.reg.Publication, err = AttachPublication(base, f.reg.StaticRoot, pub, nil)
 	if err != nil {
 		t.Fatal(err)

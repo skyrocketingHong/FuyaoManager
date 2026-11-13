@@ -25,6 +25,16 @@ platform development history preserved; see
 
 ## Features
 
+- **Platform content and website workspaces**: shared blogs, albums, places
+  and friends; independent per-site source selection, theme configuration,
+  frozen builds, previews and registered Caddy publication. See
+  [Content workspaces](./docs/CONTENT_WORKSPACES.md).
+- **Registered static-site takeover**: preserve complex source rules,
+  protect management endpoints, seal serving files under root ownership,
+  and coordinate activation and failure recovery without a general root shell.
+- **Traffic snapshots**: optional latest daily Cloudflare data from an
+  existing operator-bound loopback source, with explicit cache state.
+
 - **User management and audit**: administrator-only account lifecycle, site
   memberships, passkey/session revocation, one-time enrollment/recovery codes,
   and searchable operation history. See [Administration](./docs/ADMINISTRATION.md).
