@@ -56,7 +56,7 @@ superseded where they conflict with this section.
 
 ## Next (in order, one package at a time)
 
-- **Current batch 0.3.0**: user-management HTTP/UI, per-site authorization, session/passkey controls, persistent audit history, console appearance settings and sidebar alignment are implemented. The earlier 0.2.0 pending items below are completed in this batch. All 161 frontend tests and type checking passed; full Go tests with the real theme passed (httpapi 153.137s), and targeted administration/concurrency race tests passed. The 0.2.1 → 0.3.0 upgrade was explicitly approved. Deployment is being prepared; business publishing remains isolated. Usage and boundaries: `ADMINISTRATION.md`.
+- **0.3.0 completed and deployed** (`d0e9728`, 2026-11-13): user-management HTTP/UI, per-site authorization, session/passkey controls, persistent audit with canonical change detail, console appearance and sidebar alignment are complete. This closes the pending items in the historical 0.2.0 entry below. All 161 frontend tests, type/build/contract checks and full Go tests passed; verification includes real-theme integration, targeted race checks and a further real build/preview loop after the audit-detail change. The explicitly approved 0.2.1 → 0.3.0 upgrade is deployed with schema 15. All 20 HTTP/TLS probes passed; served artifacts match the build. Existing accounts, passkeys, site files, release links and the managed Caddy snippet are unchanged, with publishing isolated and no Caddy reload. Full operational evidence remains local in ignored files. Usage: `ADMINISTRATION.md`; visual and physical-authenticator acceptance remain manual.
 
 - **M6 — Console refinement and isolated management** (in progress):
   version 0.2.0 covers the completed shell and shared-surface reuse,
