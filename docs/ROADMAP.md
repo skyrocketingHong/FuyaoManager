@@ -56,6 +56,8 @@ superseded where they conflict with this section.
 
 ## Next (in order, one package at a time)
 
+- **Current batch 0.3.0**: user-management HTTP/UI, per-site authorization, session/passkey controls, persistent audit history, console appearance settings and sidebar alignment are implemented. The earlier 0.2.0 pending items below are completed in this batch. All 161 frontend tests and type checking passed; full Go tests with the real theme passed (httpapi 153.137s), and targeted administration/concurrency race tests passed. The 0.2.1 → 0.3.0 upgrade was explicitly approved. Deployment is being prepared; business publishing remains isolated. Usage and boundaries: `ADMINISTRATION.md`.
+
 - **M6 — Console refinement and isolated management** (in progress):
   version 0.2.0 covers the completed shell and shared-surface reuse,
   separate platform-home/site-overview actions, favicon and route titles,

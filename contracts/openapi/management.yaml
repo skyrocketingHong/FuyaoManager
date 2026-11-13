@@ -83,19 +83,19 @@ paths:
         - $ref: '#/components/parameters/AdminSearch'
         - name: role
           in: query
-          schema: {type: string, enum: [admin, member]}
+          schema: { type: string, enum: [admin, member] }
         - name: status
           in: query
           description: Deleted accounts are excluded unless this is explicitly deleted.
-          schema: {type: string, enum: [active, disabled, pending, deleted]}
+          schema: { type: string, enum: [active, disabled, pending, deleted] }
       responses:
         '200':
           description: Filtered account page; never includes authentication material.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AdminUserPage'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        default: {$ref: '#/components/responses/Problem'}
+              schema: { $ref: '#/components/schemas/AdminUserPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       operationId: createUser
       tags: [Administration]
@@ -108,12 +108,12 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AdminProfileInput'}
+            schema: { $ref: '#/components/schemas/AdminProfileInput' }
       responses:
-        '201': {$ref: '#/components/responses/AccountCode'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '201': { $ref: '#/components/responses/AccountCode' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}:
     parameters:
@@ -127,10 +127,10 @@ paths:
           description: Metadata only; no cookie, CSRF token, user handle or credential bytes.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AdminUserDetail'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '404': {$ref: '#/components/responses/NotFound'}
-        default: {$ref: '#/components/responses/Problem'}
+              schema: { $ref: '#/components/schemas/AdminUserDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
     delete:
       operationId: deleteUser
       tags: [Administration]
@@ -140,10 +140,10 @@ paths:
         - sessionCookie: []
           csrfHeader: []
       responses:
-        '204': {description: Account deleted and live authentication artifacts revoked.}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '204': { description: Account deleted and live authentication artifacts revoked. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/profile:
     parameters:
@@ -159,12 +159,12 @@ paths:
         required: true
         content:
           application/json:
-            schema: {$ref: '#/components/schemas/AdminProfileInput'}
+            schema: { $ref: '#/components/schemas/AdminProfileInput' }
       responses:
-        '200': {$ref: '#/components/responses/AdminUser'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '200': { $ref: '#/components/responses/AdminUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/role:
     parameters:
@@ -185,12 +185,12 @@ paths:
               additionalProperties: false
               required: [platformRole]
               properties:
-                platformRole: {type: string, enum: [admin, member]}
+                platformRole: { type: string, enum: [admin, member] }
       responses:
-        '200': {$ref: '#/components/responses/AdminUser'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '200': { $ref: '#/components/responses/AdminUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/status:
     parameters:
@@ -212,12 +212,12 @@ paths:
               additionalProperties: false
               required: [status]
               properties:
-                status: {type: string, enum: [active, disabled]}
+                status: { type: string, enum: [active, disabled] }
       responses:
-        '200': {$ref: '#/components/responses/AdminUser'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '200': { $ref: '#/components/responses/AdminUser' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/login-code:
     parameters:
@@ -231,10 +231,10 @@ paths:
         - sessionCookie: []
           csrfHeader: []
       responses:
-        '200': {$ref: '#/components/responses/AccountCode'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '200': { $ref: '#/components/responses/AccountCode' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/site-access/{siteId}:
     parameters:
@@ -257,7 +257,7 @@ paths:
               additionalProperties: false
               required: [role]
               properties:
-                role: {type: string, enum: ['', owner, editor, viewer]}
+                role: { type: string, enum: ['', owner, editor, viewer] }
       responses:
         '200':
           description: The saved membership.
@@ -267,11 +267,11 @@ paths:
                 type: object
                 required: [siteId, role]
                 properties:
-                  siteId: {type: string, format: uuid}
-                  role: {type: string, enum: ['', owner, editor, viewer]}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+                  siteId: { type: string, format: uuid }
+                  role: { type: string, enum: ['', owner, editor, viewer] }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/sessions:
     parameters:
@@ -284,9 +284,9 @@ paths:
         - sessionCookie: []
           csrfHeader: []
       responses:
-        '204': {description: Sessions revoked; the current cookie is cleared when affected.}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        default: {$ref: '#/components/responses/Problem'}
+        '204': { description: Sessions revoked; the current cookie is cleared when affected. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/sessions/{sessionId}:
     parameters:
@@ -300,10 +300,10 @@ paths:
         - sessionCookie: []
           csrfHeader: []
       responses:
-        '204': {description: Session revoked.}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '404': {$ref: '#/components/responses/NotFound'}
-        default: {$ref: '#/components/responses/Problem'}
+        '204': { description: Session revoked. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/users/{userId}/passkeys/{passkeyId}:
     parameters:
@@ -318,10 +318,10 @@ paths:
         - sessionCookie: []
           csrfHeader: []
       responses:
-        '204': {description: Passkey removed and login artifacts revoked.}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        '409': {$ref: '#/components/responses/AccountConflict'}
-        default: {$ref: '#/components/responses/Problem'}
+        '204': { description: Passkey removed and login artifacts revoked. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/AccountConflict' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/admin/audit:
     get:
@@ -335,27 +335,27 @@ paths:
         - $ref: '#/components/parameters/AdminSearch'
         - name: actor
           in: query
-          schema: {type: string, maxLength: 128}
+          schema: { type: string, maxLength: 128 }
         - name: operation
           in: query
-          schema: {type: string, maxLength: 128}
+          schema: { type: string, maxLength: 128 }
         - name: outcome
           in: query
-          schema: {type: string, enum: [success, failure]}
+          schema: { type: string, enum: [success, failure] }
         - name: from
           in: query
-          schema: {type: string, format: date-time}
+          schema: { type: string, format: date-time }
         - name: until
           in: query
-          schema: {type: string, format: date-time}
+          schema: { type: string, format: date-time }
       responses:
         '200':
           description: Audit page in descending timestamp and UUID order.
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/AuditPage'}
-        '403': {$ref: '#/components/responses/Forbidden'}
-        default: {$ref: '#/components/responses/Problem'}
+              schema: { $ref: '#/components/schemas/AuditPage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/auth/register/options:
     post:
@@ -825,9 +825,21 @@ paths:
                     passkeyBound: false
                     passkeyAvailable: true
                 anonymous:
-                  value: { 'authenticated': false, 'platformInitialized': true, 'passkeyBound': false, 'passkeyAvailable': true }
+                  value:
+                    {
+                      'authenticated': false,
+                      'platformInitialized': true,
+                      'passkeyBound': false,
+                      'passkeyAvailable': true
+                    }
                 uninitialized:
-                  value: { 'authenticated': false, 'platformInitialized': false, 'passkeyBound': false, 'passkeyAvailable': true }
+                  value:
+                    {
+                      'authenticated': false,
+                      'platformInitialized': false,
+                      'passkeyBound': false,
+                      'passkeyAvailable': true
+                    }
         default:
           $ref: '#/components/responses/Problem'
 
@@ -3105,30 +3117,30 @@ components:
       name: userId
       in: path
       required: true
-      schema: {type: string, format: uuid}
+      schema: { type: string, format: uuid }
     SessionId:
       name: sessionId
       in: path
       required: true
-      schema: {type: string, format: uuid}
+      schema: { type: string, format: uuid }
     PasskeyId:
       name: passkeyId
       in: path
       required: true
-      schema: {type: string, format: uuid}
+      schema: { type: string, format: uuid }
     AdminPage:
       name: page
       in: query
-      schema: {type: integer, minimum: 1, maximum: 100000, default: 1}
+      schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
     AdminPageSize:
       name: pageSize
       in: query
-      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
     AdminSearch:
       name: q
       in: query
       description: Literal substring; LIKE metacharacters have no special meaning.
-      schema: {type: string, maxLength: 128}
+      schema: { type: string, maxLength: 128 }
     SiteId:
       name: siteId
       in: path
@@ -3182,17 +3194,17 @@ components:
       description: Saved account metadata.
       content:
         application/json:
-          schema: {$ref: '#/components/schemas/AdminUser'}
+          schema: { $ref: '#/components/schemas/AdminUser' }
     AccountCode:
       description: Account metadata and the once-returned code. Response is no-store.
       content:
         application/json:
-          schema: {$ref: '#/components/schemas/AccountCode'}
+          schema: { $ref: '#/components/schemas/AccountCode' }
     AccountConflict:
       description: Username conflict, inactive or terminal account, self-management, last administrator, last owner or last own passkey (`username_taken`, `account_conflict`, `self_management`, `last_admin`, `last_owner`, `last_passkey`).
       content:
         application/problem+json:
-          schema: {$ref: '#/components/schemas/Problem'}
+          schema: { $ref: '#/components/schemas/Problem' }
     Problem:
       description: Unexpected error; the body never leaks SQL or connection details.
       content:
@@ -3254,41 +3266,41 @@ components:
       additionalProperties: false
       required: [username, displayName]
       properties:
-        username: {type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$'}
-        displayName: {type: string, maxLength: 200}
+        username: { type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$' }
+        displayName: { type: string, maxLength: 200 }
     AdminUser:
       type: object
       required: [id, username, displayName, platformRole, status, createdAt, updatedAt]
       properties:
-        id: {type: string, format: uuid}
-        username: {type: string}
-        displayName: {type: string}
-        platformRole: {type: string, enum: [admin, member]}
-        status: {type: string, enum: [pending, active, disabled, deleted]}
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time}
+        id: { type: string, format: uuid }
+        username: { type: string }
+        displayName: { type: string }
+        platformRole: { type: string, enum: [admin, member] }
+        status: { type: string, enum: [pending, active, disabled, deleted] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     AdminUserPage:
       type: object
       required: [users, total, page, pageSize]
       properties:
         users:
           type: array
-          items: {$ref: '#/components/schemas/AdminUser'}
-        total: {type: integer}
-        page: {type: integer}
-        pageSize: {type: integer}
+          items: { $ref: '#/components/schemas/AdminUser' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
     AccountCode:
       type: object
       required: [user, code, expiresAt]
       properties:
-        user: {$ref: '#/components/schemas/AdminUser'}
-        code: {type: string}
-        expiresAt: {type: string, format: date-time}
+        user: { $ref: '#/components/schemas/AdminUser' }
+        code: { type: string }
+        expiresAt: { type: string, format: date-time }
     AdminUserDetail:
       type: object
       required: [user, access]
       properties:
-        user: {$ref: '#/components/schemas/AdminUser'}
+        user: { $ref: '#/components/schemas/AdminUser' }
         access:
           type: object
           required: [sites, passkeys, sessions]
@@ -3299,64 +3311,78 @@ components:
                 type: object
                 required: [siteId, name, slug, role]
                 properties:
-                  siteId: {type: string, format: uuid}
-                  name: {type: string}
-                  slug: {type: string}
-                  role: {type: string, enum: ['', owner, editor, viewer]}
+                  siteId: { type: string, format: uuid }
+                  name: { type: string }
+                  slug: { type: string }
+                  role: { type: string, enum: ['', owner, editor, viewer] }
             passkeys:
               type: array
               items:
                 type: object
                 required: [id, rpId, createdAt, lastUsedAt, backupEligible, backupState, currentRp]
                 properties:
-                  id: {type: string, format: uuid}
-                  rpId: {type: string}
-                  createdAt: {type: string, format: date-time}
-                  lastUsedAt: {type: string, format: date-time, nullable: true}
-                  backupEligible: {type: boolean}
-                  backupState: {type: boolean}
-                  currentRp: {type: boolean}
+                  id: { type: string, format: uuid }
+                  rpId: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  lastUsedAt: { type: string, format: date-time, nullable: true }
+                  backupEligible: { type: boolean }
+                  backupState: { type: boolean }
+                  currentRp: { type: boolean }
             sessions:
               type: array
               items:
                 type: object
                 required: [id, kind, createdAt, lastSeenAt, expiresAt, current]
                 properties:
-                  id: {type: string, format: uuid}
-                  kind: {type: string, enum: [full, restricted]}
-                  createdAt: {type: string, format: date-time}
-                  lastSeenAt: {type: string, format: date-time}
-                  expiresAt: {type: string, format: date-time}
-                  current: {type: boolean}
+                  id: { type: string, format: uuid }
+                  kind: { type: string, enum: [full, restricted] }
+                  createdAt: { type: string, format: date-time }
+                  lastSeenAt: { type: string, format: date-time }
+                  expiresAt: { type: string, format: date-time }
+                  current: { type: boolean }
     AuditPage:
       type: object
       required: [entries, total, page, pageSize, operations]
       properties:
         entries:
           type: array
-          items: {$ref: '#/components/schemas/AuditEvent'}
-        total: {type: integer}
-        page: {type: integer}
-        pageSize: {type: integer}
+          items: { $ref: '#/components/schemas/AuditEvent' }
+        total: { type: integer }
+        page: { type: integer }
+        pageSize: { type: integer }
         operations:
           type: array
-          items: {type: string}
+          items: { type: string }
     AuditEvent:
       type: object
-      required: [id, createdAt, actorId, actorName, operation, resourceId, siteId, method, route, peerIp, status, outcome]
+      required:
+        [
+          id,
+          createdAt,
+          actorId,
+          actorName,
+          operation,
+          resourceId,
+          siteId,
+          method,
+          route,
+          peerIp,
+          status,
+          outcome
+        ]
       properties:
-        id: {type: string, format: uuid}
-        createdAt: {type: string, format: date-time}
-        actorId: {type: string, format: uuid, nullable: true}
-        actorName: {type: string}
-        operation: {type: string}
-        resourceId: {type: string}
-        siteId: {type: string, format: uuid, nullable: true}
-        method: {type: string}
-        route: {type: string}
-        peerIp: {type: string}
-        status: {type: integer, minimum: 100, maximum: 599}
-        outcome: {type: string, enum: [success, failure]}
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        actorId: { type: string, format: uuid, nullable: true }
+        actorName: { type: string }
+        operation: { type: string }
+        resourceId: { type: string }
+        siteId: { type: string, format: uuid, nullable: true }
+        method: { type: string }
+        route: { type: string }
+        peerIp: { type: string }
+        status: { type: integer, minimum: 100, maximum: 599 }
+        outcome: { type: string, enum: [success, failure] }
     BuildFailure:
       type: object
       description: Persisted failure record of a build task.

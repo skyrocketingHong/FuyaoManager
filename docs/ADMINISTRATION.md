@@ -10,11 +10,11 @@ Creating a user creates a member account and returns a single-use code valid for
 
 The Manage drawer edits username/display name, changes platform roles, enables/disables/deletes accounts, assigns individual site memberships, lists/revokes active sessions and revokes passkeys.
 
-| Scope | Role | Access |
-| --- | --- | --- |
-| Platform | Administrator | Manage accounts, site authorization and audit records |
-| Platform | Member | Use site business functions explicitly granted to the account |
-| Site | Owner, editor, viewer | Existing per-site API rules; a platform-role change does not rewrite site roles |
+| Scope    | Role                  | Access                                                                          |
+| -------- | --------------------- | ------------------------------------------------------------------------------- |
+| Platform | Administrator         | Manage accounts, site authorization and audit records                           |
+| Platform | Member                | Use site business functions explicitly granted to the account                   |
+| Site     | Owner, editor, viewer | Existing per-site API rules; a platform-role change does not rewrite site roles |
 
 Transactions protect the last active administrator and each site's last active owner. An account cannot disable or delete itself; deleted accounts cannot be restored. Disabling revokes sessions, unused codes and pending ceremonies. Re-enabling never revives old artifacts. Deletion retains history, site content and business releases. Passkey revocation also revokes the account's login artifacts, and cannot remove your last passkey for the current domain. Session metadata includes full/restricted scope, last seen, expiry and the current-session marker; validity is not presented as live connectivity.
 

@@ -7,6 +7,20 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.3.0 - 2026-11-13
+
+### Added
+
+- Full administrator user management: account creation and once-returned registration/recovery codes, profile and platform roles, lifecycle controls, per-site access, active-session management and passkey revocation.
+- Persistent operation/authentication audit (migration 0014), with operator, operation, outcome, keyword and time-range filters, pagination and metadata detail. Account changes and their success event commit atomically; secrets and request bodies are excluded.
+- Console appearance settings adapted from the reference platform: light/dark/system modes, twelve accent presets, custom colors, reset, legacy-preference migration and synchronized tabs.
+
+### Fixed
+
+- Sidebar actions and menus share icon/text alignment and consistent horizontal insets; site workspaces explicitly label the platform return action.
+- Credential revocation rechecks the exact verified key at session insertion, preventing late verified assertions from recreating sessions. Account/query generation guards prevent stale administrative data and codes from appearing after an account switch.
+- Closing a once-returned-code dialog immediately unmounts its contents.
+
 ## 0.2.1 - 2026-11-13
 
 ### Fixed

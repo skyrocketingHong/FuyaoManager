@@ -319,30 +319,32 @@ export default function UsersPage() {
 					onDirtyChange={setDrawerDirty}
 				/>
 			)}
-			{visibleCode && <Modal
-				title={t('admin.code')}
-				open
-				destroyOnHidden
-				onCancel={() => setCode(null)}
-				footer={
-					<Button type="primary" onClick={() => setCode(null)}>
-						{t('admin.close')}
-					</Button>
-				}
-			>
-				{visibleCode && (
-					<div className="admin-code-content">
-						<strong>{visibleCode.user.username}</strong>
-						<Typography.Paragraph className="admin-code" copyable={{ text: visibleCode.code }}>
-							{visibleCode.code}
-						</Typography.Paragraph>
-						<p>
-							{t('admin.codeExpires')} {timeText(visibleCode.expiresAt)}
-						</p>
-						<Alert type="info" showIcon title={t('admin.codeHint')} />
-					</div>
-				)}
-			</Modal>}
+			{visibleCode && (
+				<Modal
+					title={t('admin.code')}
+					open
+					destroyOnHidden
+					onCancel={() => setCode(null)}
+					footer={
+						<Button type="primary" onClick={() => setCode(null)}>
+							{t('admin.close')}
+						</Button>
+					}
+				>
+					{visibleCode && (
+						<div className="admin-code-content">
+							<strong>{visibleCode.user.username}</strong>
+							<Typography.Paragraph className="admin-code" copyable={{ text: visibleCode.code }}>
+								{visibleCode.code}
+							</Typography.Paragraph>
+							<p>
+								{t('admin.codeExpires')} {timeText(visibleCode.expiresAt)}
+							</p>
+							<Alert type="info" showIcon title={t('admin.codeHint')} />
+						</div>
+					)}
+				</Modal>
+			)}
 		</div>
 	);
 }
