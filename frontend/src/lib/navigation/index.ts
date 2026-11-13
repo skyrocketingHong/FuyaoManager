@@ -14,12 +14,21 @@ export interface NavItem {
 	path: string;
 	scope: NavScope;
 	/** Menu group within the scope. */
-	group: 'platform' | 'overview' | 'content' | 'settings' | 'delivery';
+	group: 'platform' | 'administration' | 'overview' | 'content' | 'settings' | 'delivery';
 	titleKey: MessageKey;
+	adminOnly?: boolean;
+	menu?: boolean;
 }
 
 export const navItems: readonly NavItem[] = [
-	{ id: 'sites', path: '/sites', scope: 'platform', group: 'platform', titleKey: 'nav.sites' },
+	{
+		id: 'sites',
+		path: '/sites',
+		scope: 'platform',
+		group: 'platform',
+		titleKey: 'nav.sites',
+		menu: false
+	},
 	{
 		id: 'themes',
 		path: '/themes',
@@ -31,8 +40,24 @@ export const navItems: readonly NavItem[] = [
 		id: 'appearance',
 		path: '/appearance',
 		scope: 'platform',
-		group: 'platform',
+		group: 'administration',
 		titleKey: 'nav.appearance'
+	},
+	{
+		id: 'users',
+		path: '/users',
+		scope: 'platform',
+		group: 'administration',
+		titleKey: 'nav.users',
+		adminOnly: true
+	},
+	{
+		id: 'logs',
+		path: '/logs',
+		scope: 'platform',
+		group: 'administration',
+		titleKey: 'nav.logs',
+		adminOnly: true
 	},
 	// The account settings page lives outside the sidebar menus: it is
 	// reached from the account dropdown in the top bar only.
@@ -41,7 +66,8 @@ export const navItems: readonly NavItem[] = [
 		path: '/account',
 		scope: 'platform',
 		group: 'platform',
-		titleKey: 'nav.account'
+		titleKey: 'nav.account',
+		menu: false
 	},
 	{
 		id: 'site.overview',
@@ -126,6 +152,11 @@ export const siteNavGroups: readonly NavGroupMeta[] = [
 	{ id: 'content', titleKey: 'nav.group.content' },
 	{ id: 'settings', titleKey: 'nav.group.settings' },
 	{ id: 'delivery', titleKey: 'nav.group.delivery' }
+];
+
+export const platformNavGroups: readonly NavGroupMeta[] = [
+	{ id: 'platform', titleKey: 'nav.group.resources' },
+	{ id: 'administration', titleKey: 'nav.group.platformSettings' }
 ];
 
 export interface RouteMatch {

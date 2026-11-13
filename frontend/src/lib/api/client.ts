@@ -62,6 +62,7 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 }
 
 interface RequestOptions {
+	signal?: AbortSignal;
 	body?: unknown;
 	/** Exact ETag from a prior GET, sent as If-Match. */
 	etag?: string;
@@ -86,6 +87,7 @@ export async function api<T>(
 		method,
 		headers,
 		credentials: 'same-origin',
+		...(opts.signal ? { signal: opts.signal } : {}),
 		body:
 			opts.body !== undefined
 				? opts.multipart

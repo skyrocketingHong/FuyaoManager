@@ -17,13 +17,22 @@ import {
 	Rocket,
 	Settings,
 	UserRound,
+	UsersRound,
+	ScrollText,
 	type LucideIcon
 } from 'lucide-react';
 import { i18nSnapshot, subscribeI18n, t, type MessageKey } from '../../lib/i18n';
 import { sessionSnapshot, subscribeSession } from '../../lib/session';
 import { currentAuthGeneration } from '../../lib/api/client';
 import { loadSiteList, siteListSnapshot, subscribeSiteList } from '../../lib/sites/site-list';
-import { itemPath, matchRoute, navItems, selectedPath, siteNavGroups } from '../../lib/navigation';
+import {
+	itemPath,
+	matchRoute,
+	navItems,
+	selectedPath,
+	siteNavGroups,
+	platformNavGroups
+} from '../../lib/navigation';
 import { PageHeaderProvider } from '../PageHeader';
 import SidebarActions, { type SidebarAction } from './SidebarActions';
 import SidebarNav from './SidebarNav';
@@ -35,6 +44,8 @@ type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
 	themes: Palette,
 	appearance: Palette,
+	users: UsersRound,
+	logs: ScrollText,
 	'site.posts': FileText,
 	'site.friends': Link2,
 	'site.albums': Images,
@@ -71,20 +82,24 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	const match = matchRoute(pathname);
 	const siteId = match?.item.scope === 'site' ? match.siteId : null;
 	const currentSite = siteId ? siteList.sites.find((site) => site.siteId === siteId) : null;
-	const menuItems: MenuItem[] = siteId
-		? siteNavGroups.map((group) => ({
-				key: group.id,
-				type: 'group',
-				label: t(group.titleKey),
-				children: navItems
-					.filter((item) => item.scope === 'site' && item.group === group.id)
-					.map((item) => menuEntry(item.id, siteId))
-			}))
-		: [menuEntry('themes', null), menuEntry('appearance', null)];
+	const menuItems: MenuItem[] = [];
+	for (const group of siteId ? siteNavGroups : platformNavGroups) {
+		const children = navItems
+			.filter(
+				(item) =>
+					item.scope === (siteId ? 'site' : 'platform') &&
+					item.group === group.id &&
+					item.menu !== false &&
+					(!item.adminOnly || session.user?.platformRole === 'admin')
+			)
+			.map((item) => menuEntry(item.id, siteId));
+		if (children.length)
+			menuItems.push({ key: group.id, type: 'group', label: t(group.titleKey), children });
+	}
 	const actions: SidebarAction[] = [
 		{
 			key: 'platform-home',
-			label: t('nav.platformHome'),
+			label: t(siteId ? 'nav.returnPlatform' : 'nav.platformHome'),
 			icon: siteId ? <ArrowLeft size={16} /> : <LayoutDashboard size={16} strokeWidth={1.8} />,
 			trailing: siteId ? undefined : <ChevronRight size={14} />,
 			active: pathname === '/sites',

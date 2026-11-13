@@ -4,6 +4,238 @@
  */
 
 export interface paths {
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List and filter accounts as a platform administrator */
+        get: operations["listUsers"];
+        put?: never;
+        /**
+         * Create a member account and a one-time registration code
+         * @description The code is valid for ten minutes, returned once and never logged. Redeeming it requires binding a passkey before business access. Roles and site access are granted through separate guarded endpoints.
+         */
+        post: operations["createUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        /** Inspect an account, site memberships, passkeys and active sessions */
+        get: operations["getUser"];
+        put?: never;
+        post?: never;
+        /**
+         * Permanently soft-delete an account and revoke its login artifacts
+         * @description Self-deletion, removing the last active administrator and removing the sole active owner of any site are refused. History and site files are retained. Deleted accounts cannot be restored.
+         */
+        delete: operations["deleteUser"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update an account username and display name */
+        patch: operations["updateUserProfile"];
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/role": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the platform role without changing site memberships */
+        put: operations["setUserRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Disable or re-enable an account
+         * @description Disabling revokes sessions, codes and outstanding ceremonies. Re-enabling does not revive any old login artifact. The self, final administrator and active owner guards apply.
+         */
+        put: operations["setUserStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/login-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a ten-minute recovery or registration code for an active account
+         * @description Previous unused codes are expired. The new code is returned once and never logged; existing passkeys are preserved.
+         */
+        post: operations["issueUserLoginCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/site-access/{siteId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Grant, change or remove a single site membership
+         * @description Empty role removes access. This never changes site content or publishes a website. Removing the final active owner is refused under the account lifecycle lock.
+         */
+        put: operations["setUserSiteAccess"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Terminate every active session of one account */
+        delete: operations["revokeUserSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/sessions/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Terminate a session belonging to the specified account */
+        delete: operations["revokeUserSession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{userId}/passkeys/{passkeyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                passkeyId: components["parameters"]["PasskeyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a passkey and the account's live login artifacts
+         * @description The key UUID is metadata, never credential bytes. All sessions, unused codes and pending ceremonies for the account are revoked. Removing your own final passkey for the current RP is refused. Another account can recover through a newly issued code and binding.
+         */
+        delete: operations["revokeUserPasskey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Filter and page the append-only operation and authentication history
+         * @description Records begin when this version is deployed; historical events are not fabricated. Events contain operation IDs, route templates, UUID targets and outcomes, never request bodies, code values, cookies, credential bytes or raw query strings. Peer IP is the transport peer, not a forwarded header.
+         */
+        get: operations["listAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register/options": {
         parameters: {
             query?: never;
@@ -1031,6 +1263,100 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminProfileInput: {
+            username: string;
+            displayName: string;
+        };
+        AdminUser: {
+            /** Format: uuid */
+            id: string;
+            username: string;
+            displayName: string;
+            /** @enum {string} */
+            platformRole: "admin" | "member";
+            /** @enum {string} */
+            status: "pending" | "active" | "disabled" | "deleted";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AdminUserPage: {
+            users: components["schemas"]["AdminUser"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        AccountCode: {
+            user: components["schemas"]["AdminUser"];
+            code: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        AdminUserDetail: {
+            user: components["schemas"]["AdminUser"];
+            access: {
+                sites: {
+                    /** Format: uuid */
+                    siteId: string;
+                    name: string;
+                    slug: string;
+                    /** @enum {string} */
+                    role: "" | "owner" | "editor" | "viewer";
+                }[];
+                passkeys: {
+                    /** Format: uuid */
+                    id: string;
+                    rpId: string;
+                    /** Format: date-time */
+                    createdAt: string;
+                    /** Format: date-time */
+                    lastUsedAt: string | null;
+                    backupEligible: boolean;
+                    backupState: boolean;
+                    currentRp: boolean;
+                }[];
+                sessions: {
+                    /** Format: uuid */
+                    id: string;
+                    /** @enum {string} */
+                    kind: "full" | "restricted";
+                    /** Format: date-time */
+                    createdAt: string;
+                    /** Format: date-time */
+                    lastSeenAt: string;
+                    /** Format: date-time */
+                    expiresAt: string;
+                    current: boolean;
+                }[];
+            };
+        };
+        AuditPage: {
+            entries: components["schemas"]["AuditEvent"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            operations: string[];
+        };
+        AuditEvent: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            actorId: string | null;
+            actorName: string;
+            operation: string;
+            resourceId: string;
+            /** Format: uuid */
+            siteId: string | null;
+            method: string;
+            route: string;
+            peerIp: string;
+            status: number;
+            /** @enum {string} */
+            outcome: "success" | "failure";
+        };
         /** @description Persisted failure record of a build task. */
         BuildFailure: {
             /** @description The stage the task died in (capability-check, theme-lookup, theme-changed, theme-root, theme-source-changed, theme-manifest, workspace, snapshot, prepare, build, harvest, interrupted, internal). */
@@ -1215,6 +1541,8 @@ export interface components {
             username: string;
         };
         User: {
+            /** @enum {string} */
+            platformRole: "admin" | "member";
             /** Format: uuid */
             id: string;
             username: string;
@@ -1730,6 +2058,33 @@ export interface components {
         };
     };
     responses: {
+        /** @description Saved account metadata. */
+        AdminUser: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AdminUser"];
+            };
+        };
+        /** @description Account metadata and the once-returned code. Response is no-store. */
+        AccountCode: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["AccountCode"];
+            };
+        };
+        /** @description Username conflict, inactive or terminal account, self-management, last administrator, last owner or last own passkey (`username_taken`, `account_conflict`, `self_management`, `last_admin`, `last_owner`, `last_passkey`). */
+        AccountConflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Unexpected error; the body never leaks SQL or connection details. */
         Problem: {
             headers: {
@@ -1813,6 +2168,13 @@ export interface components {
         };
     };
     parameters: {
+        UserId: string;
+        SessionId: string;
+        PasskeyId: string;
+        AdminPage: number;
+        AdminPageSize: number;
+        /** @description Literal substring; LIKE metacharacters have no special meaning. */
+        AdminSearch: string;
         /** @description Site UUID. */
         SiteId: string;
         /** @description Build task UUID. */
@@ -1837,6 +2199,330 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listUsers: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["AdminPage"];
+                pageSize?: components["parameters"]["AdminPageSize"];
+                /** @description Literal substring; LIKE metacharacters have no special meaning. */
+                q?: components["parameters"]["AdminSearch"];
+                role?: "admin" | "member";
+                /** @description Deleted accounts are excluded unless this is explicitly deleted. */
+                status?: "active" | "disabled" | "pending" | "deleted";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Filtered account page; never includes authentication material. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserPage"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    createUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminProfileInput"];
+            };
+        };
+        responses: {
+            201: components["responses"]["AccountCode"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Metadata only; no cookie, CSRF token, user handle or credential bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Account deleted and live authentication artifacts revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    updateUserProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminProfileInput"];
+            };
+        };
+        responses: {
+            200: components["responses"]["AdminUser"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setUserRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    platformRole: "admin" | "member";
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["AdminUser"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setUserStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    status: "active" | "disabled";
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["AdminUser"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    issueUserLoginCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["AccountCode"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setUserSiteAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    role: "" | "owner" | "editor" | "viewer";
+                };
+            };
+        };
+        responses: {
+            /** @description The saved membership. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        siteId: string;
+                        /** @enum {string} */
+                        role: "" | "owner" | "editor" | "viewer";
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeUserSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sessions revoked; the current cookie is cleared when affected. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeUserSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                sessionId: components["parameters"]["SessionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Session revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    revokeUserPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: components["parameters"]["UserId"];
+                passkeyId: components["parameters"]["PasskeyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Passkey removed and login artifacts revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["AccountConflict"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    listAuditEvents: {
+        parameters: {
+            query?: {
+                page?: components["parameters"]["AdminPage"];
+                pageSize?: components["parameters"]["AdminPageSize"];
+                /** @description Literal substring; LIKE metacharacters have no special meaning. */
+                q?: components["parameters"]["AdminSearch"];
+                actor?: string;
+                operation?: string;
+                outcome?: "success" | "failure";
+                from?: string;
+                until?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Audit page in descending timestamp and UUID order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            default: components["responses"]["Problem"];
+        };
+    };
     startPasskeyEnrollment: {
         parameters: {
             query?: never;

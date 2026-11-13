@@ -34,6 +34,20 @@ func (s *SessionStore) Create(ctx context.Context, userID uuid.UUID, ttl time.Du
 // concurrently can never be handed a fresh cookie (the FOR SHARE waits out an
 // in-flight status change and re-reads the committed state).
 func (s *SessionStore) CreateWithKind(ctx context.Context, userID uuid.UUID, kind string, ttl time.Duration) (cookieToken string, csrf string, expiresAt time.Time, err error) {
+	return s.create(ctx, userID, kind, ttl, nil, "")
+}
+
+// CreateForPasskey rechecks the exact verified credential at the session
+// insertion boundary. The key-share lock orders issuance before revocation,
+// or rejects it after deletion, including a previously verified assertion.
+func (s *SessionStore) CreateForPasskey(ctx context.Context, userID uuid.UUID, rpID string, credentialID []byte, ttl time.Duration) (string, string, time.Time, error) {
+	if len(credentialID) == 0 {
+		return "", "", time.Time{}, ErrConflict
+	}
+	return s.create(ctx, userID, model.SessionKindFull, ttl, credentialID, rpID)
+}
+
+func (s *SessionStore) create(ctx context.Context, userID uuid.UUID, kind string, ttl time.Duration, credentialID []byte, rpID string) (cookieToken string, csrf string, expiresAt time.Time, err error) {
 	// The stored digest is computed over the exact text presented in the
 	// cookie, so lookup agrees byte for byte. Both values are freshly
 	// generated random material, never literals.
@@ -44,8 +58,10 @@ func (s *SessionStore) CreateWithKind(ctx context.Context, userID uuid.UUID, kin
 		`INSERT INTO sessions (id, user_id, kind, token_hash, csrf_token, expires_at)
 		 SELECT $1, $2, $3, $4, $5, now() + make_interval(secs => $6)
 		 WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = $2 AND u.status = 'active' FOR SHARE)
+		 AND ($7::bytea IS NULL OR EXISTS (SELECT 1 FROM passkeys p
+		   WHERE p.user_id=$2 AND p.credential_id=$7 AND p.rp_id=$8 FOR SHARE))
 		 RETURNING expires_at`,
-		id, userID, kind, sha256Sum([]byte(cookieToken)), csrf, ttl.Seconds(),
+		id, userID, kind, sha256Sum([]byte(cookieToken)), csrf, ttl.Seconds(), credentialID, rpID,
 	).Scan(&expiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", time.Time{}, ErrConflict

@@ -114,6 +114,7 @@ func (a *API) handleExchangeCode(w http.ResponseWriter, r *http.Request) {
 		cookieTTL = a.cfg.RegistrationTTL
 	}
 	a.setSessionCookie(w, result.CookieToken, cookieTTL)
+	setAuditActor(r, result.User)
 	a.clearAuthTxCookie(w)
 	a.store.AuthCodes.PurgeExpired(r.Context())
 	writeJSON(w, http.StatusOK, ceremonyDone{

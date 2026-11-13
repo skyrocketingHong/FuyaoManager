@@ -13,7 +13,8 @@ import zh from '../src/lib/i18n/locales/zh-CN.json';
 const alice = {
 	id: '11111111-1111-1111-1111-111111111111',
 	username: 'alice',
-	displayName: 'Alice'
+	displayName: 'Alice',
+	platformRole: 'admin'
 };
 const siteAbc = {
 	siteId: 'abc',
@@ -100,6 +101,9 @@ vi.mock('../src/pages/SitesPage', async () => {
 	};
 });
 vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-themes</div> }));
+vi.mock('../src/pages/UsersPage', () => ({ default: () => <div>page-users</div> }));
+vi.mock('../src/pages/LogsPage', () => ({ default: () => <div>page-logs</div> }));
+vi.mock('../src/pages/AppearancePage', () => ({ default: () => <div>page-appearance</div> }));
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
 vi.mock('../src/pages/sites/SiteConfigPage', () => ({ default: () => <div>page-config</div> }));
@@ -260,6 +264,31 @@ describe('deep links and menu selection', () => {
 describe('sidebar shell', () => {
 	beforeEach(() => authenticated());
 
+	it.each([
+		['/users', 'page-users', 'nav.users'],
+		['/logs', 'page-logs', 'nav.logs']
+	])('allows administrators at %s', async (path, marker, title) => {
+		renderAt(path);
+		expect(await screen.findByText(marker)).toBeDefined();
+		expect(document.querySelector('.ant-menu-item-selected')?.textContent).toContain(
+			zh[title as keyof typeof zh]
+		);
+	});
+
+	it.each(['/users', '/logs'])(
+		'blocks a member deep link to %s and hides management menus',
+		async (path) => {
+			mockSession = { ...mockSession, user: { ...alice, platformRole: 'member' } };
+			renderAt(path);
+			expect(await screen.findByText(zh['error.forbidden'])).toBeDefined();
+			expect(screen.queryByText('page-users')).toBeNull();
+			expect(screen.queryByText('page-logs')).toBeNull();
+			expect(screen.queryByRole('menuitem', { name: zh['nav.users'] })).toBeNull();
+			expect(screen.queryByRole('menuitem', { name: zh['nav.logs'] })).toBeNull();
+			expect(screen.getByRole('menuitem', { name: zh['nav.appearance'] })).toBeDefined();
+		}
+	);
+
 	it('renders the favicon brand, the platform menu, and the fixed home action', async () => {
 		renderAt('/sites');
 		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
@@ -290,7 +319,7 @@ describe('sidebar shell', () => {
 		);
 		const overview = screen.getByText(zh['nav.overview']).closest('button');
 		expect(overview?.getAttribute('aria-current')).toBeNull();
-		const home = screen.getByText(zh['nav.platformHome']).closest('button');
+		const home = screen.getByText(zh['nav.returnPlatform']).closest('button');
 		expect(home?.getAttribute('aria-current')).toBeNull();
 	});
 

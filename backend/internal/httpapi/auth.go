@@ -172,7 +172,7 @@ func (a *API) handleRegisterVerify(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to complete registration.")
 		return
 	}
-	a.finishLogin(w, r, user)
+	a.finishLogin(w, r, user, credential.ID)
 }
 
 // handleLoginOptions starts a discoverable-credential (passkey) login.
@@ -255,14 +255,14 @@ func (a *API) handleLoginVerify(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to complete login.")
 		return
 	}
-	a.finishLogin(w, r, waUser.Profile)
+	a.finishLogin(w, r, waUser.Profile, credential.ID)
 }
 
 // finishLogin issues the session cookie and returns the ceremony response.
 // Permit enrollment and discoverable passkey login always mint full sessions:
 // both prove a credential registered under the current relying party.
-func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.User) {
-	token, csrf, _, err := a.store.Sessions.Create(r.Context(), user.ID, a.cfg.SessionTTL)
+func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.User, credentialID []byte) {
+	token, csrf, _, err := a.store.Sessions.CreateForPasskey(r.Context(), user.ID, a.cfg.RPID, credentialID, a.cfg.SessionTTL)
 	if errors.Is(err, store.ErrConflict) {
 		a.clearAuthTxCookie(w)
 		writeProblem(w, http.StatusUnauthorized, "credential_rejected", "The passkey login response failed verification.")
@@ -274,6 +274,7 @@ func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.Use
 		return
 	}
 	a.setSessionCookie(w, token, a.cfg.SessionTTL)
+	setAuditActor(r, user)
 	a.clearAuthTxCookie(w)
 	writeJSON(w, http.StatusOK, ceremonyDone{User: toUserDTO(user), CSRFToken: csrf, SessionScope: model.SessionKindFull, PasskeyBound: true})
 }

@@ -25,6 +25,12 @@ platform development history preserved; see
 
 ## Features
 
+- **User management and audit**: administrator-only account lifecycle, site
+  memberships, passkey/session revocation, one-time enrollment/recovery codes,
+  and searchable operation history. See [Administration](./docs/ADMINISTRATION.md).
+- **Console appearance**: light/dark/system modes, twelve accent presets,
+  custom colors, browser persistence and synchronized tabs.
+
 - **Passkey authentication**: everyday sign-in is a discoverable passkey
   (WebAuthn, user verification required); sessions are cookie-based with
   CSRF and Origin enforcement. First run: `fuyao-admin init-admin` prints a
@@ -184,3 +190,5 @@ roadmap records deployment verification and the remaining manual acceptance.
 ## License
 
 [AGPL-3.0-only](./LICENSE). Theme projects keep their own licenses.
+
+This project was developed with assistance from generative AI.

@@ -12,7 +12,7 @@ import { ApiError } from '../src/lib/api/client';
 import type { User } from '../src/lib/api/management';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 
-const alice: User = { id: 'u1', username: 'alice', displayName: 'Alice' };
+const alice: User = { id: 'u1', username: 'alice', displayName: 'Alice', platformRole: 'member' };
 
 let mockSession: { status: string; user: User | null };
 const renameCurrentUser = vi.fn();
@@ -83,10 +83,9 @@ afterEach(() => {
 function mount() {
 	// A data router is required: the draft guard's useBlocker rejects the
 	// declarative <MemoryRouter> mode.
-	const router = createMemoryRouter(
-		[{ path: '/account', element: <AccountSettingsPage /> }],
-		{ initialEntries: ['/account'] }
-	);
+	const router = createMemoryRouter([{ path: '/account', element: <AccountSettingsPage /> }], {
+		initialEntries: ['/account']
+	});
 	return render(
 		<ConfigProvider>
 			<RouterProvider router={router} />
@@ -143,7 +142,9 @@ describe('AccountSettingsPage rename flow', () => {
 	});
 
 	it('keeps the draft and surfaces the failure when the rename is rejected', async () => {
-		vi.mocked(updateAccountProfile).mockRejectedValue(new ApiError(409, 'username_taken', '', null));
+		vi.mocked(updateAccountProfile).mockRejectedValue(
+			new ApiError(409, 'username_taken', '', null)
+		);
 		mount();
 		const input = await waitFor(() => {
 			const element = screen.getByLabelText(zh['account.usernameLabel']) as HTMLInputElement;
@@ -169,7 +170,7 @@ describe('AccountSettingsPage rename flow', () => {
 
 describe('AccountSettingsPage cross-account guards', () => {
 	it('a rename landing after switching to another account never applies', async () => {
-		const bob: User = { id: 'u2', username: 'bob', displayName: 'Bob' };
+		const bob: User = { id: 'u2', username: 'bob', displayName: 'Bob', platformRole: 'member' };
 		let resolveRename!: (v: User) => void;
 		vi.mocked(updateAccountProfile).mockImplementation(
 			() =>

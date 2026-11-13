@@ -53,6 +53,10 @@ tags:
     description: WebAuthn enrollment and login ceremonies.
   - name: Account
     description: Self-service account profile for the caller's own account.
+  - name: Administration
+    description: Administrator-only account lifecycle, site access and credential management.
+  - name: Audit
+    description: Administrator-only structured operation and authentication history.
   - name: Session
     description: Session introspection and logout.
   - name: Sites
@@ -68,6 +72,291 @@ security:
   - sessionCookie: []
 
 paths:
+  /api/v1/admin/users:
+    get:
+      operationId: listUsers
+      tags: [Administration]
+      summary: List and filter accounts as a platform administrator
+      parameters:
+        - $ref: '#/components/parameters/AdminPage'
+        - $ref: '#/components/parameters/AdminPageSize'
+        - $ref: '#/components/parameters/AdminSearch'
+        - name: role
+          in: query
+          schema: {type: string, enum: [admin, member]}
+        - name: status
+          in: query
+          description: Deleted accounts are excluded unless this is explicitly deleted.
+          schema: {type: string, enum: [active, disabled, pending, deleted]}
+      responses:
+        '200':
+          description: Filtered account page; never includes authentication material.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserPage'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        default: {$ref: '#/components/responses/Problem'}
+    post:
+      operationId: createUser
+      tags: [Administration]
+      summary: Create a member account and a one-time registration code
+      description: The code is valid for ten minutes, returned once and never logged. Redeeming it requires binding a passkey before business access. Roles and site access are granted through separate guarded endpoints.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdminProfileInput'}
+      responses:
+        '201': {$ref: '#/components/responses/AccountCode'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    get:
+      operationId: getUser
+      tags: [Administration]
+      summary: Inspect an account, site memberships, passkeys and active sessions
+      responses:
+        '200':
+          description: Metadata only; no cookie, CSRF token, user handle or credential bytes.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AdminUserDetail'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
+    delete:
+      operationId: deleteUser
+      tags: [Administration]
+      summary: Permanently soft-delete an account and revoke its login artifacts
+      description: Self-deletion, removing the last active administrator and removing the sole active owner of any site are refused. History and site files are retained. Deleted accounts cannot be restored.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '204': {description: Account deleted and live authentication artifacts revoked.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/profile:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    patch:
+      operationId: updateUserProfile
+      tags: [Administration]
+      summary: Update an account username and display name
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/AdminProfileInput'}
+      responses:
+        '200': {$ref: '#/components/responses/AdminUser'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/role:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: setUserRole
+      tags: [Administration]
+      summary: Set the platform role without changing site memberships
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [platformRole]
+              properties:
+                platformRole: {type: string, enum: [admin, member]}
+      responses:
+        '200': {$ref: '#/components/responses/AdminUser'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/status:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: setUserStatus
+      tags: [Administration]
+      summary: Disable or re-enable an account
+      description: Disabling revokes sessions, codes and outstanding ceremonies. Re-enabling does not revive any old login artifact. The self, final administrator and active owner guards apply.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: {type: string, enum: [active, disabled]}
+      responses:
+        '200': {$ref: '#/components/responses/AdminUser'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/login-code:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    post:
+      operationId: issueUserLoginCode
+      tags: [Administration]
+      summary: Issue a ten-minute recovery or registration code for an active account
+      description: Previous unused codes are expired. The new code is returned once and never logged; existing passkeys are preserved.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '200': {$ref: '#/components/responses/AccountCode'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/site-access/{siteId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/SiteId'
+    put:
+      operationId: setUserSiteAccess
+      tags: [Administration]
+      summary: Grant, change or remove a single site membership
+      description: Empty role removes access. This never changes site content or publishes a website. Removing the final active owner is refused under the account lifecycle lock.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [role]
+              properties:
+                role: {type: string, enum: ['', owner, editor, viewer]}
+      responses:
+        '200':
+          description: The saved membership.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [siteId, role]
+                properties:
+                  siteId: {type: string, format: uuid}
+                  role: {type: string, enum: ['', owner, editor, viewer]}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/sessions:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+    delete:
+      operationId: revokeUserSessions
+      tags: [Administration]
+      summary: Terminate every active session of one account
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '204': {description: Sessions revoked; the current cookie is cleared when affected.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/sessions/{sessionId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/SessionId'
+    delete:
+      operationId: revokeUserSession
+      tags: [Administration]
+      summary: Terminate a session belonging to the specified account
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '204': {description: Session revoked.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/users/{userId}/passkeys/{passkeyId}:
+    parameters:
+      - $ref: '#/components/parameters/UserId'
+      - $ref: '#/components/parameters/PasskeyId'
+    delete:
+      operationId: revokeUserPasskey
+      tags: [Administration]
+      summary: Revoke a passkey and the account's live login artifacts
+      description: The key UUID is metadata, never credential bytes. All sessions, unused codes and pending ceremonies for the account are revoked. Removing your own final passkey for the current RP is refused. Another account can recover through a newly issued code and binding.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '204': {description: Passkey removed and login artifacts revoked.}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409': {$ref: '#/components/responses/AccountConflict'}
+        default: {$ref: '#/components/responses/Problem'}
+
+  /api/v1/admin/audit:
+    get:
+      operationId: listAuditEvents
+      tags: [Audit]
+      summary: Filter and page the append-only operation and authentication history
+      description: Records begin when this version is deployed; historical events are not fabricated. Events contain operation IDs, route templates, UUID targets and outcomes, never request bodies, code values, cookies, credential bytes or raw query strings. Peer IP is the transport peer, not a forwarded header.
+      parameters:
+        - $ref: '#/components/parameters/AdminPage'
+        - $ref: '#/components/parameters/AdminPageSize'
+        - $ref: '#/components/parameters/AdminSearch'
+        - name: actor
+          in: query
+          schema: {type: string, maxLength: 128}
+        - name: operation
+          in: query
+          schema: {type: string, maxLength: 128}
+        - name: outcome
+          in: query
+          schema: {type: string, enum: [success, failure]}
+        - name: from
+          in: query
+          schema: {type: string, format: date-time}
+        - name: until
+          in: query
+          schema: {type: string, format: date-time}
+      responses:
+        '200':
+          description: Audit page in descending timestamp and UUID order.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AuditPage'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        default: {$ref: '#/components/responses/Problem'}
+
   /api/v1/auth/register/options:
     post:
       operationId: startPasskeyEnrollment
@@ -513,7 +802,8 @@ paths:
                       {
                         'id': '018f3c1e-6a2c-7b41-9f22-3f0a1c7d5b88',
                         'username': 'alice',
-                        'displayName': 'Alice'
+                        'displayName': 'Alice',
+                        'platformRole': 'admin'
                       }
                     csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
                     sessionScope: full
@@ -527,7 +817,8 @@ paths:
                       {
                         'id': '018f3c1e-6a2c-7b41-9f22-3f0a1c7d5b88',
                         'username': 'alice',
-                        'displayName': 'Alice'
+                        'displayName': 'Alice',
+                        'platformRole': 'admin'
                       }
                     csrfToken: 'dGhpc0lzQUNzcmZUb2tlbg'
                     sessionScope: restricted
@@ -2810,6 +3101,34 @@ components:
         every authenticated mutating request.
 
   parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    PasskeyId:
+      name: passkeyId
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    AdminPage:
+      name: page
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 100000, default: 1}
+    AdminPageSize:
+      name: pageSize
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+    AdminSearch:
+      name: q
+      in: query
+      description: Literal substring; LIKE metacharacters have no special meaning.
+      schema: {type: string, maxLength: 128}
     SiteId:
       name: siteId
       in: path
@@ -2859,6 +3178,21 @@ components:
         minLength: 1
 
   responses:
+    AdminUser:
+      description: Saved account metadata.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AdminUser'}
+    AccountCode:
+      description: Account metadata and the once-returned code. Response is no-store.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/AccountCode'}
+    AccountConflict:
+      description: Username conflict, inactive or terminal account, self-management, last administrator, last owner or last own passkey (`username_taken`, `account_conflict`, `self_management`, `last_admin`, `last_owner`, `last_passkey`).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
     Problem:
       description: Unexpected error; the body never leaks SQL or connection details.
       content:
@@ -2915,6 +3249,114 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    AdminProfileInput:
+      type: object
+      additionalProperties: false
+      required: [username, displayName]
+      properties:
+        username: {type: string, pattern: '^[a-z0-9][a-z0-9._-]{2,63}$'}
+        displayName: {type: string, maxLength: 200}
+    AdminUser:
+      type: object
+      required: [id, username, displayName, platformRole, status, createdAt, updatedAt]
+      properties:
+        id: {type: string, format: uuid}
+        username: {type: string}
+        displayName: {type: string}
+        platformRole: {type: string, enum: [admin, member]}
+        status: {type: string, enum: [pending, active, disabled, deleted]}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+    AdminUserPage:
+      type: object
+      required: [users, total, page, pageSize]
+      properties:
+        users:
+          type: array
+          items: {$ref: '#/components/schemas/AdminUser'}
+        total: {type: integer}
+        page: {type: integer}
+        pageSize: {type: integer}
+    AccountCode:
+      type: object
+      required: [user, code, expiresAt]
+      properties:
+        user: {$ref: '#/components/schemas/AdminUser'}
+        code: {type: string}
+        expiresAt: {type: string, format: date-time}
+    AdminUserDetail:
+      type: object
+      required: [user, access]
+      properties:
+        user: {$ref: '#/components/schemas/AdminUser'}
+        access:
+          type: object
+          required: [sites, passkeys, sessions]
+          properties:
+            sites:
+              type: array
+              items:
+                type: object
+                required: [siteId, name, slug, role]
+                properties:
+                  siteId: {type: string, format: uuid}
+                  name: {type: string}
+                  slug: {type: string}
+                  role: {type: string, enum: ['', owner, editor, viewer]}
+            passkeys:
+              type: array
+              items:
+                type: object
+                required: [id, rpId, createdAt, lastUsedAt, backupEligible, backupState, currentRp]
+                properties:
+                  id: {type: string, format: uuid}
+                  rpId: {type: string}
+                  createdAt: {type: string, format: date-time}
+                  lastUsedAt: {type: string, format: date-time, nullable: true}
+                  backupEligible: {type: boolean}
+                  backupState: {type: boolean}
+                  currentRp: {type: boolean}
+            sessions:
+              type: array
+              items:
+                type: object
+                required: [id, kind, createdAt, lastSeenAt, expiresAt, current]
+                properties:
+                  id: {type: string, format: uuid}
+                  kind: {type: string, enum: [full, restricted]}
+                  createdAt: {type: string, format: date-time}
+                  lastSeenAt: {type: string, format: date-time}
+                  expiresAt: {type: string, format: date-time}
+                  current: {type: boolean}
+    AuditPage:
+      type: object
+      required: [entries, total, page, pageSize, operations]
+      properties:
+        entries:
+          type: array
+          items: {$ref: '#/components/schemas/AuditEvent'}
+        total: {type: integer}
+        page: {type: integer}
+        pageSize: {type: integer}
+        operations:
+          type: array
+          items: {type: string}
+    AuditEvent:
+      type: object
+      required: [id, createdAt, actorId, actorName, operation, resourceId, siteId, method, route, peerIp, status, outcome]
+      properties:
+        id: {type: string, format: uuid}
+        createdAt: {type: string, format: date-time}
+        actorId: {type: string, format: uuid, nullable: true}
+        actorName: {type: string}
+        operation: {type: string}
+        resourceId: {type: string}
+        siteId: {type: string, format: uuid, nullable: true}
+        method: {type: string}
+        route: {type: string}
+        peerIp: {type: string}
+        status: {type: integer, minimum: 100, maximum: 599}
+        outcome: {type: string, enum: [success, failure]}
     BuildFailure:
       type: object
       description: Persisted failure record of a build task.
@@ -3240,8 +3682,11 @@ components:
 
     User:
       type: object
-      required: [id, username, displayName]
+      required: [id, username, displayName, platformRole]
       properties:
+        platformRole:
+          type: string
+          enum: [admin, member]
         id:
           type: string
           format: uuid

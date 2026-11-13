@@ -125,7 +125,10 @@ func TestInactiveAccountRejectsCredentialIssuance(t *testing.T) {
 			ctx := t.Context()
 			op := env.newAdmin("issue-op")
 			user, _, _ := env.createUserSession("inactive-user")
-			var err error
+			keys, err := env.store.Passkeys.ListByUser(ctx, user.ID)
+			if err != nil || len(keys) == 0 {
+				t.Fatal("fixture passkey missing")
+			}
 			if status == model.UserStatusDisabled {
 				_, err = env.store.DisableAccount(ctx, op.ID, user.ID)
 			} else {
@@ -142,9 +145,9 @@ func TestInactiveAccountRejectsCredentialIssuance(t *testing.T) {
 					t.Fatalf("issue %s code: got %v, want ErrCodePurpose", purpose, err)
 				}
 			}
-			api := &API{store: env.store, cfg: Config{SessionTTL: time.Hour}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+			api := &API{store: env.store, cfg: Config{SessionTTL: time.Hour, RPID: "localhost"}, logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
 			response := httptest.NewRecorder()
-			api.finishLogin(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", nil), user)
+			api.finishLogin(response, httptest.NewRequest(http.MethodPost, "/api/v1/auth/login/verify", nil), user, keys[0].CredentialID)
 			if response.Code != http.StatusUnauthorized {
 				t.Fatalf("stale verified login status = %d, want 401", response.Code)
 			}

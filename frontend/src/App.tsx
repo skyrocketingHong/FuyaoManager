@@ -14,6 +14,8 @@ import LoginPage from './pages/LoginPage';
 import BindPasskeyPage from './pages/BindPasskeyPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
 import AppearancePage from './pages/AppearancePage';
+import UsersPage from './pages/UsersPage';
+import LogsPage from './pages/LogsPage';
 import SitesPage from './pages/SitesPage';
 import ThemesCatalogPage from './pages/ThemesCatalogPage';
 import SiteDetailPage from './pages/sites/SiteDetailPage';
@@ -43,7 +45,9 @@ const pageByNavId: Record<string, ComponentType> = {
 	'site.builds': BuildsPage,
 	'site.releases': ReleasesPage,
 	account: AccountSettingsPage,
-	appearance: AppearancePage
+	appearance: AppearancePage,
+	users: UsersPage,
+	logs: LogsPage
 };
 
 type Status = ReturnType<typeof sessionSnapshot>['status'];
@@ -145,7 +149,13 @@ export default function App() {
 											key={item.id}
 											path={item.path}
 											element={
-												item.scope === 'site' ? (
+												item.adminOnly && session.user?.platformRole !== 'admin' ? (
+													<Result
+														status="403"
+														title={t('error.forbidden')}
+														extra={<Button href="/sites">{t('nav.platformHome')}</Button>}
+													/>
+												) : item.scope === 'site' ? (
 													<SiteBoundary>
 														<Page />
 													</SiteBoundary>

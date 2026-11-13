@@ -34,10 +34,10 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0013）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0014）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
-│   │   │                      # 主题、构建、发布、媒体任务、网络入口
+│   │   │                      # 主题、构建、发布、媒体任务、网络入口、审计
 │   │   ├── httpapi/           # 管理 API：认证、站点、内容、相册、
 │   │   │                      # 主题、构建、发布、边缘状态、UI 托管
 │   │   │                      # + testdata/theme（内置测试主题）
@@ -55,7 +55,8 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── config.example.env     # 无真实凭据的环境模板
 │   └── go.mod / go.sum        # module github.com/skyrocketingHong/FuyaoManager/backend
 ├── frontend/                  # React + antd 6 管理台（独立 package-lock.json）
-│   ├── src/lib/api/           # 类型化客户端 + 生成的 schema.d.ts
+│   ├── src/lib/api/           # 管理业务与管理员客户端 + 生成的 schema.d.ts
+│   ├── src/lib/admin/         # 可取消查询、变更请求守卫、审计操作文案
 │   ├── src/lib/sites/         # 站点业务模块（防竞态详情、编辑器）
 │   ├── src/lib/themes/        # 主题选择存储（目录、If-Match、412）
 │   ├── src/lib/editing/       # EditableDoc 状态机 + 未保存离开保护
@@ -66,10 +67,10 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── src/lib/session/       # 会话状态：匿名/受限/完整/错误
 │   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
 │   │                          # TablePanel、DataTable、PageLoading、StatusTag、
-│   │                          # RouteErrorPage、layout/（AppShell、TopBar、
+│   │                          # RouteErrorPage、admin/UserDrawer、layout/（AppShell、TopBar、
 │   │                          # SidebarInfo/Actions/Nav/Foot）
 │   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance 样式
-│   ├── src/pages/             # 登录、通行密钥绑定、账号及管理台外观设置、主题目录、站点
+│   ├── src/pages/             # 登录、通行密钥绑定、用户管理、日志、账号及外观设置、主题目录、站点
 │   │                          # 与各业务页
 │   └── tests/                 # vitest 测试（jsdom）
 ├── contracts/
@@ -86,6 +87,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # 控制台复用来源及适配边界
+    ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # 账号、审计和外观操作说明
     └── source-mapping/commit-map-from-fuyaohomepage.txt
 ```
 

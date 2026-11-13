@@ -201,7 +201,7 @@ func (s *Store) CreateAccountWithCode(ctx context.Context, operatorID uuid.UUID,
 	if err != nil {
 		return model.User{}, "", time.Time{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, u.ID, "createUser"); err != nil {
 		return model.User{}, "", time.Time{}, err
 	}
 	return u, code, expiresAt, nil
@@ -241,7 +241,7 @@ func (s *Store) IssueAccountCode(ctx context.Context, operatorID, targetID uuid.
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "issueUserLoginCode"); err != nil {
 		return "", time.Time{}, err
 	}
 	return code, expiresAt, nil
@@ -265,7 +265,7 @@ func (s *Store) AdminUpdateAccount(ctx context.Context, operatorID, targetID uui
 	var u model.User
 	err = tx.QueryRow(ctx,
 		`UPDATE users SET username = $2, display_name = $3, updated_at = now()
-		 WHERE id = $1
+		 WHERE id = $1 AND status <> 'deleted'
 		 RETURNING `+userColumns,
 		targetID, username, displayName,
 	).Scan(&u.ID, &u.Username, &u.DisplayName, &u.WebAuthnUserHandle, &u.Status,
@@ -280,7 +280,7 @@ func (s *Store) AdminUpdateAccount(ctx context.Context, operatorID, targetID uui
 		}
 		return model.User{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "updateUserProfile"); err != nil {
 		return model.User{}, err
 	}
 	return u, nil
@@ -338,7 +338,7 @@ func (s *Store) AdminSetPlatformRole(ctx context.Context, operatorID, targetID u
 	if err != nil {
 		return model.User{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserRole"); err != nil {
 		return model.User{}, err
 	}
 	return u, nil
@@ -432,7 +432,11 @@ func (s *Store) deactivateAccount(ctx context.Context, operatorID, targetID uuid
 		}
 		return model.User{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	operation := "setUserStatus"
+	if targetStatus == model.UserStatusDeleted {
+		operation = "deleteUser"
+	}
+	if err := commitAudited(ctx, tx, operatorID, targetID, operation); err != nil {
 		return model.User{}, err
 	}
 	return u, nil
@@ -480,7 +484,7 @@ func (s *Store) EnableAccount(ctx context.Context, operatorID, targetID uuid.UUI
 	if err != nil {
 		return model.User{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserStatus"); err != nil {
 		return model.User{}, err
 	}
 	return u, nil

@@ -17,7 +17,8 @@ import faviconSvg from '../public/favicon.svg?raw';
 const alice = {
 	id: '11111111-1111-1111-1111-111111111111',
 	username: 'alice',
-	displayName: 'Alice'
+	displayName: 'Alice',
+	platformRole: 'admin'
 };
 const siteAbc = {
 	siteId: 'abc',
@@ -80,6 +81,9 @@ vi.mock('../src/pages/LoginPage', () => ({ default: () => <div>page-login</div> 
 vi.mock('../src/pages/BindPasskeyPage', () => ({ default: () => <div>page-bind</div> }));
 vi.mock('../src/pages/SitesPage', () => ({ default: () => <div>page-sites</div> }));
 vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-themes</div> }));
+vi.mock('../src/pages/UsersPage', () => ({ default: () => <div>page-users</div> }));
+vi.mock('../src/pages/LogsPage', () => ({ default: () => <div>page-logs</div> }));
+vi.mock('../src/pages/AppearancePage', () => ({ default: () => <div>page-appearance</div> }));
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
 vi.mock('../src/pages/sites/SiteConfigPage', () => ({ default: () => <div>page-config</div> }));
@@ -145,6 +149,17 @@ function renderAt(path: string) {
 }
 
 describe('route titles', () => {
+	it.each([
+		['/users', 'nav.users'],
+		['/logs', 'nav.logs'],
+		['/appearance', 'nav.appearance']
+	])('titles %s from the shared navigation metadata', async (path, key) => {
+		sessionWith('authenticated');
+		renderAt(path);
+		await waitFor(() =>
+			expect(document.title).toBe(`Fuyao Manager - ${zh[key as keyof typeof zh]}`)
+		);
+	});
 	it('titles a platform route from its navigation metadata', async () => {
 		sessionWith('authenticated');
 		renderAt('/sites');

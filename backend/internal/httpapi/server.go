@@ -160,6 +160,19 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPost, "/api/v1/auth/passkey/register/verify", "verifyPasskeyBinding", a.passkeyRoute(a.requireAuth(a.withCSRF(a.handleBindVerify)))},
 
 		{http.MethodGet, "/api/v1/session", "getSession", a.handleSession},
+		{http.MethodGet, "/api/v1/admin/users", "listUsers", a.requireFullScope(a.adminRoute(a.handleListUsers))},
+		{http.MethodPost, "/api/v1/admin/users", "createUser", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCreateUser)))},
+		{http.MethodGet, "/api/v1/admin/users/{userId}", "getUser", a.requireFullScope(a.adminRoute(a.handleGetUser))},
+		{http.MethodPatch, "/api/v1/admin/users/{userId}/profile", "updateUserProfile", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleAdminUpdateProfile)))},
+		{http.MethodPut, "/api/v1/admin/users/{userId}/role", "setUserRole", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSetUserRole)))},
+		{http.MethodPut, "/api/v1/admin/users/{userId}/status", "setUserStatus", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSetUserStatus)))},
+		{http.MethodDelete, "/api/v1/admin/users/{userId}", "deleteUser", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleDeleteUser)))},
+		{http.MethodPost, "/api/v1/admin/users/{userId}/login-code", "issueUserLoginCode", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleIssueUserCode)))},
+		{http.MethodPut, "/api/v1/admin/users/{userId}/site-access/{siteId}", "setUserSiteAccess", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSetUserSiteAccess)))},
+		{http.MethodDelete, "/api/v1/admin/users/{userId}/sessions", "revokeUserSessions", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleRevokeUserSessions)))},
+		{http.MethodDelete, "/api/v1/admin/users/{userId}/sessions/{sessionId}", "revokeUserSession", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleRevokeUserSessions)))},
+		{http.MethodDelete, "/api/v1/admin/users/{userId}/passkeys/{passkeyId}", "revokeUserPasskey", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleRevokeUserPasskey)))},
+		{http.MethodGet, "/api/v1/admin/audit", "listAuditEvents", a.requireFullScope(a.adminRoute(a.handleListAudit))},
 		{http.MethodPost, "/api/v1/auth/logout", "logout", a.requireAuth(a.withCSRF(a.handleLogout))},
 
 		// Self-service account profile: the target is always the caller's own
@@ -262,7 +275,7 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 
 	mux := http.NewServeMux()
 	for _, route := range api.routes() {
-		mux.HandleFunc(route.Method+" "+route.Pattern, route.Handler)
+		mux.HandleFunc(route.Method+" "+route.Pattern, api.auditRoute(route))
 	}
 
 	var h http.Handler = mux
@@ -343,6 +356,7 @@ func (a *API) requireAuth(h authedHandler) http.HandlerFunc {
 			writeProblem(w, http.StatusUnauthorized, "unauthenticated", "The session is invalid or expired.")
 			return
 		}
+		setAuditActor(r, auth.User)
 		h(w, r, auth)
 	}
 }
@@ -435,11 +449,12 @@ func (a *API) clearAuthTxCookie(w http.ResponseWriter) {
 
 // userDTO is the public representation of an administrator.
 type userDTO struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
+	ID           string `json:"id"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"displayName"`
+	PlatformRole string `json:"platformRole"`
 }
 
 func toUserDTO(u model.User) userDTO {
-	return userDTO{ID: u.ID.String(), Username: u.Username, DisplayName: u.DisplayName}
+	return userDTO{ID: u.ID.String(), Username: u.Username, DisplayName: u.DisplayName, PlatformRole: u.PlatformRole}
 }

@@ -40,10 +40,10 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0013)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0014)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
-│   │   │                      # themes, builds, releases, media tasks, network entries
+│   │   │                      # themes, builds, releases, media tasks, network entries, audit
 │   │   ├── httpapi/           # management API: auth (codes, passkey binding,
 │   │   │                      # session), sites, content, albums, themes, builds,
 │   │   │                      # releases, edge status, UI hosting
@@ -62,7 +62,8 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── config.example.env     # environment template without real credentials
 │   └── go.mod / go.sum        # module github.com/skyrocketingHong/FuyaoManager/backend
 ├── frontend/                  # React + antd 6 console (own package-lock.json)
-│   ├── src/lib/api/           # typed client + generated schema.d.ts
+│   ├── src/lib/api/           # typed management/admin clients + generated schema.d.ts
+│   ├── src/lib/admin/         # cancellable queries, mutation guards, audit labels
 │   ├── src/lib/sites/         # site business modules (race-safe detail, editors)
 │   ├── src/lib/themes/        # theme-selection store (catalog, If-Match, 412)
 │   ├── src/lib/editing/       # EditableDoc state machine + unsaved-changes guard
@@ -73,11 +74,11 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/lib/session/       # session state: anonymous/restricted/full/error
 │   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
 │   │                          # TablePanel, DataTable, PageLoading, StatusTag,
-│   │                          # RouteErrorPage, layout/ (AppShell, TopBar,
+│   │                          # RouteErrorPage, admin/UserDrawer, layout/ (AppShell, TopBar,
 │   │                          # SidebarInfo/Actions/Nav/Foot)
 │   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance CSS (semantic
 │   │                          # variables)
-│   ├── src/pages/             # login, passkey binding, account and console appearance settings,
+│   ├── src/pages/             # login, passkey binding, users, logs, account and appearance settings,
 │   │                          # themes catalog, sites, per-site surfaces
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/
@@ -95,6 +96,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # reused console modules and boundaries
+    ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # account, audit and appearance workflows
     └── source-mapping/commit-map-from-fuyaohomepage.txt
 ```
 

@@ -46,7 +46,12 @@ const codeToKey: Record<string, MessageKey> = {
 	release_not_rollbackable: 'error.releaseNotRollbackable',
 	no_live_release: 'error.noLiveRelease',
 	deployment_disabled: 'error.deploymentDisabled',
-	username_taken: 'error.usernameTaken'
+	username_taken: 'error.usernameTaken',
+	last_admin: 'error.lastAdmin',
+	last_owner: 'error.lastOwner',
+	last_passkey: 'error.lastPasskey',
+	self_management: 'error.selfManagement',
+	account_conflict: 'error.accountConflict'
 };
 
 /** Returns the message key describing the error, or null for unknown errors. */

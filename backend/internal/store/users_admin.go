@@ -6,7 +6,6 @@ package store
 
 import (
 	"context"
-	"strings"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 )
@@ -64,13 +63,7 @@ func (s *UserStore) ListForAdmin(ctx context.Context, q UserAdminQuery) (UserAdm
 	if size < 1 || size > 200 {
 		size = 50
 	}
-	search := q.Search
-	if search != "" {
-		// Bound value construction (never SQL text): wrap the term into the
-		// LIKE pattern and escape the pattern metacharacters.
-		search = "%" + strings.NewReplacer("%", "\\%", "_", "\\_").Replace(search) + "%"
-	}
-	args := []any{q.IncludeDeleted, nilIfEmpty(q.PlatformRole), nilIfEmpty(q.Status), nilIfEmpty(search)}
+	args := []any{q.IncludeDeleted, nilIfEmpty(q.PlatformRole), nilIfEmpty(q.Status), literalPattern(q.Search)}
 
 	var total int
 	if err := s.pool.QueryRow(ctx, listAdminCountSQL, args...).Scan(&total); err != nil {
