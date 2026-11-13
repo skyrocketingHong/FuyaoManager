@@ -73,4 +73,6 @@ superseded where they conflict with this section.
   approved. Business publishing stays isolated; existing websites and data
   are retained. Deployment 0.2.0 (`c48c73c`) passed: the manager is active, the schema is 13, existing data and published-site pointers are unchanged, public API/assets return 404, and the Tailscale manager/API/assets return 200. Client-served artifacts match the build; existing websites remain 200 and the managed Caddy snippet is unchanged. The prior program and database backup are retained.
 
+- **M6 console patch 0.2.1**: fixed the site-configuration loading crash (React #310), added real router/header transition coverage and a recoverable error page, and reused the reference sidebar regions, top bar, icons and table density with layered antd CSS. Locale changes preserve drafts, saves install canonical values, and site-list caches isolate accounts. Frontend types passed; all 142 tests and the process exit status passed. See `UI_REFERENCE.md` for provenance. Visual acceptance remains with the user.
+
 - **Manual acceptance**: complete the real authenticator binding/sign-in and visual review, and confirm browser behavior after disconnecting and reconnecting Tailscale. Production deployment and program cleanup are recorded in M5 above.

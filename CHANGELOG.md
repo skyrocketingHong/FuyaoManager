@@ -7,6 +7,15 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.2.1 - 2026-11-13
+
+### Fixed
+
+- Site-configuration loading no longer changes the hook count and crashes with React #310. Header hooks remain unconditional; failed loads and route errors offer recovery actions.
+- Layered antd styles restore the reference console's shared CSS precedence. Sidebar regions, top bar, Lucide icons and compact tables reuse the reference implementation; the platform-home action no longer duplicates a menu entry.
+- Locale changes update page text without losing drafts. Configuration saves lock editing and install canonical server values. Site-list caches reject previous-account responses.
+- Settings-view tests unmount explicitly, canceling delayed antd updates before the test environment closes.
+
 ## 0.2.0 - 2026-11-13
 
 ### Added
