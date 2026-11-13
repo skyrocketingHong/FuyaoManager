@@ -69,7 +69,11 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 }
 
 // Create inserts a site with initial settings and the owner membership in one
-// transaction. The row starts in the provisioning state.
+// transaction. The row starts in the provisioning state. The transaction
+// holds the account-lifecycle lock and re-checks the owner's status, so a
+// site can never be created under an owner that is being deactivated
+// concurrently — ownership writes share this lock domain, and later
+// membership edits must take it too.
 func (s *SiteStore) Create(ctx context.Context, params NewSiteParams, owner uuid.UUID) (SiteRecord, error) {
 	id := newUUID()
 	visibility := params.Visibility
@@ -81,6 +85,20 @@ func (s *SiteStore) Create(ctx context.Context, params NewSiteParams, owner uuid
 		return SiteRecord{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, AccountLifecycleLockKey); err != nil {
+		return SiteRecord{}, err
+	}
+	var ownerStatus string
+	if err := tx.QueryRow(ctx, `SELECT status FROM users WHERE id = $1`, owner).Scan(&ownerStatus); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return SiteRecord{}, ErrNotFound
+		}
+		return SiteRecord{}, err
+	}
+	if ownerStatus != model.UserStatusActive {
+		return SiteRecord{}, ErrConflict
+	}
 
 	if _, err := tx.Exec(ctx,
 		`INSERT INTO sites (id, slug, visibility) VALUES ($1, $2, $3)`, id, params.Slug, visibility); err != nil {

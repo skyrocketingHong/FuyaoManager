@@ -3,9 +3,11 @@ package store
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
@@ -26,7 +28,11 @@ func (s *SessionStore) Create(ctx context.Context, userID uuid.UUID, ttl time.Du
 }
 
 // CreateWithKind issues a new session of the given kind (full or restricted)
-// and returns the raw cookie token and CSRF token exactly once.
+// and returns the raw cookie token and CSRF token exactly once. The insert is
+// guarded by a locking re-read of the account: a session can only be minted
+// while the account is active at insert time, so a deactivation that ran
+// concurrently can never be handed a fresh cookie (the FOR SHARE waits out an
+// in-flight status change and re-reads the committed state).
 func (s *SessionStore) CreateWithKind(ctx context.Context, userID uuid.UUID, kind string, ttl time.Duration) (cookieToken string, csrf string, expiresAt time.Time, err error) {
 	// The stored digest is computed over the exact text presented in the
 	// cookie, so lookup agrees byte for byte. Both values are freshly
@@ -36,10 +42,14 @@ func (s *SessionStore) CreateWithKind(ctx context.Context, userID uuid.UUID, kin
 	id := newUUID()
 	err = s.pool.QueryRow(ctx,
 		`INSERT INTO sessions (id, user_id, kind, token_hash, csrf_token, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, now() + make_interval(secs => $6))
+		 SELECT $1, $2, $3, $4, $5, now() + make_interval(secs => $6)
+		 WHERE EXISTS (SELECT 1 FROM users u WHERE u.id = $2 AND u.status = 'active' FOR SHARE)
 		 RETURNING expires_at`,
 		id, userID, kind, sha256Sum([]byte(cookieToken)), csrf, ttl.Seconds(),
 	).Scan(&expiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", time.Time{}, ErrConflict
+	}
 	if err != nil {
 		return "", "", time.Time{}, err
 	}

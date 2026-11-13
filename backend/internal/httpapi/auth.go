@@ -263,6 +263,11 @@ func (a *API) handleLoginVerify(w http.ResponseWriter, r *http.Request) {
 // both prove a credential registered under the current relying party.
 func (a *API) finishLogin(w http.ResponseWriter, r *http.Request, user model.User) {
 	token, csrf, _, err := a.store.Sessions.Create(r.Context(), user.ID, a.cfg.SessionTTL)
+	if errors.Is(err, store.ErrConflict) {
+		a.clearAuthTxCookie(w)
+		writeProblem(w, http.StatusUnauthorized, "credential_rejected", "The passkey login response failed verification.")
+		return
+	}
 	if err != nil {
 		a.logger.Error("create session", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to complete authentication.")

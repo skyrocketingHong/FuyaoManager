@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"sync"
@@ -184,14 +185,21 @@ func TestAuthCodePurposeSeparation(t *testing.T) {
 		t.Fatal("login code for unknown user should fail")
 	}
 
-	// Pending user (never activated) with a directly inserted login code.
+	// The issuer rejects a login code for a pending account. A stored code
+	// from an older issuer must still be rejected at exchange time.
 	pending, err := env.store.Users.Create(ctx, "pendinguser", "Pending")
 	if err != nil {
 		t.Fatalf("create pending user: %v", err)
 	}
-	loginCode, _, _, err := env.store.AuthCodes.Create(ctx, pending.ID, store.AuthCodePurposeLogin, time.Minute)
+	if _, _, _, err := env.store.AuthCodes.Create(ctx, pending.ID, store.AuthCodePurposeLogin, time.Minute); !errors.Is(err, store.ErrCodePurpose) {
+		t.Fatalf("issue pending-user login code: got %v, want ErrCodePurpose", err)
+	}
+	loginCode, codeID, _, err := env.store.AuthCodes.Create(ctx, pending.ID, store.AuthCodePurposeInit, time.Minute)
 	if err != nil {
-		t.Fatalf("insert login code for pending user: %v", err)
+		t.Fatalf("seed legacy code: %v", err)
+	}
+	if _, err := env.pool.Exec(ctx, `UPDATE auth_codes SET purpose = 'login' WHERE id = $1`, codeID); err != nil {
+		t.Fatalf("arrange legacy purpose mismatch: %v", err)
 	}
 	status, _, problem := exchangeCode(env.newClient(), loginCode)
 	if status != 409 || problem.Code != "code_purpose_mismatch" {
@@ -199,7 +207,10 @@ func TestAuthCodePurposeSeparation(t *testing.T) {
 	}
 
 	// Once an active administrator exists, init-admin is closed.
-	env.createUserSession("rootadmin")
+	admin, _, _ := env.createUserSession("rootadmin")
+	if _, _, _, err := env.store.AuthCodes.Create(ctx, admin.ID, store.AuthCodePurposeInit, time.Minute); !errors.Is(err, store.ErrCodePurpose) {
+		t.Fatalf("issue active-user initialization code: got %v, want ErrCodePurpose", err)
+	}
 	if _, _, err := env.store.InitAdmin(ctx, "secondadmin", "Second", time.Minute); err == nil {
 		t.Fatal("init-admin after an active administrator should fail")
 	}

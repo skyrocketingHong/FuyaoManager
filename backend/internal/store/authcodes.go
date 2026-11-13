@@ -53,17 +53,30 @@ type AuthCodeStore struct {
 
 // Create issues a one-time code for the user and purpose, returning the raw
 // code exactly once. The code is formatted XXXX-XXXX-XXXX-XXXX (80 bits of
-// entropy), the same format as enrollment permits.
+// entropy), the same format as enrollment permits. The insert is guarded by
+// a locking re-read of the account — login codes only for active accounts,
+// init codes only for pending ones — so a deactivation that ran concurrently
+// can never be handed a fresh code (the FOR SHARE waits out an in-flight
+// status change and re-reads the committed state).
 func (s *AuthCodeStore) Create(ctx context.Context, userID uuid.UUID, purpose string, ttl time.Duration) (code string, id uuid.UUID, expiresAt time.Time, err error) {
 	raw := randomBytes(10)
 	code = formatCode(base32.StdEncoding.EncodeToString(raw))
 	id = newUUID()
 	err = s.pool.QueryRow(ctx,
 		`INSERT INTO auth_codes (id, user_id, purpose, code_hash, expires_at)
-		 VALUES ($1, $2, $3, $4, now() + make_interval(secs => $5))
+		 SELECT $1, $2, $3, $4, now() + make_interval(secs => $5)
+		 WHERE EXISTS (
+		   SELECT 1 FROM users u
+		   WHERE u.id = $2
+		     AND u.status = (CASE WHEN $3 = 'login' THEN 'active' ELSE 'pending' END)
+		   FOR SHARE
+		 )
 		 RETURNING expires_at`,
 		id, userID, purpose, sha256Sum([]byte(code)), ttl.Seconds(),
 	).Scan(&expiresAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", uuid.Nil, time.Time{}, ErrCodePurpose
+	}
 	if err != nil {
 		return "", uuid.Nil, time.Time{}, err
 	}
