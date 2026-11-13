@@ -133,7 +133,7 @@ func (s *Store) SaveFootprints(siteID uuid.UUID, doc FootprintsDoc, expectedDige
 	var saved FootprintsDoc
 	var digest string
 	err := s.withFileLock(siteID, "data", "data/footprints.yaml", func() error {
-		_, currentDigest, err := s.ReadFile(siteID, RootContent, "data/footprints.yaml")
+		existing, currentDigest, err := s.ReadFile(siteID, RootContent, "data/footprints.yaml")
 		if errors.Is(err, ErrNotFound) {
 			currentDigest = Digest(nil)
 		} else if err != nil {
@@ -142,7 +142,7 @@ func (s *Store) SaveFootprints(siteID uuid.UUID, doc FootprintsDoc, expectedDige
 		if expectedDigest != "" && currentDigest != expectedDigest {
 			return ErrConflict
 		}
-		out, err := yaml.Marshal(&doc)
+		out, err := marshalFootprints(&doc, existing)
 		if err != nil {
 			return err
 		}

@@ -1,0 +1,39 @@
+schemaVersion: 1
+coordinateReference:
+  system: GCJ-02
+  revision: preserved
+cities:
+  - id: legacy-city
+    name: Legacy City
+    coordinates:
+      lng: 116.4
+      lat: 39.9
+      accuracy: 12
+    type: city
+    adcode: "110000"
+    visitDate: "20240101"
+    geometry:
+      type: Polygon
+      coordinates:
+        - [[116.3, 39.8], [116.5, 39.8], [116.5, 40.0], [116.3, 39.8]]
+    places:
+      - id: first-place
+        name: Legacy Place
+        coordinates: {lng: 116.41, lat: 39.91, altitude: 25}
+        type: place
+        visitDate: "20240101"
+        parentCityId: legacy-city
+        geometry: {type: Point, coordinates: [116.41, 39.91]}
+        providerMetadata: {stableCode: first, rank: 1}
+      - id: second-place
+        name: {zh: 第二地点, en: Second Place, ja: Second}
+        coordinates: {lng: 116.42, lat: 39.92}
+        type: place
+        visitDate: "20240101"
+        providerMetadata: {stableCode: second, rank: 2}
+  - id: translated-city
+    name: {zh: 示例城市, en: Example City, fr: Example}
+    coordinates: {lng: 117.2, lat: 39.1}
+    type: city
+    visitDate: "20240202"
+    customBoundary: {kind: administrative, points: [[117.1, 39.0], [117.3, 39.2]]}
