@@ -1,5 +1,7 @@
 {
 	"app.title": "FuyaoManager",
+	"app.pageError": "页面暂时无法显示",
+	"app.reloadPage": "重新加载",
 	"app.localeSwitch": "EN",
 	"app.theme.light": "日间",
 	"app.theme.dark": "夜间",

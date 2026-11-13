@@ -112,7 +112,7 @@ export default function SiteConfigPage() {
 				navigate('/login');
 				return;
 			}
-			setErrorKey(key);
+			setErrorKey(key ?? 'error.generic');
 		}
 	}, [siteId, navigate]);
 
@@ -242,10 +242,6 @@ export default function SiteConfigPage() {
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
 	useUnsavedGuard(editable && (dirty || linksDirty || securityInput !== ''));
 
-	if (form === null) {
-		return <PageLoading spec="page" label={t('common.loading')} />;
-	}
-
 	const headerActions = (
 		<Space size={8}>
 			{conflict ? (
@@ -261,7 +257,25 @@ export default function SiteConfigPage() {
 			</Button>
 		</Space>
 	);
-	const headerActive = usePageHeader({ actions: headerActions });
+	const headerActive = usePageHeader({ actions: headerActions }, form !== null);
+
+	if (form === null) {
+		return (
+			<div className="page-stack">
+				{contextHolder}
+				{errorKey ? (
+					<Alert
+						type="error"
+						showIcon
+						title={t(errorKey)}
+						action={<Button onClick={() => void load()}>{t('session.retry')}</Button>}
+					/>
+				) : (
+					<PageLoading spec="page" label={t('common.loading')} />
+				)}
+			</div>
+		);
+	}
 
 	return (
 		<div className="page-stack">

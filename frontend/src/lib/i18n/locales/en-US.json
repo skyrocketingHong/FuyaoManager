@@ -1,5 +1,7 @@
 {
 	"app.title": "FuyaoManager",
+	"app.pageError": "This page could not be displayed",
+	"app.reloadPage": "Reload page",
 	"app.localeSwitch": "中文",
 	"app.theme.light": "Light",
 	"app.theme.dark": "Dark",
