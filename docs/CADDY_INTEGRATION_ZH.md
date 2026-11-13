@@ -33,3 +33,5 @@ HTTPS管理会话和认证事务使用`__Host-` Cookie，Secure、HttpOnly、Pat
 原样抽出完整 host 块，在主文件原位置改为导入受保护源文件的绝对路径，保留共享 snippet 和其他站点。不可变基础模板只替换已开放的 `__FUYAO_COMPRESSION__`、`__FUYAO_CACHE_CONTROL__`、`__FUYAO_SECURITY_HEADERS__` 槽位；`preserve` 保存各槽位原始片段，全部选择保留时须与原源文件逐字节一致。主模板仅替换唯一 `__FUYAO_SITE_SOURCE__`。切换前比较完整 adapter 配置，仅批准受保护配置文件新增的自动 hide 路径，其余任何差异均拒绝。
 
 Caddy 账号需要读取和遍历在线源及校验工作文件，无需写权限；登记、模板和 `/var/lib/fuyao-caddy-control/` 不对应用账号开放。控制程序固定使用 `/run/caddy/admin.sock`，适配命令使用运行中 Caddy 的环境，避免丢失解析期秘密。完成上述校验后才启用独立源配置开关。主模板或其他导入配置发生变化会使已有校验计划失效，可能需要运维核对。
+
+sudo helper 继承应用服务的文件系统 namespace。使用 `ProtectSystem=full` 时，只将 root 拥有的源目录纳入精确 `ReadWritePaths`，Unix 权限仍须拒绝应用账号直接写入；模板和二进制继续只读。root 终端成功不能代替服务上下文验证，须通过真实认证管理 API 执行部署闭环。

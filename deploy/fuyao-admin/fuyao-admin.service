@@ -17,7 +17,7 @@ RestartSec=3
 MemoryMax=1750M
 ProtectSystem=full
 ProtectHome=yes
-ReadWritePaths=/srv/fuyao-admin/data /etc/caddy/fuyao-admin
+ReadWritePaths=/srv/fuyao-admin/data -/etc/caddy/fuyao-managed
 PrivateTmp=yes
 
 [Install]
