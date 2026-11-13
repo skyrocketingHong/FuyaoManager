@@ -17,6 +17,7 @@ import (
 	webauthnlib "github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/caddymanage"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
@@ -35,24 +36,26 @@ const (
 
 // Config carries the HTTP-facing runtime configuration.
 type Config struct {
-	CaddyReadCmd     []string
-	OpenAPIJSON      []byte
-	RPID             string
-	RPOrigins        []string
-	CookieSecure     bool
-	SessionTTL       time.Duration
-	ChallengeTTL     time.Duration
-	RegistrationTTL  time.Duration
-	ThemeContracts   ThemeConfigValidator
-	BuildEnqueuer    BuildEnqueuer
-	Previews         PreviewIssuer
-	Publisher        Publisher
-	PublishedOrigins PublishedOrigins
-	Provisioner      SiteProvisioner
-	Edge             EdgeManager
-	Content          ContentStore
-	MediaTasks       *store.MediaTaskStore
-	ReleasesRoot     string
+	CaddyReadCmd           []string
+	CaddyControl           func(context.Context, caddymanage.Request) (caddymanage.Result, error)
+	CaddyManagementEnabled bool
+	OpenAPIJSON            []byte
+	RPID                   string
+	RPOrigins              []string
+	CookieSecure           bool
+	SessionTTL             time.Duration
+	ChallengeTTL           time.Duration
+	RegistrationTTL        time.Duration
+	ThemeContracts         ThemeConfigValidator
+	BuildEnqueuer          BuildEnqueuer
+	Previews               PreviewIssuer
+	Publisher              Publisher
+	PublishedOrigins       PublishedOrigins
+	Provisioner            SiteProvisioner
+	Edge                   EdgeManager
+	Content                ContentStore
+	MediaTasks             *store.MediaTaskStore
+	ReleasesRoot           string
 	// DeploymentEnabled gates the publish, rollback, visibility, and edge
 	// reapply APIs: false (the run-isolation default) answers them with
 	// 503 deployment_disabled, while reads keep working.
@@ -149,6 +152,11 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/openapi", "getOpenAPI", a.requireFullScope(a.handleOpenAPI)},
 		{http.MethodPost, "/api/v1/admin/caddy/sync", "syncCaddySites", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSyncCaddy)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/caddy", "getCaddySite", a.requireFullScope(a.handleGetCaddySite)},
+		{http.MethodPost, "/api/v1/sites/{siteId}/caddy/convert", "convertCaddySite", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCaddyConvert)))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/caddy/draft", "saveCaddyDraft", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCaddyDraft)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/caddy/validate", "validateCaddyDraft", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCaddyValidate)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/caddy/deploy", "deployCaddyDraft", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCaddyDeploy)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/caddy/rollback", "rollbackCaddyConfiguration", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleCaddyRollback)))},
 		// WebAuthn ceremonies (no prior session; protected by permit,
 		// challenge, and Origin checks). On IP-literal deployments the RP ID
 		// cannot be a domain string, so the relying party is unavailable and
@@ -389,7 +397,8 @@ func (a *API) requireFullScope(h authedHandler) http.HandlerFunc {
 				writeSiteLookupError(w, err)
 				return
 			}
-			if site.Kind != "theme" && r.URL.Path != "/api/v1/sites/"+id.String() && r.URL.Path != "/api/v1/sites/"+id.String()+"/caddy" && r.URL.Path != "/api/v1/sites/"+id.String()+"/settings" {
+			base := "/api/v1/sites/" + id.String()
+			if site.Kind != "theme" && r.URL.Path != base && r.URL.Path != base+"/caddy" && !strings.HasPrefix(r.URL.Path, base+"/caddy/") && r.URL.Path != base+"/settings" {
 				writeProblem(w, 409, "site_kind_mismatch", "This route is only available for theme-managed sites.")
 				return
 			}

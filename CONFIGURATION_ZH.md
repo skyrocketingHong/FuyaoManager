@@ -43,6 +43,8 @@
 | `FUYAO_ADMIN_PORT_MIN` / `FUYAO_ADMIN_PORT_MAX` | `20000` / `20100`                           | 站点入口与预览的平台分配端口范围。                                                            |
 | `FUYAO_ADMIN_DEPLOYMENT_ENABLED`                | `false`                                     | 默认运行隔离：建站、内容、构建与预览可用，但不启动发布服务器、不应用 Caddy 片段，发布/回滚/可见性/边缘重应用返回 `503 deployment_disabled`。历史发布仍可读。 |
 | `FUYAO_ADMIN_EDGE_SNIPPET_DIR`                  | 空                                          | 启用受管 Caddy 片段（由数据库状态渲染）；发布开关关闭时不生效。                                |
+| `FUYAO_ADMIN_CADDY_CONTROL_CMD` | 空 | 运维固定的逗号分隔 argv，调用 root 拥有的源配置能力，经 stdin 接收受限 JSON；HTTP 不可选择命令或路径。 |
+| `FUYAO_ADMIN_CADDY_MANAGEMENT_ENABLED` | `false` | 仅启用已登记静态网站的源配置校验后部署和回退，与主题发布流水线分开控制。 |
 | `FUYAO_ADMIN_EDGE_APPLY_CMD`                    | `sudo -n /usr/local/sbin/fuyao-caddy-apply` | 运维控制的校验 + reload 命令（固定参数）。                                                    |
 | `FUYAO_ADMIN_EDGE_PRIVATE_BIND`                 | `127.0.0.1`                                 | 私有站点入口的精确绑定地址。                                                                  |
 | `FUYAO_ADMIN_EDGE_PUBLIC_BIND`                  | 空                                          | 公开入口绑定（空 = 全接口）。                                                                 |

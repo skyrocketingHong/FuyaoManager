@@ -31,10 +31,12 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── cmd/fuyao-admin/       # CLI：migrate / serve / init-admin / login-code /
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
+│   ├── cmd/fuyao-caddy-control/ # 单独安装、root 拥有的源配置能力
+│   ├── cmd/fuyao-caddy-inventory/ # 在特权边界内生成安全清单
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0016）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0017）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
 │   │   │                      # 主题、构建、发布、媒体任务、网络入口、审计
@@ -51,6 +53,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   │   ├── mediatask/         # 经主题 Node 脚本的相册索引
 │   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
 │   │   ├── caddyinventory/     # fixed read capability runner
+│   │   ├── caddymanage/        # 有限源配置、校验计划与受控应用
 │   │   ├── edge/              # 受管 Caddy 片段渲染与应用
 │   │   ├── wa/                # WebAuthn 桥（兼容路径）
 │   │   └── testauth/          # 仅测试用的合成认证器

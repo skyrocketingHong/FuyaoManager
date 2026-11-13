@@ -28,13 +28,7 @@ func (a *API) handleGetCaddySite(w http.ResponseWriter, r *http.Request, auth st
 	if !ok {
 		return
 	}
-	item, err := a.store.GetCaddySite(r.Context(), id, auth.User.ID)
-	if err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, 200, item)
+	a.writeCaddyState(w, r, auth, id)
 }
 func (a *API) handleOpenAPI(w http.ResponseWriter, r *http.Request, _ store.AuthSession) {
 	if len(a.cfg.OpenAPIJSON) == 0 {

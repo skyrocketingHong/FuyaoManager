@@ -40,6 +40,7 @@ import SidebarNav from './SidebarNav';
 import SidebarInfo from './SidebarInfo';
 import SidebarFoot from './SidebarFoot';
 import TopBar from './TopBar';
+import CaddyIcon from '../CaddyIcon';
 
 type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
@@ -67,7 +68,12 @@ function menuEntry(itemId: string, siteId: string | null): MenuItem {
 	return {
 		key: itemPath(item, siteId),
 		label: t(item.titleKey),
-		icon: Icon ? <Icon size={15} strokeWidth={1.8} /> : undefined
+		icon:
+			item.id === 'site.caddy' ? (
+				<CaddyIcon />
+			) : Icon ? (
+				<Icon size={15} strokeWidth={1.8} />
+			) : undefined
 	};
 }
 

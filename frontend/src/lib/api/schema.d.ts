@@ -81,6 +81,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/caddy/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adopt an operator-approved source configuration without changing live traffic */
+        post: operations["convertCaddySite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/caddy/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Save a bounded configuration draft without applying it */
+        put: operations["saveCaddyDraft"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/caddy/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate the exact saved revision through the fixed source capability */
+        post: operations["validateCaddyDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/caddy/deploy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply an approved validated revision and restore the last good file on failure */
+        post: operations["deployCaddyDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/caddy/rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate and reapply a previously applied configuration as a new revision */
+        post: operations["rollbackCaddyConfiguration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users": {
         parameters: {
             query?: never;
@@ -1352,6 +1452,50 @@ export interface components {
             present: boolean;
             /** Format: date-time */
             syncedAt: string;
+            /** @enum {string} */
+            managementMode: "platform" | "caddy";
+            management?: components["schemas"]["CaddyManagement"] | null;
+            capabilities: {
+                convert: boolean;
+                edit: boolean;
+                validate: boolean;
+                deploy: boolean;
+            };
+            unavailableReason?: string;
+            settingsCapabilities?: {
+                compression: boolean;
+                cacheControl: boolean;
+                securityHeaders: boolean;
+            };
+        };
+        CaddySettings: {
+            /** @enum {string} */
+            compression: "preserve" | "none" | "gzip" | "zstd" | "gzip_zstd";
+            /** @enum {string} */
+            cacheControl: "preserve" | "no_store";
+            /** @enum {string} */
+            securityHeaders: "preserve" | "baseline";
+        };
+        CaddyManagement: {
+            /** Format: int64 */
+            revision: number;
+            /** Format: int64 */
+            appliedRevision: number | null;
+            /** Format: int64 */
+            validatedRevision: number | null;
+            sourceDigest: string;
+            settings: components["schemas"]["CaddySettings"];
+            /** Format: date-time */
+            updatedAt: string;
+            history: {
+                /** Format: int64 */
+                revision: number;
+                settings: components["schemas"]["CaddySettings"];
+                /** @enum {string} */
+                status: "draft" | "validated" | "applied";
+                /** Format: date-time */
+                createdAt: string;
+            }[];
         };
         AdminProfileInput: {
             username: string;
@@ -1947,6 +2091,11 @@ export interface components {
         };
         Site: {
             /**
+             * @description Configuration ownership; separate from the content kind.
+             * @enum {string}
+             */
+            managementMode?: "platform" | "caddy";
+            /**
              * @description Determines the available workspace; legacy omitted values mean theme.
              * @enum {string}
              */
@@ -2166,6 +2315,25 @@ export interface components {
         };
     };
     responses: {
+        /** @description The exact revision ETag no longer matches (`precondition_failed`). */
+        PreconditionFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Current configuration ownership, draft and exact revision ETag. */
+        CaddyState: {
+            headers: {
+                ETag?: string;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["CaddySite"];
+            };
+        };
         /** @description Saved account metadata. */
         AdminUser: {
             headers: {
@@ -2417,6 +2585,154 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    convertCaddySite: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CaddyState"];
+            412: components["responses"]["PreconditionFailed"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    saveCaddyDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    settings: components["schemas"]["CaddySettings"];
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["CaddyState"];
+            412: components["responses"]["PreconditionFailed"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    validateCaddyDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CaddyState"];
+            412: components["responses"]["PreconditionFailed"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deployCaddyDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: components["responses"]["CaddyState"];
+            412: components["responses"]["PreconditionFailed"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    rollbackCaddyConfiguration: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                };
+            };
+        };
+        responses: {
+            200: components["responses"]["CaddyState"];
+            412: components["responses"]["PreconditionFailed"];
             default: components["responses"]["Problem"];
         };
     };

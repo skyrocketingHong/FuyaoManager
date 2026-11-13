@@ -106,7 +106,8 @@ type Config struct {
 	// the edge is never reconciled or applied, and the publish, rollback,
 	// visibility, and edge-reapply APIs answer 503 deployment_disabled.
 	// Historical release data stays readable.
-	DeploymentEnabled bool
+	DeploymentEnabled      bool
+	CaddyManagementEnabled bool
 }
 
 // Load reads the environment and validates it.
@@ -186,6 +187,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	cfg.DeploymentEnabled = deploymentEnabled
+	cfg.CaddyManagementEnabled, err = envBool("FUYAO_ADMIN_CADDY_MANAGEMENT_ENABLED")
+	if err != nil {
+		return Config{}, err
+	}
 
 	if err := cfg.validate(); err != nil {
 		return Config{}, err

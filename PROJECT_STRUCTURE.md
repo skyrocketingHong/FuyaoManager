@@ -37,10 +37,12 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── cmd/fuyao-admin/       # CLI: migrate / serve / init-admin / login-code /
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
+│   ├── cmd/fuyao-caddy-control/ # separately installed root-owned source capability
+│   ├── cmd/fuyao-caddy-inventory/ # sanitizes adapter output before the privilege boundary
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0016)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0017)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries, audit
@@ -58,6 +60,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   │   ├── mediatask/         # album indexing through the theme's Node script
 │   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
 │   │   ├── caddyinventory/     # fixed read capability runner
+│   │   ├── caddymanage/        # finite source settings, validation plans and safe apply
 │   │   ├── edge/              # managed Caddy snippet rendering/applying
 │   │   ├── wa/                # WebAuthn bridge (compatibility path)
 │   │   └── testauth/          # test-only synthetic authenticator

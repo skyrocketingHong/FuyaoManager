@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+# This root-owned wrapper and the standalone binary must never be placed
+# under the service-writable current/release tree. No argv is accepted.
+[ "$#" -eq 0 ] || exit 64
+exec /usr/local/libexec/fuyao-caddy-control

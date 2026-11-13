@@ -22,15 +22,18 @@ type SiteStore struct {
 
 // SiteRecord is a site joined with its settings and the caller's role.
 type SiteRecord struct {
-	Site     model.Site
-	Settings model.SiteSettings
-	Role     string
-	Kind     string
+	Site           model.Site
+	Settings       model.SiteSettings
+	Role           string
+	Kind           string
+	ManagementMode string
 }
 
 const siteJoinColumns = `si.id, si.slug, si.visibility, si.provision_state, si.provision_failure, si.created_at, si.updated_at,
 	ss.site_id, ss.name, ss.description, ss.default_locale, ss.revision, ss.updated_at,
-	COALESCE((SELECT kind FROM caddy_sites c WHERE c.site_id=si.id),'theme')`
+	COALESCE((SELECT kind FROM caddy_sites c WHERE c.site_id=si.id),'theme'),
+ CASE WHEN EXISTS(SELECT 1 FROM caddy_sites c WHERE c.site_id=si.id)
+ AND NOT EXISTS(SELECT 1 FROM caddy_management cm WHERE cm.site_id=si.id) THEN 'caddy' ELSE 'platform' END`
 
 // NewSiteParams carries the fields of a site creation request. Visibility
 // defaults to private; provisionState starts as provisioning until the
@@ -52,11 +55,11 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
 			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt,
-			&rec.Kind, role)
+			&rec.Kind, &rec.ManagementMode, role)
 	} else {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
-			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt, &rec.Kind)
+			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt, &rec.Kind, &rec.ManagementMode)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SiteRecord{}, ErrNotFound
@@ -181,7 +184,7 @@ func (s *SiteStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]SiteRe
 			&rec.Site.ProvisionFailure, &rec.Site.CreatedAt, &rec.Site.UpdatedAt,
 			&rec.Settings.SiteID, &rec.Settings.Name, &rec.Settings.Description,
 			&rec.Settings.DefaultLocale, &rec.Settings.Revision, &rec.Settings.UpdatedAt,
-			&rec.Kind, &rec.Role); err != nil {
+			&rec.Kind, &rec.ManagementMode, &rec.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, rec)

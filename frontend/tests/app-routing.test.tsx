@@ -6,7 +6,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 
@@ -147,10 +147,20 @@ beforeEach(() => {
 	mockSiteListState = { status: 'ready', sites: [siteAbc], errorKey: null };
 	getSite.mockResolvedValue(siteAbc);
 	window.history.pushState({}, '', '/');
+	const NativeRequest = globalThis.Request;
+	vi.stubGlobal(
+		'Request',
+		class extends NativeRequest {
+			constructor(input: RequestInfo | URL, init?: RequestInit) {
+				super(input, init ? { ...init, signal: undefined } : init);
+			}
+		}
+	);
 });
 
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 });
 
 function authenticated() {
@@ -164,11 +174,10 @@ function authenticated() {
 }
 
 function renderAt(path: string) {
+	const router = createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: [path] });
 	return render(
 		<ConfigProvider>
-			<MemoryRouter initialEntries={[path]}>
-				<App />
-			</MemoryRouter>
+			<RouterProvider router={router} />
 		</ConfigProvider>
 	);
 }
@@ -375,6 +384,9 @@ describe('site kind workspaces', () => {
 				data: {
 					siteId: site.siteId,
 					kind,
+					managementMode: 'caddy',
+					capabilities: { convert: false, edit: false, validate: false, deploy: false },
+					unavailableReason: 'operator_registration_required',
 					present: true,
 					syncedAt: site.updatedAt,
 					definition: {
@@ -404,7 +416,7 @@ describe('site kind workspaces', () => {
 			])
 				expect(menu.textContent).not.toContain(zh[key as keyof typeof zh]);
 			expect(menu.textContent).toContain(zh['nav.caddy']);
-			expect(screen.getByText(zh['caddy.protected'])).toBeDefined();
+			expect(screen.getByText(zh['caddy.operatorRegistration'])).toBeDefined();
 			expect(screen.queryByText('page-config')).toBeNull();
 			expect(screen.queryByText('page-theme')).toBeNull();
 			if (kind === 'redirect')

@@ -26,6 +26,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/caddymanage"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/config"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
@@ -398,28 +399,42 @@ func runServe(ctx context.Context) error {
 			}
 		}
 	}
+	var control func(context.Context, caddymanage.Request) (caddymanage.Result, error)
+	var controlCommand []string
+	for _, part := range strings.Split(os.Getenv("FUYAO_ADMIN_CADDY_CONTROL_CMD"), ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			controlCommand = append(controlCommand, part)
+		}
+	}
+	if len(controlCommand) > 0 {
+		control = func(ctx context.Context, request caddymanage.Request) (caddymanage.Result, error) {
+			return caddymanage.Execute(ctx, controlCommand, request)
+		}
+	}
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
-		CaddyReadCmd:      caddyCommand,
-		OpenAPIJSON:       contractJSON,
-		RPID:              cfg.RPID,
-		RPOrigins:         cfg.RPOrigins,
-		CookieSecure:      cfg.CookieSecure,
-		SessionTTL:        cfg.SessionTTL,
-		ChallengeTTL:      cfg.ChallengeTTL,
-		RegistrationTTL:   cfg.RegistrationTTL,
-		ThemeContracts:    themeContracts,
-		BuildEnqueuer:     runner,
-		Previews:          previews,
-		Publisher:         publisher,
-		PublishedOrigins:  publishedOrigins,
-		Provisioner:       provisioner,
-		Edge:              edgeMgr,
-		Content:           contentStore,
-		MediaTasks:        st.MediaTasks,
-		ReleasesRoot:      releasesRoot,
-		DeploymentEnabled: cfg.DeploymentEnabled,
-		PortMin:           cfg.PortMin,
-		PortMax:           cfg.PortMax,
+		CaddyReadCmd:           caddyCommand,
+		CaddyControl:           control,
+		CaddyManagementEnabled: cfg.CaddyManagementEnabled,
+		OpenAPIJSON:            contractJSON,
+		RPID:                   cfg.RPID,
+		RPOrigins:              cfg.RPOrigins,
+		CookieSecure:           cfg.CookieSecure,
+		SessionTTL:             cfg.SessionTTL,
+		ChallengeTTL:           cfg.ChallengeTTL,
+		RegistrationTTL:        cfg.RegistrationTTL,
+		ThemeContracts:         themeContracts,
+		BuildEnqueuer:          runner,
+		Previews:               previews,
+		Publisher:              publisher,
+		PublishedOrigins:       publishedOrigins,
+		Provisioner:            provisioner,
+		Edge:                   edgeMgr,
+		Content:                contentStore,
+		MediaTasks:             st.MediaTasks,
+		ReleasesRoot:           releasesRoot,
+		DeploymentEnabled:      cfg.DeploymentEnabled,
+		PortMin:                cfg.PortMin,
+		PortMax:                cfg.PortMax,
 	}, logger)
 
 	if cfg.AdminUIDir != "" {

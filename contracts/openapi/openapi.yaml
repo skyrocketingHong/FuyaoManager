@@ -151,6 +151,101 @@ paths:
               schema: { $ref: '#/components/schemas/CaddySite' }
         '404': { $ref: '#/components/responses/NotFound' }
         default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy/convert:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    post:
+      operationId: convertCaddySite
+      tags: [Sites]
+      summary: Adopt an operator-approved source configuration without changing live traffic
+      x-required-platform-role: admin
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': { $ref: '#/components/responses/CaddyState' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy/draft:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    put:
+      operationId: saveCaddyDraft
+      tags: [Sites]
+      summary: Save a bounded configuration draft without applying it
+      x-required-platform-role: admin
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [settings]
+              properties:
+                settings: { $ref: '#/components/schemas/CaddySettings' }
+      responses:
+        '200': { $ref: '#/components/responses/CaddyState' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy/validate:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    post:
+      operationId: validateCaddyDraft
+      tags: [Sites]
+      summary: Validate the exact saved revision through the fixed source capability
+      x-required-platform-role: admin
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': { $ref: '#/components/responses/CaddyState' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy/deploy:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    post:
+      operationId: deployCaddyDraft
+      tags: [Sites]
+      summary: Apply an approved validated revision and restore the last good file on failure
+      x-required-platform-role: admin
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200': { $ref: '#/components/responses/CaddyState' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy/rollback:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    post:
+      operationId: rollbackCaddyConfiguration
+      tags: [Sites]
+      summary: Validate and reapply a previously applied configuration as a new revision
+      x-required-platform-role: admin
+      security: [{ sessionCookie: [], csrfHeader: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision]
+              properties:
+                revision: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200': { $ref: '#/components/responses/CaddyState' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/admin/users:
     get:
       operationId: listUsers
@@ -3284,6 +3379,19 @@ components:
         minLength: 1
 
   responses:
+    PreconditionFailed:
+      description: The exact revision ETag no longer matches (`precondition_failed`).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    CaddyState:
+      description: Current configuration ownership, draft and exact revision ETag.
+      headers:
+        ETag:
+          schema: { type: string }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/CaddySite' }
     AdminUser:
       description: Saved account metadata.
       content:
@@ -3357,7 +3465,7 @@ components:
   schemas:
     CaddySite:
       type: object
-      required: [siteId, sourceKey, kind, definition, present, syncedAt]
+      required: [siteId, sourceKey, kind, definition, present, syncedAt, managementMode, capabilities]
       properties:
         siteId: { type: string, format: uuid }
         sourceKey: { type: string }
@@ -3365,6 +3473,55 @@ components:
         definition: { type: object, additionalProperties: true }
         present: { type: boolean }
         syncedAt: { type: string, format: date-time }
+        managementMode: { type: string, enum: [platform, caddy] }
+        management:
+          oneOf:
+            - $ref: '#/components/schemas/CaddyManagement'
+            - enum: [null]
+        capabilities:
+          type: object
+          required: [convert, edit, validate, deploy]
+          properties:
+            convert: { type: boolean }
+            edit: { type: boolean }
+            validate: { type: boolean }
+            deploy: { type: boolean }
+        unavailableReason: { type: string }
+        settingsCapabilities:
+          type: object
+          required: [compression, cacheControl, securityHeaders]
+          properties:
+            compression: { type: boolean }
+            cacheControl: { type: boolean }
+            securityHeaders: { type: boolean }
+    CaddySettings:
+      type: object
+      additionalProperties: false
+      required: [compression, cacheControl, securityHeaders]
+      properties:
+        compression: { type: string, enum: [preserve, none, gzip, zstd, gzip_zstd] }
+        cacheControl: { type: string, enum: [preserve, no_store] }
+        securityHeaders: { type: string, enum: [preserve, baseline] }
+    CaddyManagement:
+      type: object
+      required: [revision, appliedRevision, validatedRevision, sourceDigest, settings, history, updatedAt]
+      properties:
+        revision: { type: integer, format: int64 }
+        appliedRevision: { type: integer, format: int64, nullable: true }
+        validatedRevision: { type: integer, format: int64, nullable: true }
+        sourceDigest: { type: string }
+        settings: { $ref: '#/components/schemas/CaddySettings' }
+        updatedAt: { type: string, format: date-time }
+        history:
+          type: array
+          items:
+            type: object
+            required: [revision, settings, status, createdAt]
+            properties:
+              revision: { type: integer, format: int64 }
+              settings: { $ref: '#/components/schemas/CaddySettings' }
+              status: { type: string, enum: [draft, validated, applied] }
+              createdAt: { type: string, format: date-time }
     AdminProfileInput:
       type: object
       additionalProperties: false
@@ -4374,6 +4531,10 @@ components:
           updatedAt
         ]
       properties:
+        managementMode:
+          type: string
+          enum: [platform, caddy]
+          description: Configuration ownership; separate from the content kind.
         kind:
           type: string
           enum: [theme, static, redirect, reverse_proxy, unsupported]

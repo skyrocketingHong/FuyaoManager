@@ -32,5 +32,5 @@ func Read(ctx context.Context, argv []string) ([]caddyconfig.Site, error) {
 	if err := cmd.Run(); err != nil {
 		return nil, fmt.Errorf("Caddy read capability failed")
 	}
-	return caddyconfig.Parse(data.Bytes())
+	return ParseOutput(data.Bytes())
 }

@@ -55,7 +55,16 @@ const codeToKey: Record<string, MessageKey> = {
 	last_owner: 'error.lastOwner',
 	last_passkey: 'error.lastPasskey',
 	self_management: 'error.selfManagement',
-	account_conflict: 'error.accountConflict'
+	account_conflict: 'error.accountConflict',
+	operator_registration_required: 'caddy.operatorRegistration',
+	source_missing: 'caddy.missing',
+	source_config_changed: 'caddy.sourceChanged',
+	caddy_validation_failed: 'caddy.validationFailed',
+	caddy_capability_denied: 'error.forbidden',
+	caddy_runtime_uncertain: 'caddy.runtimeUncertain',
+	site_kind_unsupported: 'caddy.kindUnsupported',
+	caddy_deployment_disabled: 'error.deploymentDisabled',
+	caddy_state_conflict: 'caddy.stateConflict'
 };
 
 /** Returns the message key describing the error, or null for unknown errors. */

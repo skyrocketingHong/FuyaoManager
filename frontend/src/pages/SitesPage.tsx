@@ -31,6 +31,16 @@ import PageLoading from '../components/PageLoading';
 import DataTable from '../components/DataTable';
 import StatusTag, { type StatusKind } from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
+import CaddyIcon from '../components/CaddyIcon';
+
+function managementMode(site: Site): 'platform' | 'caddy' | 'unknown' {
+	if (
+		'managementMode' in site &&
+		(site.managementMode === 'platform' || site.managementMode === 'caddy')
+	)
+		return site.managementMode;
+	return 'unknown';
+}
 
 interface CreateForm {
 	slug: string;
@@ -180,6 +190,23 @@ export default function SitesPage() {
 	}
 
 	const sites = siteList.sites;
+	const groups = [
+		{
+			mode: 'platform',
+			title: t('sites.platformManagement'),
+			records: sites.filter((site) => managementMode(site) === 'platform')
+		},
+		{
+			mode: 'caddy',
+			title: t('sites.caddyManagement'),
+			records: sites.filter((site) => managementMode(site) === 'caddy')
+		},
+		{
+			mode: 'unknown',
+			title: t('sites.unknownManagement'),
+			records: sites.filter((site) => managementMode(site) === 'unknown')
+		}
+	].filter((group) => group.mode !== 'unknown' || group.records.length > 0);
 
 	return (
 		<div className="page-stack">
@@ -187,95 +214,117 @@ export default function SitesPage() {
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
 			) : null}
-			{sites.length === 0 ? (
-				<TablePanel>
-					<Empty description={t('sites.empty')} />
-				</TablePanel>
-			) : (
-				<TablePanel>
-					<DataTable<Site>
-						rowKey="siteId"
-						pagination={false}
-						dataSource={sites}
-						columns={[
-							{
-								title: t('caddy.kind'),
-								render: (_, site) =>
-									(site.kind ?? 'theme') === 'theme'
-										? t('nav.theme')
-										: t(
-												site.kind === 'static'
-													? 'caddy.static'
-													: site.kind === 'redirect'
-														? 'caddy.redirect'
-														: site.kind === 'reverse_proxy'
-															? 'caddy.proxy'
-															: 'caddy.complex'
-											)
-							},
-							{
-								title: t('site.name'),
-								dataIndex: 'name',
-								render: (name: string, site) => (
-									<>
-										<div>
-											<Link to={`/sites/${site.siteId}`}>{name}</Link>
-										</div>
-										<div className="version-text" style={{ color: 'var(--muted-foreground)' }}>
-											{site.slug}
-										</div>
-									</>
-								)
-							},
-							{
-								title: t('site.role'),
-								dataIndex: 'role',
-								width: 110,
-								render: (role: string) => (
-									<StatusTag kind="neutral">{t(`role.${role}` as never)}</StatusTag>
-								)
-							},
-							{
-								title: t('site.visibility'),
-								dataIndex: 'visibility',
-								width: 100,
-								render: (v: string, site) =>
-									site.kind && site.kind !== 'theme' ? (
-										t('caddy.sourceValue')
-									) : (
-										<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
-											{t(`site.visibility.${v}` as never)}
-										</StatusTag>
+			{groups.map((group) => (
+				<TablePanel
+					key={group.mode}
+					title={
+						<Space size={8}>
+							{group.mode === 'caddy' && <CaddyIcon />}
+							{group.title}
+						</Space>
+					}
+				>
+					{group.records.length === 0 ? (
+						<Empty description={t('sites.empty')} />
+					) : (
+						<DataTable<Site>
+							rowKey="siteId"
+							pagination={false}
+							dataSource={group.records}
+							columns={[
+								{
+									title: t('caddy.kind'),
+									render: (_, site) =>
+										(site.kind ?? 'theme') === 'theme'
+											? t('nav.theme')
+											: t(
+													site.kind === 'static'
+														? 'caddy.static'
+														: site.kind === 'redirect'
+															? 'caddy.redirect'
+															: site.kind === 'reverse_proxy'
+																? 'caddy.proxy'
+																: 'caddy.complex'
+												)
+								},
+								{
+									title: t('site.name'),
+									dataIndex: 'name',
+									render: (name: string, site) => (
+										<>
+											<div>
+												<Link to={`/sites/${site.siteId}`}>{name}</Link>
+											</div>
+											<div className="version-text" style={{ color: 'var(--muted-foreground)' }}>
+												{site.slug}
+											</div>
+										</>
 									)
-							},
-							{
-								title: t('site.provisionState'),
-								dataIndex: 'provisionState',
-								width: 190,
-								render: (_: string, site) =>
-									site.kind && site.kind !== 'theme' ? (
-										t('caddy.protected')
-									) : (
-										<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-											<StatusTag kind={provisionKind(site)}>
-												{t(`site.provision.${site.provisionState}` as never)}
+								},
+								{
+									title: t('site.role'),
+									dataIndex: 'role',
+									width: 110,
+									render: (role: string) => (
+										<StatusTag kind="neutral">{t(`role.${role}` as never)}</StatusTag>
+									)
+								},
+								{
+									title: t('site.visibility'),
+									dataIndex: 'visibility',
+									width: 100,
+									render: (v: string, site) =>
+										site.kind && site.kind !== 'theme' ? (
+											t('caddy.sourceValue')
+										) : (
+											<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
+												{t(`site.visibility.${v}` as never)}
 											</StatusTag>
-											{site.provisionState === 'failed' ? (
-												<Button
-													size="small"
-													loading={retrying === site.siteId}
-													onClick={() => void handleRetry(site)}
-												>
-													{t('sites.retryProvision')}
-												</Button>
-											) : null}
-										</span>
+										)
+								},
+								{
+									title: t('site.provisionState'),
+									dataIndex: 'provisionState',
+									width: 190,
+									render: (_: string, site) =>
+										site.kind && site.kind !== 'theme' ? (
+											t(
+												managementMode(site) === 'platform'
+													? 'caddy.managedConfiguration'
+													: 'caddy.sourceValue'
+											)
+										) : (
+											<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+												<StatusTag kind={provisionKind(site)}>
+													{t(`site.provision.${site.provisionState}` as never)}
+												</StatusTag>
+												{site.provisionState === 'failed' ? (
+													<Button
+														size="small"
+														loading={retrying === site.siteId}
+														onClick={() => void handleRetry(site)}
+													>
+														{t('sites.retryProvision')}
+													</Button>
+												) : null}
+											</span>
+										)
+								},
+								{
+									title: t('admin.actions'),
+									render: (_, site) => (
+										<Link
+											to={`/sites/${site.siteId}${site.kind === 'theme' || !site.kind ? '' : '/caddy'}`}
+										>
+											{t('admin.manage')}
+										</Link>
 									)
-							}
-						]}
-					/>
+								}
+							]}
+						/>
+					)}
 				</TablePanel>
-			)}
+			))}
 			<Modal
 				title={t('sites.createTitle')}
 				open={createOpen}

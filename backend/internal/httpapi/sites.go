@@ -29,6 +29,7 @@ type siteDTO struct {
 	ProvisionFailure json.RawMessage `json:"provisionFailure,omitempty"`
 	Role             string          `json:"role"`
 	Kind             string          `json:"kind"`
+	ManagementMode   string          `json:"managementMode"`
 	SettingsRevision int64           `json:"settingsRevision"`
 	CreatedAt        string          `json:"createdAt"`
 	UpdatedAt        string          `json:"updatedAt"`
@@ -81,6 +82,7 @@ func toSiteDTO(rec store.SiteRecord) siteDTO {
 		ProvisionFailure: rec.Site.ProvisionFailure,
 		Role:             rec.Role,
 		Kind:             rec.Kind,
+		ManagementMode:   rec.ManagementMode,
 		SettingsRevision: rec.Settings.Revision,
 		CreatedAt:        rec.Site.CreatedAt.UTC().Format(timeFormat),
 		UpdatedAt:        rec.Settings.UpdatedAt.UTC().Format(timeFormat),
