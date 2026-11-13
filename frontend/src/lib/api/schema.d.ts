@@ -2330,7 +2330,7 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            /** @description Wrong host */
+            /** @description Wrong host, path, or unknown lease. */
             404: {
                 headers: {
                     [name: string]: unknown;
