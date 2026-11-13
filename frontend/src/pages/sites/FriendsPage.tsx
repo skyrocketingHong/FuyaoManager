@@ -13,6 +13,7 @@ import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
 import { Panel } from '../../components/Panel';
+import { useContentScope } from '../../components/ContentScopeProvider';
 import { getFriends, getSite, putFriends, type Friend, type Site } from '../../lib/api/management';
 import { EditableDoc } from '../../lib/editing/EditableDoc';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
@@ -28,6 +29,8 @@ interface FriendsRows {
 
 export default function FriendsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
+	const scope = useContentScope();
+	const target = scope.target;
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -35,17 +38,17 @@ export default function FriendsPage() {
 	// A fresh store per site keeps data and error state from surviving a
 	// switch between sites; the epoch guards late responses against that
 	// same switch.
-	const editor = useMemo(() => new EditableDoc<FriendsRows>(), [siteId]);
+	const editor = useMemo(() => new EditableDoc<FriendsRows>(), [scope.key]);
 	const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
 	const dirty = editor.isDirty();
 	const epoch = useRef(0);
 
 	const load = useCallback(async () => {
-		if (!siteId) return;
+		if (!target) return;
 		const my = ++epoch.current;
 		editor.markLoading();
 		try {
-			const { friends, digest } = await getFriends(siteId);
+			const { friends, digest } = await getFriends(target);
 			if (my !== epoch.current) return;
 			editor.load({ online: friends.online ?? [], offline: friends.offline ?? [] }, digest);
 			setErrorKey(null);
@@ -58,25 +61,26 @@ export default function FriendsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [siteId, navigate, editor]);
+	}, [target, navigate, editor]);
 
 	useEffect(() => {
-		if (!siteId) return;
+		if (!target) return;
 		epoch.current++;
 		setSite(null);
 		let cancelled = false;
-		getSite(siteId)
-			.then((s) => {
-				if (!cancelled) setSite(s);
-			})
-			.catch(() => {});
+		if (siteId && scope.canEdit === undefined)
+			getSite(siteId)
+				.then((s) => {
+					if (!cancelled) setSite(s);
+				})
+				.catch(() => {});
 		void load();
 		return () => {
 			epoch.current++;
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [siteId]);
+	}, [scope.key]);
 
 	function mutate(group: Group, updater: (rows: Friend[]) => Friend[]) {
 		editor.mutate((current) => ({
@@ -108,11 +112,11 @@ export default function FriendsPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId) return;
+		if (!target) return;
 		const snapshot = editor.beginSave();
 		if (snapshot === null) return;
 		try {
-			const saved = await putFriends(siteId, snapshot, state.etag);
+			const saved = await putFriends(target, snapshot, state.etag);
 			editor.resolveSave(
 				{ online: saved.friends.online ?? [], offline: saved.friends.offline ?? [] },
 				saved.digest
@@ -132,10 +136,10 @@ export default function FriendsPage() {
 	// Conflict sync adopts the server version as the new baseline and ETag
 	// while keeping the local draft: unsaved edits are never dropped here.
 	async function syncAfterConflict() {
-		if (!siteId) return;
+		if (!target) return;
 		const my = epoch.current;
 		try {
-			const { friends, digest } = await getFriends(siteId);
+			const { friends, digest } = await getFriends(target);
 			if (my !== epoch.current) return;
 			editor.syncAfterConflict(
 				{ online: friends.online ?? [], offline: friends.offline ?? [] },
@@ -148,8 +152,9 @@ export default function FriendsPage() {
 		}
 	}
 
-	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
-	useUnsavedGuard(editable && dirty);
+	const editable =
+		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
+	useUnsavedGuard(dirty);
 	const rows: FriendsRows | null = state.draft ?? state.baseline;
 
 	const headerActions = (

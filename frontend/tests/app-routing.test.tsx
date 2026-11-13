@@ -146,6 +146,39 @@ beforeEach(() => {
 	setLocale('zh-CN');
 	mockSiteListState = { status: 'ready', sites: [siteAbc], errorKey: null };
 	getSite.mockResolvedValue(siteAbc);
+	apiRequest.mockImplementation(async (_method: string, path: string) => {
+		if (path.endsWith('/content-sources'))
+			return {
+				data: {
+					sources: {
+						posts: 'independent',
+						albums: 'independent',
+						footprints: 'independent',
+						friends: 'independent'
+					},
+					revision: 1
+				},
+				etag: '"sources-1"'
+			};
+		if (path.endsWith('/overview'))
+			return {
+				data: {
+					counts: { posts: 0, albums: 0, photos: 0, places: 0, friends: 0 },
+					sources: {},
+					hasCaddy: false,
+					analytics: {
+						configured: false,
+						available: false,
+						provider: 'cloudflare',
+						cache: 'unknown',
+						latest: null
+					},
+					theme: { selected: false, theme: null }
+				},
+				etag: null
+			};
+		return { data: {}, etag: null };
+	});
 	window.history.pushState({}, '', '/');
 	const NativeRequest = globalThis.Request;
 	vi.stubGlobal(
@@ -374,6 +407,54 @@ describe('site kind workspaces', () => {
 		expect(await screen.findByText(zh['caddy.unsupportedPage'])).toBeDefined();
 		expect(document.querySelector('.app-sider nav')?.textContent).not.toContain(zh['nav.posts']);
 	});
+	it('offers theme selection and content sources for an adopted static site before a theme is selected', async () => {
+		const site = {
+			...siteAbc,
+			kind: 'static' as const,
+			managementMode: 'platform',
+			workspace: {
+				themeEnabled: false,
+				themeSelectable: true,
+				buildable: false,
+				deployable: false,
+				hasCaddy: true
+			}
+		};
+		mockSiteListState = { status: 'ready', sites: [site], errorKey: null };
+		getSite.mockResolvedValue(site);
+		renderAt('/sites/abc/theme');
+		expect(await screen.findByText('page-theme')).toBeDefined();
+		const menu = document.querySelector('.app-sider nav')!;
+		expect(menu.textContent).toContain(zh['nav.themeSelection']);
+		expect(menu.textContent).toContain(zh['nav.contentSources']);
+		expect(menu.textContent).toContain(zh['nav.caddy']);
+		expect(menu.textContent).not.toContain(zh['nav.themeConfiguration']);
+		expect(menu.textContent).not.toContain(zh['nav.builds']);
+	});
+	it('uses declared theme workspace capabilities while retaining the static source identity', async () => {
+		const site = {
+			...siteAbc,
+			kind: 'static' as const,
+			managementMode: 'platform',
+			workspace: {
+				themeEnabled: true,
+				themeSelectable: true,
+				buildable: true,
+				deployable: false,
+				hasCaddy: true
+			}
+		};
+		mockSiteListState = { status: 'ready', sites: [site], errorKey: null };
+		getSite.mockResolvedValue(site);
+		renderAt('/sites/abc/builds');
+		expect(await screen.findByText('page-builds')).toBeDefined();
+		const menu = document.querySelector('.app-sider nav')!;
+		expect(menu.textContent).toContain(zh['nav.themeConfiguration']);
+		expect(menu.textContent).toContain(zh['nav.builds']);
+		expect(menu.textContent).toContain(zh['nav.releases']);
+		expect(menu.textContent).toContain(zh['nav.caddy']);
+		expect(screen.queryByText(zh['caddy.unsupportedPage'])).toBeNull();
+	});
 	it.each(['static', 'redirect', 'reverse_proxy', 'unsupported'] as const)(
 		'shows the %s configuration without theme-only menu entries',
 		async (kind) => {
@@ -437,11 +518,59 @@ describe('site kind workspaces', () => {
 			expect(apiRequest).not.toHaveBeenCalled();
 		}
 	);
-	it('keeps the original theme workspace and rejects its unrelated Caddy editor route', async () => {
+	it('opens the registered Caddy route independently of content kind', async () => {
+		apiRequest.mockResolvedValue({
+			data: {
+				siteId: siteAbc.siteId,
+				sourceKey: 'existing-source',
+				kind: 'static',
+				managementMode: 'platform',
+				management: null,
+				capabilities: { convert: false, edit: false, validate: false, deploy: false },
+				unavailableReason: 'operator_registration_required',
+				present: true,
+				syncedAt: siteAbc.updatedAt,
+				definition: { hosts: ['existing.example.com'], listen: [':443'], root: '/srv/theme-site' }
+			},
+			etag: '"source"'
+		});
 		renderAt('/sites/abc/caddy');
-		expect(await screen.findByText(zh['caddy.unsupportedPage'])).toBeDefined();
+		expect(await screen.findByText('/srv/theme-site')).toBeDefined();
 		expect(document.querySelector('.app-sider nav')?.textContent).toContain(zh['nav.posts']);
-		expect(document.querySelector('.app-sider nav')?.textContent).not.toContain(zh['nav.caddy']);
-		expect(apiRequest).not.toHaveBeenCalled();
+		expect(document.querySelector('.app-sider nav')?.textContent).toContain(zh['nav.caddy']);
+		expect(apiRequest).toHaveBeenCalledWith(
+			'GET',
+			'/api/v1/sites/abc/caddy',
+			expect.objectContaining({ signal: expect.anything() })
+		);
+		expect(screen.queryByText(zh['caddy.unsupportedPage'])).toBeNull();
+	});
+	it('retries Caddy loading within the real route and top bar', async () => {
+		const site = { ...siteAbc, kind: 'static' as const };
+		mockSiteListState = { status: 'ready', sites: [site], errorKey: null };
+		getSite.mockResolvedValue(site);
+		apiRequest.mockRejectedValueOnce(new TypeError('offline')).mockResolvedValueOnce({
+			data: {
+				siteId: site.siteId,
+				sourceKey: 'existing-source',
+				kind: 'static',
+				managementMode: 'caddy',
+				management: null,
+				capabilities: { convert: false, edit: false, validate: false, deploy: false },
+				unavailableReason: 'operator_registration_required',
+				present: true,
+				syncedAt: site.updatedAt,
+				definition: { hosts: ['existing.example.com'], listen: [':443'], root: '/srv/recovered' }
+			},
+			etag: '"source"'
+		});
+		renderAt('/sites/abc/caddy');
+		expect(await screen.findByText(zh['error.network'])).toBeDefined();
+		fireEvent.click(
+			screen.getByRole('button', { name: (name) => name.replace(/\s/g, '') === zh['common.retry'] })
+		);
+		expect(await screen.findByText('/srv/recovered')).toBeDefined();
+		expect(document.title).toBe(`Fuyao Manager - ${zh['nav.caddy']}`);
+		expect(document.querySelector('.topbar')?.textContent).toContain(zh['sites.caddyManagement']);
 	});
 });

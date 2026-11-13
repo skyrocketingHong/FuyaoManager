@@ -67,6 +67,7 @@ export function caddyReasonKey(code: string | undefined): MessageKey {
 		(
 			{
 				operator_registration_required: 'caddy.operatorRegistration',
+				protected_control_plane: 'caddy.protectedControlPlane',
 				site_kind_unsupported: 'caddy.kindUnsupported',
 				deployment_disabled: 'error.deploymentDisabled',
 				caddy_deployment_disabled: 'error.deploymentDisabled',

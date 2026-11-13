@@ -24,6 +24,7 @@ import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
 import { Panel } from '../../components/Panel';
+import { useContentScope } from '../../components/ContentScopeProvider';
 import {
 	getFootprints,
 	getSite,
@@ -99,14 +100,18 @@ function loadAMap(key: string, serviceHost?: string): Promise<AMapLike | null> {
 
 export default function FootprintsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
+	const scope = useContentScope();
+	const target = scope.target;
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
-	const editor = useMemo(() => new EditableDoc<{ cities: FootprintCity[] }>(), [siteId]);
+	const editor = useMemo(() => new EditableDoc<{ cities: FootprintCity[] }>(), [scope.key]);
 	const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
 	const dirty = editor.isDirty();
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [amapKey, setAmapKey] = useState('');
 	const [amapServiceHost, setAmapServiceHost] = useState('');
+	const effectiveAmapKey = scope.amap ? (scope.amap.browserKey ?? '') : amapKey;
+	const effectiveAmapServiceHost = scope.amap ? (scope.amap.serviceHost ?? '') : amapServiceHost;
 	const [mapState, setMapState] = useState<'idle' | 'ready' | 'failed'>('idle');
 	const [pickedFor, setPickedFor] = useState<{
 		kind: 'city' | 'place';
@@ -119,11 +124,11 @@ export default function FootprintsPage() {
 	const epoch = useRef(0);
 
 	const load = useCallback(async () => {
-		if (!siteId) return;
+		if (!target) return;
 		const my = ++epoch.current;
 		editor.markLoading();
 		try {
-			const env = await getFootprints(siteId);
+			const env = await getFootprints(target);
 			if (my !== epoch.current) return;
 			editor.load(env.footprints, env.digest);
 			setErrorKey(null);
@@ -136,38 +141,40 @@ export default function FootprintsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [siteId, navigate, editor]);
+	}, [target, navigate, editor]);
 
 	useEffect(() => {
-		if (!siteId) return;
+		if (!target) return;
 		epoch.current++;
 		setSite(null);
 		let cancelled = false;
-		getSite(siteId)
-			.then((s) => {
-				if (!cancelled) setSite(s);
-			})
-			.catch(() => {});
-		getSiteConfig(siteId)
-			.then((env) => {
-				if (cancelled) return;
-				setAmapKey(env.config.services?.amap?.browserKey ?? '');
-				setAmapServiceHost(env.config.services?.amap?.serviceHost ?? '');
-			})
-			.catch(() => {});
+		if (siteId && scope.canEdit === undefined)
+			getSite(siteId)
+				.then((s) => {
+					if (!cancelled) setSite(s);
+				})
+				.catch(() => {});
+		if (siteId && !scope.amap)
+			getSiteConfig(siteId)
+				.then((env) => {
+					if (cancelled) return;
+					setAmapKey(env.config.services?.amap?.browserKey ?? '');
+					setAmapServiceHost(env.config.services?.amap?.serviceHost ?? '');
+				})
+				.catch(() => {});
 		void load();
 		return () => {
 			epoch.current++;
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [siteId]);
+	}, [scope.key]);
 
 	// Initialize the picker map when a target is selected.
 	useEffect(() => {
 		if (!pickedFor) return;
 		let cancelled = false;
-		void loadAMap(amapKey, amapServiceHost).then((AMap) => {
+		void loadAMap(effectiveAmapKey, effectiveAmapServiceHost).then((AMap) => {
 			if (cancelled || !AMap || !mapHostRef.current) {
 				if (!cancelled && !AMap) setMapState('failed');
 				return;
@@ -190,7 +197,7 @@ export default function FootprintsPage() {
 			mapRef.current = null;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [pickedFor, amapKey]);
+	}, [pickedFor, effectiveAmapKey, effectiveAmapServiceHost]);
 
 	function applyPick(lng: number, lat: number) {
 		if (!pickedFor) return;
@@ -271,11 +278,11 @@ export default function FootprintsPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId) return;
+		if (!target) return;
 		const snapshot = editor.beginSave();
 		if (snapshot === null) return;
 		try {
-			const saved = await putFootprints(siteId, snapshot, state.etag);
+			const saved = await putFootprints(target, snapshot, state.etag);
 			editor.resolveSave(saved.footprints, saved.digest);
 			void messageApi.success(t('footprints.saved'));
 		} catch (err) {
@@ -291,10 +298,10 @@ export default function FootprintsPage() {
 
 	// Conflict sync adopts the server baseline + ETag and keeps the draft.
 	async function syncAfterConflict() {
-		if (!siteId) return;
+		if (!target) return;
 		const my = epoch.current;
 		try {
-			const env = await getFootprints(siteId);
+			const env = await getFootprints(target);
 			if (my !== epoch.current) return;
 			editor.syncAfterConflict(env.footprints, env.digest);
 			void messageApi.info(t('friends.conflictSynced'));
@@ -303,8 +310,9 @@ export default function FootprintsPage() {
 		}
 	}
 
-	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
-	useUnsavedGuard(editable && dirty);
+	const editable =
+		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
+	useUnsavedGuard(dirty);
 
 	function coordInputs(
 		value: { lng: number; lat: number },

@@ -21,7 +21,10 @@ import UsersPage from './pages/UsersPage';
 import LogsPage from './pages/LogsPage';
 import SitesPage from './pages/SitesPage';
 import ThemesCatalogPage from './pages/ThemesCatalogPage';
-import SiteDetailPage from './pages/sites/SiteDetailPage';
+import SiteOverviewPage from './pages/sites/SiteOverviewPage';
+import ContentSourcesPage from './pages/sites/ContentSourcesPage';
+import { ContentScopeProvider } from './components/ContentScopeProvider';
+import type { ContentResource } from './lib/api/content';
 import SettingsPage from './pages/sites/SettingsPage';
 import ThemePage from './pages/sites/ThemePage';
 import PostsPage from './pages/sites/PostsPage';
@@ -35,18 +38,24 @@ import ReleasesPage from './pages/sites/ReleasesPage';
 /** Page components keyed by navigation item id; the route table consumes
  * the same metadata as the sidebar menu, so they cannot drift apart. */
 const pageByNavId: Record<string, ComponentType> = {
+	'content.posts': PostsPage,
+	'content.albums': AlbumsPage,
+	'content.footprints': FootprintsPage,
+	'content.friends': FriendsPage,
+	'site.sources': ContentSourcesPage,
+	'site.theme-config': () => <ThemePage view="configuration" />,
 	api: ApiPage,
 	'site.caddy': CaddySitePage,
 	sites: SitesPage,
 	themes: ThemesCatalogPage,
-	'site.overview': SiteDetailPage,
+	'site.overview': SiteOverviewPage,
 	'site.settings': SettingsPage,
 	'site.config': SiteConfigPage,
 	'site.posts': PostsPage,
 	'site.friends': FriendsPage,
 	'site.albums': AlbumsPage,
 	'site.footprints': FootprintsPage,
-	'site.theme': ThemePage,
+	'site.theme': () => <ThemePage view="selection" />,
 	'site.builds': BuildsPage,
 	'site.releases': ReleasesPage,
 	account: AccountSettingsPage,
@@ -161,11 +170,17 @@ export default function App() {
 														extra={<Button href="/sites">{t('nav.platformHome')}</Button>}
 													/>
 												) : item.scope === 'site' ? (
-													<SiteBoundary>
+													<SiteBoundary key={item.id}>
 														<SiteRoute page={item.id}>
 															<Page />
 														</SiteRoute>
 													</SiteBoundary>
+												) : item.id.startsWith('content.') ? (
+													<ContentScopeProvider
+														resource={item.id.slice('content.'.length) as ContentResource}
+													>
+														<Page />
+													</ContentScopeProvider>
 												) : (
 													<Page />
 												)

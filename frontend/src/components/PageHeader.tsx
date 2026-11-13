@@ -32,7 +32,9 @@ const RegistrationContext = createContext<Registration | null>(null);
 const ContentContext = createContext<PageHeaderContent | undefined>(undefined);
 
 export function PageHeaderProvider({ scope, children }: { scope: string; children: ReactNode }) {
-	const [records, setRecords] = useState(new Map<string, { scope: string; value: PageHeaderContent }>());
+	const [records, setRecords] = useState(
+		new Map<string, { scope: string; value: PageHeaderContent }>()
+	);
 
 	const publish = (owner: string, expectedScope: string, value: PageHeaderContent) => {
 		setRecords((current) => new Map(current).set(owner, { scope: expectedScope, value }));
@@ -86,7 +88,7 @@ export function PageTabs({
 	ariaLabel
 }: {
 	value: string;
-	options: { label: ReactNode; value: string }[];
+	options: { label: ReactNode; value: string; disabled?: boolean }[];
 	onChange: (value: string) => void;
 	disabled?: boolean;
 	ariaLabel?: string;

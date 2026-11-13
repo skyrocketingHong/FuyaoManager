@@ -25,6 +25,7 @@ import {
 import { ApiError } from '../../lib/api/client';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
+import { hasSiteWorkspace } from '../../lib/navigation/workspace';
 
 interface CurrentView {
 	release: Release;
@@ -221,14 +222,16 @@ export default function ReleasesPage() {
 	}
 
 	const editable = site !== null && canEditSite(site);
+	const workspace = site && hasSiteWorkspace(site) ? site.workspace : null;
 	// Deployment facts: nothing known (loading, fetch failure) counts as
 	// deployable — the isolation presentation is the conservative default.
 	// Deployment gating: only an answer for the CURRENT site, explicitly
 	// ready, with isolated===false opens the deployable surfaces — anything
 	// else (loading, error, a mismatched site payload, an absent field) stays
 	// conservative.
-	const trusted =
-		edge.kind === 'ready' && edge.state.site?.siteId === siteId && edge.state.isolated === false;
+	const trusted = workspace
+		? workspace.deployable
+		: edge.kind === 'ready' && edge.state.site?.siteId === siteId && edge.state.isolated === false;
 	const isolated = !trusted;
 	// Only releases that actually back content block a build from being
 	// published again; failed attempts do not.
@@ -313,7 +316,16 @@ export default function ReleasesPage() {
 								style={{ marginBottom: 16 }}
 							/>
 						)}
-						{edge.kind === 'loading' ? (
+						{workspace ? (
+							!workspace.deployable && (
+								<Alert
+									type="info"
+									showIcon
+									title={t('error.deploymentDisabled')}
+									style={{ marginBottom: 16 }}
+								/>
+							)
+						) : edge.kind === 'loading' ? (
 							<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
 								{t('common.loading')}
 							</Typography.Text>

@@ -17,12 +17,18 @@ import Trans from '../../components/i18n/Trans';
 import PageLoading from '../../components/PageLoading';
 import StatusTag from '../../components/StatusTag';
 import { Panel } from '../../components/Panel';
+import { PageTabs, usePageHeader } from '../../components/PageHeader';
+import { loadSiteList } from '../../lib/sites/site-list';
 import { ThemeSelection } from '../../lib/themes/theme-selection';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { configTextFromFields, fieldsFromSchema } from '../../lib/themes/schemaForm';
 import { t } from '../../lib/i18n';
 
-export default function ThemePage() {
+export default function ThemePage({
+	view = 'all'
+}: {
+	view?: 'all' | 'selection' | 'configuration';
+}) {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
 	const store = useMemo(
@@ -63,10 +69,55 @@ export default function ThemePage() {
 		});
 		if (next !== null) store.setConfig(next);
 	}
+	const actions = (
+		<Button
+			type="primary"
+			loading={phase.kind === 'saving'}
+			disabled={!editable || state.selected === null || !store.dirty()}
+			onClick={() =>
+				void store.save().then(() => {
+					if (store.getSnapshot().phase.kind === 'saved') void loadSiteList(true);
+				})
+			}
+		>
+			{t(view === 'configuration' ? 'themes.saveConfig' : 'themes.save')}
+		</Button>
+	);
+	const content =
+		view === 'all' ? undefined : (
+			<PageTabs
+				value={view}
+				options={[
+					{ value: 'selection', label: t('nav.themeSelection') },
+					{
+						value: 'configuration',
+						label: t('nav.themeConfiguration'),
+						disabled: !state.hasSelection
+					}
+				]}
+				onChange={(value) =>
+					navigate(`/sites/${siteId}/${value === 'selection' ? 'theme' : 'theme-config'}`)
+				}
+				ariaLabel={t('nav.theme')}
+			/>
+		);
+	const header = usePageHeader({ content, actions });
 
 	return (
 		<div className="page-stack">
-			<Panel title={<Trans text={t('themes.title')} />}>
+			<Panel
+				title={
+					<Trans
+						text={t(
+							view === 'selection'
+								? 'nav.themeSelection'
+								: view === 'configuration'
+									? 'nav.themeConfiguration'
+									: 'themes.title'
+						)}
+					/>
+				}
+			>
 				{phase.kind === 'loading' ? (
 					<PageLoading spec="section" label={t('common.loading')} />
 				) : (
@@ -108,102 +159,102 @@ export default function ThemePage() {
 							<Form.Item label={t('themes.current')} htmlFor="theme-saved">
 								<span id="theme-saved">
 									{state.hasSelection && state.savedSelected ? (
-										<StatusTag kind="success">
-											{state.savedSelected.replace('@', ' @ ')}
-										</StatusTag>
+										<StatusTag kind="success">{state.savedSelected.replace('@', ' @ ')}</StatusTag>
 									) : (
 										<StatusTag kind="neutral">{t('themes.unselected')}</StatusTag>
 									)}
 								</span>
 							</Form.Item>
-							<Form.Item label={t('themes.select')} htmlFor="theme-select">
-								<Radio.Group
-									id="theme-select"
-									value={state.selected}
-									onChange={(e) => store.select(e.target.value as string)}
-									disabled={!editable}
-								>
-									<Space orientation="vertical">
-										{state.themes.map((theme) => (
-											<Radio
-												key={`${theme.themeId}@${theme.version}`}
-												value={`${theme.themeId}@${theme.version}`}
-											>
-												{theme.name ?? theme.themeId}
-												<Typography.Text type="secondary">
-													{' '}
-													{theme.themeId} @ {theme.version}
-												</Typography.Text>
-											</Radio>
-										))}
-									</Space>
-								</Radio.Group>
-							</Form.Item>
-							{schemaFields.length > 0 ? (
-								schemaFields.map((field) => (
-									<Form.Item
-										key={field.key}
-										label={field.label}
-										htmlFor={`theme-field-${field.key}`}
+							{view !== 'configuration' && (
+								<Form.Item label={t('themes.select')} htmlFor="theme-select">
+									<Radio.Group
+										id="theme-select"
+										value={state.selected}
+										onChange={(e) => store.select(e.target.value as string)}
+										disabled={!editable}
 									>
-										{field.type === 'boolean' ? (
-											<Switch
-												id={`theme-field-${field.key}`}
-												checked={Boolean(configValues[field.key])}
-												disabled={!editable}
-												onChange={(checked) => setFieldValue(field.key, checked)}
-											/>
-										) : field.type === 'enum' ? (
-											<Select
-												id={`theme-field-${field.key}`}
-												value={configValues[field.key] as string | undefined}
-												disabled={!editable}
-												options={(field.options ?? []).map((opt) => ({ value: opt, label: opt }))}
-												onChange={(value) => setFieldValue(field.key, value)}
-												allowClear
-											/>
-										) : field.type === 'number' ? (
-											<InputNumber
-												id={`theme-field-${field.key}`}
-												value={configValues[field.key] as number | undefined}
-												disabled={!editable}
-												onChange={(value) => setFieldValue(field.key, value)}
-											/>
-										) : (
-											<Input
-												id={`theme-field-${field.key}`}
-												value={configValues[field.key] as string | undefined}
-												disabled={!editable}
-												placeholder={field.placeholder}
-												onChange={(e) => setFieldValue(field.key, e.target.value)}
-											/>
-										)}
-									</Form.Item>
-								))
-							) : (
-								<Typography.Text type="secondary">{t('themes.noSchemaFields')}</Typography.Text>
+										<Space orientation="vertical">
+											{state.themes.map((theme) => (
+												<Radio
+													key={`${theme.themeId}@${theme.version}`}
+													value={`${theme.themeId}@${theme.version}`}
+												>
+													{theme.name ?? theme.themeId}
+													<Typography.Text type="secondary">
+														{' '}
+														{theme.themeId} @ {theme.version}
+													</Typography.Text>
+												</Radio>
+											))}
+										</Space>
+									</Radio.Group>
+								</Form.Item>
 							)}
-							<Form.Item label={t('themes.configJson')} htmlFor="theme-config">
-								<Input.TextArea
-									id="theme-config"
-									value={state.configText}
-									onChange={(e) => store.setConfig(e.target.value)}
-									disabled={!editable}
-									rows={6}
-									spellCheck={false}
-									style={{ fontFamily: 'monospace' }}
-									aria-label={t('themes.configJson')}
-								/>
-							</Form.Item>
+							{view !== 'selection' && (
+								<>
+									{schemaFields.length > 0 ? (
+										schemaFields.map((field) => (
+											<Form.Item
+												key={field.key}
+												label={field.label}
+												htmlFor={`theme-field-${field.key}`}
+											>
+												{field.type === 'boolean' ? (
+													<Switch
+														id={`theme-field-${field.key}`}
+														checked={Boolean(configValues[field.key])}
+														disabled={!editable}
+														onChange={(checked) => setFieldValue(field.key, checked)}
+													/>
+												) : field.type === 'enum' ? (
+													<Select
+														id={`theme-field-${field.key}`}
+														value={configValues[field.key] as string | undefined}
+														disabled={!editable}
+														options={(field.options ?? []).map((opt) => ({
+															value: opt,
+															label: opt
+														}))}
+														onChange={(value) => setFieldValue(field.key, value)}
+														allowClear
+													/>
+												) : field.type === 'number' ? (
+													<InputNumber
+														id={`theme-field-${field.key}`}
+														value={configValues[field.key] as number | undefined}
+														disabled={!editable}
+														onChange={(value) => setFieldValue(field.key, value)}
+													/>
+												) : (
+													<Input
+														id={`theme-field-${field.key}`}
+														value={configValues[field.key] as string | undefined}
+														disabled={!editable}
+														placeholder={field.placeholder}
+														onChange={(e) => setFieldValue(field.key, e.target.value)}
+													/>
+												)}
+											</Form.Item>
+										))
+									) : (
+										<Typography.Text type="secondary">{t('themes.noSchemaFields')}</Typography.Text>
+									)}
+									<Form.Item label={t('themes.configJson')} htmlFor="theme-config">
+										<Input.TextArea
+											id="theme-config"
+											value={state.configText}
+											onChange={(e) => store.setConfig(e.target.value)}
+											disabled={!editable}
+											rows={6}
+											spellCheck={false}
+											style={{ fontFamily: 'monospace' }}
+											aria-label={t('themes.configJson')}
+										/>
+									</Form.Item>
+								</>
+							)}
 						</Form>
-						<Button
-							type="primary"
-							loading={phase.kind === 'saving'}
-							disabled={!editable || state.selected === null}
-							onClick={() => void store.save()}
-						>
-							<Trans text={t('themes.save')} />
-						</Button>
+						{!header && actions}
 					</>
 				)}
 			</Panel>

@@ -66,6 +66,20 @@ vi.mock('../src/lib/api/management', () => ({
 }));
 vi.mock('../src/lib/api/client', () => ({
 	currentAuthGeneration: () => 0,
+	api: vi
+		.fn()
+		.mockResolvedValue({
+			data: {
+				sources: {
+					posts: 'independent',
+					albums: 'independent',
+					footprints: 'independent',
+					friends: 'independent'
+				},
+				revision: 1
+			},
+			etag: '"sources-1"'
+		}),
 	ApiError: class ApiError extends Error {
 		constructor(
 			public status: number,

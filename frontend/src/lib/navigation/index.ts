@@ -21,6 +21,13 @@ export interface NavItem {
 }
 
 export const navItems: readonly NavItem[] = [
+	...(['posts', 'albums', 'footprints', 'friends'] as const).map((resource) => ({
+		id: `content.${resource}`,
+		path: `/content/${resource}`,
+		scope: 'platform' as const,
+		group: 'content' as const,
+		titleKey: `nav.${resource}` as MessageKey
+	})),
 	{
 		id: 'api',
 		path: '/api-reference',
@@ -137,7 +144,21 @@ export const navItems: readonly NavItem[] = [
 		path: '/sites/:siteId/theme',
 		scope: 'site',
 		group: 'settings',
-		titleKey: 'nav.theme'
+		titleKey: 'nav.themeSelection'
+	},
+	{
+		id: 'site.theme-config',
+		path: '/sites/:siteId/theme-config',
+		scope: 'site',
+		group: 'settings',
+		titleKey: 'nav.themeConfiguration'
+	},
+	{
+		id: 'site.sources',
+		path: '/sites/:siteId/content-sources',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'nav.contentSources'
 	},
 	{
 		id: 'site.builds',
@@ -169,6 +190,7 @@ export const siteNavGroups: readonly NavGroupMeta[] = [
 ];
 
 export const platformNavGroups: readonly NavGroupMeta[] = [
+	{ id: 'content', titleKey: 'nav.group.content' },
 	{ id: 'platform', titleKey: 'nav.group.resources' },
 	{ id: 'administration', titleKey: 'nav.group.platformSettings' }
 ];

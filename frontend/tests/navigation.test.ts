@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { itemPath, matchRoute, navItems, selectedPath } from '../src/lib/navigation';
+import { allowSitePage, type SiteWorkspace } from '../src/lib/navigation/workspace';
+import type { Site } from '../src/lib/api/management';
 
 describe('navigation metadata', () => {
 	it('covers every business path exactly once', () => {
@@ -12,7 +14,19 @@ describe('navigation metadata', () => {
 		expect(new Set(paths).size).toBe(paths.length);
 		expect(paths).toContain('/sites');
 		expect(paths).toContain('/themes');
-		for (const sub of ['', '/settings', '/config', '/posts', '/friends', '/albums', '/footprints', '/theme', '/builds', '/releases']) {
+		for (const sub of [
+			'',
+			'/caddy',
+			'/settings',
+			'/config',
+			'/posts',
+			'/friends',
+			'/albums',
+			'/footprints',
+			'/theme',
+			'/builds',
+			'/releases'
+		]) {
 			expect(paths).toContain(`/sites/:siteId${sub}`);
 		}
 	});
@@ -21,11 +35,52 @@ describe('navigation metadata', () => {
 		expect(matchRoute('/sites')?.item.id).toBe('sites');
 		expect(matchRoute('/themes')?.item.id).toBe('themes');
 		expect(matchRoute('/themes')?.siteId).toBeNull();
+		for (const resource of ['posts', 'albums', 'footprints', 'friends'])
+			expect(matchRoute(`/content/${resource}`)?.item.scope).toBe('platform');
+	});
+	it('uses declared workspace capabilities independently of a static site kind', () => {
+		const website: Site & { workspace: SiteWorkspace } = {
+			siteId: 'website',
+			slug: 'website',
+			name: 'Website',
+			visibility: 'private',
+			provisionState: 'ready',
+			role: 'owner',
+			settingsRevision: 1,
+			description: '',
+			defaultLocale: 'en-US',
+			createdAt: '2026-01-01T00:00:00Z',
+			updatedAt: '2026-01-01T00:00:00Z',
+			kind: 'static',
+			workspace: {
+				themeEnabled: false,
+				themeSelectable: true,
+				buildable: false,
+				deployable: false,
+				hasCaddy: true
+			}
+		};
+		expect(allowSitePage(website, 'site.theme')).toBe(true);
+		expect(allowSitePage(website, 'site.sources')).toBe(true);
+		expect(allowSitePage(website, 'site.posts')).toBe(true);
+		expect(allowSitePage(website, 'site.theme-config')).toBe(false);
+		expect(allowSitePage(website, 'site.builds')).toBe(false);
+		expect(
+			allowSitePage(
+				{
+					...website,
+					workspace: { ...website.workspace, themeEnabled: true, buildable: true }
+				} as Site,
+				'site.builds'
+			)
+		).toBe(true);
+		expect(allowSitePage(null, 'site.theme')).toBe(false);
 	});
 
 	it('resolves every site-scoped route with its site id', () => {
 		const cases: [string, string][] = [
 			['/sites/abc', 'site.overview'],
+			['/sites/abc/caddy', 'site.caddy'],
 			['/sites/abc/settings', 'site.settings'],
 			['/sites/abc/config', 'site.config'],
 			['/sites/abc/posts', 'site.posts'],
@@ -52,7 +107,7 @@ describe('navigation metadata', () => {
 		for (const id of ['site.posts', 'site.friends', 'site.albums', 'site.footprints']) {
 			expect(groupOf(id), id).toBe('content');
 		}
-		for (const id of ['site.settings', 'site.config', 'site.theme']) {
+		for (const id of ['site.caddy', 'site.settings', 'site.config', 'site.theme']) {
 			expect(groupOf(id), id).toBe('settings');
 		}
 		for (const id of ['site.builds', 'site.releases']) {

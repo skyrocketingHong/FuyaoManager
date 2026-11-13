@@ -5,6 +5,7 @@
  */
 import { api, setCsrfToken } from './client';
 import type { components } from './schema';
+import { contentResourcePath, type ContentTarget } from './content';
 
 export type User = components['schemas']['User'];
 export type Site = components['schemas']['Site'];
@@ -85,8 +86,12 @@ export async function beginPasskeyLogin(): Promise<AssertionOptionsEnvelope> {
 }
 
 /** Completes a passkey login; the server mints a fresh full session. */
-export async function finishPasskeyLogin(assertion: CredentialAssertionResponse): Promise<CeremonyDone> {
-	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/login/verify', { body: assertion });
+export async function finishPasskeyLogin(
+	assertion: CredentialAssertionResponse
+): Promise<CeremonyDone> {
+	const { data } = await api<CeremonyDone>('POST', '/api/v1/auth/login/verify', {
+		body: assertion
+	});
 	setCsrfToken(data.csrfToken);
 	return data;
 }
@@ -263,44 +268,44 @@ export async function rollbackRelease(siteId: string, releaseId: string): Promis
 // --- site content (single authority for the frozen-snapshot builds) ---
 
 export async function listPosts(
-	siteId: string,
+	siteId: ContentTarget,
 	query: string,
 	page: number,
 	pageSize: number
 ): Promise<PostList> {
 	const { data } = await api<PostList>(
 		'GET',
-		`/api/v1/sites/${siteId}/posts?query=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`
+		`${contentResourcePath(siteId, 'posts')}?query=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`
 	);
 	return data;
 }
 
-export async function createPost(siteId: string, post: Partial<Post>): Promise<Post> {
-	const { data } = await api<Post>('POST', `/api/v1/sites/${siteId}/posts`, { body: post });
+export async function createPost(siteId: ContentTarget, post: Partial<Post>): Promise<Post> {
+	const { data } = await api<Post>('POST', contentResourcePath(siteId, 'posts'), { body: post });
 	return data;
 }
 
 export async function getPost(
-	siteId: string,
+	siteId: ContentTarget,
 	postPath: string
 ): Promise<{ post: Post; etag: string }> {
 	const { data, etag } = await api<Post>(
 		'GET',
-		`/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`
+		`${contentResourcePath(siteId, 'posts')}/${encodeURIComponent(postPath)}`
 	);
 	if (etag === null) throw new Error('post response missing ETag');
 	return { post: data, etag };
 }
 
 export async function putPost(
-	siteId: string,
+	siteId: ContentTarget,
 	postPath: string,
 	post: Partial<Post>,
 	etag: string
 ): Promise<Post> {
 	const { data } = await api<Post>(
 		'PUT',
-		`/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`,
+		`${contentResourcePath(siteId, 'posts')}/${encodeURIComponent(postPath)}`,
 		{
 			body: post,
 			etag
@@ -309,25 +314,33 @@ export async function putPost(
 	return data;
 }
 
-export async function deletePost(siteId: string, postPath: string, etag: string): Promise<void> {
-	await api<void>('DELETE', `/api/v1/sites/${siteId}/posts/${encodeURIComponent(postPath)}`, {
-		etag
-	});
+export async function deletePost(
+	siteId: ContentTarget,
+	postPath: string,
+	etag: string
+): Promise<void> {
+	await api<void>(
+		'DELETE',
+		`${contentResourcePath(siteId, 'posts')}/${encodeURIComponent(postPath)}`,
+		{
+			etag
+		}
+	);
 }
 
 export async function getFriends(
-	siteId: string
+	siteId: ContentTarget
 ): Promise<{ friends: FriendsEnvelope['friends']; digest: string }> {
-	const { data } = await api<FriendsEnvelope>('GET', `/api/v1/sites/${siteId}/content/friends`);
+	const { data } = await api<FriendsEnvelope>('GET', contentResourcePath(siteId, 'friends'));
 	return { friends: data.friends, digest: data.digest };
 }
 
 export async function putFriends(
-	siteId: string,
+	siteId: ContentTarget,
 	friends: FriendsEnvelope['friends'],
 	digest: string
 ): Promise<FriendsEnvelope> {
-	const { data } = await api<FriendsEnvelope>('PUT', `/api/v1/sites/${siteId}/content/friends`, {
+	const { data } = await api<FriendsEnvelope>('PUT', contentResourcePath(siteId, 'friends'), {
 		body: { friends },
 		etag: digest
 	});
@@ -395,27 +408,29 @@ export async function putSiteConfig(
 
 // --- albums ---
 
-export async function getAlbums(siteId: string): Promise<{ index: AlbumIndex; digest: string }> {
+export async function getAlbums(
+	siteId: ContentTarget
+): Promise<{ index: AlbumIndex; digest: string }> {
 	const { data } = await api<{ index: AlbumIndex; digest: string }>(
 		'GET',
-		`/api/v1/sites/${siteId}/albums`
+		contentResourcePath(siteId, 'albums')
 	);
 	return data;
 }
 
 export async function getAlbumYear(
-	siteId: string,
+	siteId: ContentTarget,
 	year: string
 ): Promise<{ year: AlbumYear; digest: string }> {
 	const { data } = await api<{ year: AlbumYear; digest: string }>(
 		'GET',
-		`/api/v1/sites/${siteId}/albums/${year}`
+		`${contentResourcePath(siteId, 'albums')}/${encodeURIComponent(year)}`
 	);
 	return data;
 }
 
 export async function putAlbumYear(
-	siteId: string,
+	siteId: ContentTarget,
 	year: string,
 	photos: Array<{ filename: string; title?: string; description?: string; alt?: string }>,
 	digest: string,
@@ -424,7 +439,7 @@ export async function putAlbumYear(
 ): Promise<{ year: AlbumYear; digest: string }> {
 	const { data } = await api<{ year: AlbumYear; digest: string }>(
 		'PUT',
-		`/api/v1/sites/${siteId}/albums/${year}`,
+		`${contentResourcePath(siteId, 'albums')}/${encodeURIComponent(year)}`,
 		{ body: { year: { title, cover, photos } } as never, etag: digest }
 	);
 	return data;
@@ -432,33 +447,40 @@ export async function putAlbumYear(
 
 /** Uploads one original; the returned task id tracks EXIF/thumbnail processing. */
 export async function uploadAlbumPhoto(
-	siteId: string,
+	siteId: ContentTarget,
 	file: File
 ): Promise<{ path: string; taskId: string }> {
 	const form = new FormData();
 	form.append('file', file);
 	const { data } = await api<{ path: string; taskId: string }>(
 		'POST',
-		`/api/v1/sites/${siteId}/albums/photos`,
+		`${contentResourcePath(siteId, 'albums')}/photos`,
 		{ body: form, multipart: true }
 	);
 	return data;
 }
 
-export async function processAlbums(siteId: string): Promise<{ taskId: string }> {
-	const { data } = await api<{ taskId: string }>('POST', `/api/v1/sites/${siteId}/albums/process`, {
-		body: {}
-	});
+export async function processAlbums(siteId: ContentTarget): Promise<{ taskId: string }> {
+	const { data } = await api<{ taskId: string }>(
+		'POST',
+		`${contentResourcePath(siteId, 'albums')}/process`,
+		{
+			body: {}
+		}
+	);
 	return data;
 }
 
-export async function listMediaTasks(siteId: string): Promise<MediaTask[]> {
-	const { data } = await api<{ tasks: MediaTask[] }>('GET', `/api/v1/sites/${siteId}/albums/tasks`);
+export async function listMediaTasks(siteId: ContentTarget): Promise<MediaTask[]> {
+	const { data } = await api<{ tasks: MediaTask[] }>(
+		'GET',
+		`${contentResourcePath(siteId, 'albums')}/tasks`
+	);
 	return data.tasks;
 }
 
 export async function deleteAlbumPhoto(
-	siteId: string,
+	siteId: ContentTarget,
 	year: string,
 	filename: string,
 	digest: string,
@@ -466,7 +488,7 @@ export async function deleteAlbumPhoto(
 ): Promise<void> {
 	await api<void>(
 		'DELETE',
-		`/api/v1/sites/${siteId}/albums/${year}/${encodeURIComponent(filename)}?mode=${mode}`,
+		`${contentResourcePath(siteId, 'albums')}/${encodeURIComponent(year)}/${encodeURIComponent(filename)}?mode=${mode}`,
 		{
 			etag: digest
 		}
@@ -476,23 +498,23 @@ export async function deleteAlbumPhoto(
 // --- footprints ---
 
 export async function getFootprints(
-	siteId: string
+	siteId: ContentTarget
 ): Promise<{ footprints: FootprintsDoc; digest: string }> {
 	const { data } = await api<{ footprints: FootprintsDoc; digest: string }>(
 		'GET',
-		`/api/v1/sites/${siteId}/content/footprints`
+		contentResourcePath(siteId, 'footprints')
 	);
 	return data;
 }
 
 export async function putFootprints(
-	siteId: string,
+	siteId: ContentTarget,
 	footprints: FootprintsDoc,
 	digest: string
 ): Promise<{ footprints: FootprintsDoc; digest: string }> {
 	const { data } = await api<{ footprints: FootprintsDoc; digest: string }>(
 		'PUT',
-		`/api/v1/sites/${siteId}/content/footprints`,
+		contentResourcePath(siteId, 'footprints'),
 		{ body: { footprints }, etag: digest }
 	);
 	return data;

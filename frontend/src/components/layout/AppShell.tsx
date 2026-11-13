@@ -41,6 +41,7 @@ import SidebarInfo from './SidebarInfo';
 import SidebarFoot from './SidebarFoot';
 import TopBar from './TopBar';
 import CaddyIcon from '../CaddyIcon';
+import { allowSitePage } from '../../lib/navigation/workspace';
 
 type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
@@ -57,6 +58,8 @@ const navIcons: Record<string, LucideIcon> = {
 	'site.settings': Settings,
 	'site.config': UserRound,
 	'site.theme': Palette,
+	'site.theme-config': Palette,
+	'site.sources': Link2,
 	'site.builds': Hammer,
 	'site.releases': Rocket
 };
@@ -64,7 +67,7 @@ const navIcons: Record<string, LucideIcon> = {
 function menuEntry(itemId: string, siteId: string | null): MenuItem {
 	const item = navItems.find((entry) => entry.id === itemId);
 	if (!item) throw new Error(`unknown navigation item ${itemId}`);
-	const Icon = navIcons[item.id];
+	const Icon = navIcons[item.id] ?? navIcons[item.id.replace('content.', 'site.')];
 	return {
 		key: itemPath(item, siteId),
 		label: t(item.titleKey),
@@ -99,11 +102,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					item.scope === (siteId ? 'site' : 'platform') &&
 					item.group === group.id &&
 					item.menu !== false &&
-					(item.scope !== 'site' || !!currentSite) &&
-					(item.scope !== 'site' ||
-						((currentSite?.kind ?? 'theme') === 'theme'
-							? item.id !== 'site.caddy'
-							: item.id === 'site.caddy')) &&
+					(item.scope !== 'site' || allowSitePage(currentSite, item.id)) &&
 					(!item.adminOnly || session.user?.platformRole === 'admin')
 			)
 			.map((item) => menuEntry(item.id, siteId));

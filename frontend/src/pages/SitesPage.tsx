@@ -8,7 +8,7 @@ import { Link } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Col, Empty, Form, Input, Modal, Row, Select, Space } from 'antd';
 import { api } from '../lib/api/client';
-import { useAdminMutation } from '../lib/admin/requests';
+import { useAdminMutation, useAdminQuery } from '../lib/admin/requests';
 import {
 	createSite,
 	listThemes,
@@ -30,8 +30,10 @@ import { usePageHeader } from '../components/PageHeader';
 import PageLoading from '../components/PageLoading';
 import DataTable from '../components/DataTable';
 import StatusTag, { type StatusKind } from '../components/StatusTag';
-import { TablePanel } from '../components/Panel';
+import { Panel, TablePanel } from '../components/Panel';
 import CaddyIcon from '../components/CaddyIcon';
+import ContentStatistics from '../components/ContentStatistics';
+import { getPlatformContent } from '../lib/api/content';
 
 function managementMode(site: Site): 'platform' | 'caddy' | 'unknown' {
 	if (
@@ -59,6 +61,7 @@ function provisionKind(site: Site): StatusKind {
 
 export default function SitesPage() {
 	const sync = useAdminMutation();
+	const library = useAdminQuery(getPlatformContent);
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const siteList = useSyncExternalStore(subscribeSiteList, siteListSnapshot);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -210,6 +213,20 @@ export default function SitesPage() {
 
 	return (
 		<div className="page-stack">
+			<Panel title={t('content.platform')}>
+				{library.data ? (
+					<ContentStatistics counts={library.data.counts} />
+				) : library.loading ? (
+					<PageLoading spec="section" />
+				) : (
+					<Alert
+						type="error"
+						showIcon
+						title={t(library.error ?? 'error.generic')}
+						action={<Button onClick={library.reload}>{t('common.retry')}</Button>}
+					/>
+				)}
+			</Panel>
 			{sync.error && <Alert type="error" showIcon title={t(sync.error)} />}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>

@@ -181,3 +181,120 @@ it('locks editing during a save and clears the draft after the canonical reply',
 		).disabled
 	).toBe(true);
 });
+
+function completeConfig(): ReturnType<typeof config> {
+	const response = config('Alice');
+	response.config = {
+		schemaVersion: 1,
+		site: {
+			name: 'Settings-owned name',
+			defaultLocale: 'zh-CN',
+			url: 'https://old.example',
+			startDate: '2019-03-01',
+			startYear: 2019
+		},
+		profile: {
+			name: 'Alice',
+			birthDate: '2000-02-29',
+			avatarUrl: 'https://images.example/avatar.png',
+			roles: { 'zh-CN': '开发者', 'en-US': 'Developer' },
+			quotes: { 'zh-CN': '签名', 'en-US': 'Quote' }
+		},
+		repository: { name: 'Repository', owner: 'owner', url: 'https://github.com/owner/repository' },
+		seo: {
+			author: 'Author',
+			description: 'Description',
+			keywords: ['one', 'two'],
+			twitterId: 'account'
+		},
+		services: {
+			wallpaper: {
+				defaultUrl: 'https://images.example/default.jpg',
+				apiUrl: '/api/wallpaper',
+				metadataApiUrl: '/api/wallpaper-metadata'
+			},
+			amap: { browserKey: 'public-browser-key', serviceHost: '/_AMapService' },
+			githubProxyUrl: '/api/github',
+			analyticsProxyUrl: '/api/analytics',
+			codingActivityProxyUrl: '/api/activity',
+			codingLanguagesProxyUrl: '/api/languages'
+		}
+	};
+	return response;
+}
+
+it('edits the canonical site URL and coding language service without losing other site configuration', async () => {
+	const initial = completeConfig();
+	const expected: management.SiteConfig = {
+		...initial.config,
+		site: { ...initial.config.site, url: 'https://new.example/blog' },
+		services: { ...initial.config.services, codingLanguagesProxyUrl: '/services/languages' }
+	};
+	vi.mocked(management.getSiteConfig).mockResolvedValue(initial);
+	vi.mocked(management.putSiteConfig).mockResolvedValue({
+		config: expected,
+		digest: 'sha256:saved',
+		amapSecurityCodeSet: false
+	});
+	mount();
+	fireEvent.change(await screen.findByRole('textbox', { name: 'Site URL' }), {
+		target: { value: 'https://new.example/blog' }
+	});
+	fireEvent.change(screen.getByRole('textbox', { name: 'Coding languages proxy URL' }), {
+		target: { value: '/services/languages' }
+	});
+	fireEvent.click(within(screen.getByTestId('topbar')).getByRole('button', { name: 'Save' }));
+	await waitFor(() =>
+		expect(management.putSiteConfig).toHaveBeenCalledExactlyOnceWith(
+			site.siteId,
+			expected,
+			'sha256:config',
+			undefined
+		)
+	);
+	expect(screen.queryByRole('textbox', { name: 'Site name' })).toBeNull();
+	expect((screen.getByRole('textbox', { name: 'Site URL' }) as HTMLInputElement).value).toBe(
+		'https://new.example/blog'
+	);
+	expect(screen.queryByTestId('route-crash')).toBeNull();
+});
+
+it.each([
+	['Site start date', '2026-02-30', 'Enter a valid date in YYYY-MM-DD format.'],
+	['Birth date', '2025-02-29', 'Enter a valid date in YYYY-MM-DD format.'],
+	['Site start year', '2026.5', 'The start year must be an integer from 1 to 9999.'],
+	['Site URL', 'javascript:alert(1)', 'Enter a complete HTTP or HTTPS site URL.']
+])('rejects an invalid %s before saving', async (label, value, error) => {
+	vi.mocked(management.getSiteConfig).mockResolvedValue(completeConfig());
+	mount();
+	fireEvent.change(await screen.findByRole('textbox', { name: label }), { target: { value } });
+	fireEvent.click(within(screen.getByTestId('topbar')).getByRole('button', { name: 'Save' }));
+	expect(await screen.findByText(error)).toBeDefined();
+	expect(management.putSiteConfig).not.toHaveBeenCalled();
+});
+
+it('clears optional date, year and service values while preserving required settings-owned fields', async () => {
+	const initial = completeConfig();
+	vi.mocked(management.getSiteConfig).mockResolvedValue(initial);
+	vi.mocked(management.putSiteConfig).mockImplementation(async (_siteId, submitted) => ({
+		config: submitted,
+		digest: 'sha256:cleared'
+	}));
+	mount();
+	for (const label of ['Site start date', 'Site start year', 'Wallpaper API URL', 'Twitter ID'])
+		fireEvent.change(await screen.findByRole('textbox', { name: label }), {
+			target: { value: '' }
+		});
+	fireEvent.click(within(screen.getByTestId('topbar')).getByRole('button', { name: 'Save' }));
+	await waitFor(() => expect(management.putSiteConfig).toHaveBeenCalledTimes(1));
+	const submitted = vi.mocked(management.putSiteConfig).mock.calls[0][1];
+	expect(submitted.site).toEqual({ ...initial.config.site, startDate: '', startYear: undefined });
+	expect(submitted.services.wallpaper).toEqual({
+		...initial.config.services.wallpaper,
+		apiUrl: ''
+	});
+	expect(submitted.seo.twitterId).toBe('');
+	expect(submitted.services.codingActivityProxyUrl).toBe(
+		initial.config.services.codingActivityProxyUrl
+	);
+});

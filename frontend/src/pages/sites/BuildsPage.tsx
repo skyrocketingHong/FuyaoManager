@@ -19,6 +19,7 @@ import {
 } from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
+import { siteWorkspace } from '../../lib/navigation/workspace';
 
 const terminalStatus = new Set(['succeeded', 'failed']);
 
@@ -230,7 +231,7 @@ export default function BuildsPage() {
 		}
 	}
 
-	const editable = site !== null && canEditSite(site);
+	const editable = site !== null && canEditSite(site) && siteWorkspace(site).buildable;
 
 	const createButton = (
 		<Popconfirm

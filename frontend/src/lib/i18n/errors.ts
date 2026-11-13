@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 
 const codeToKey: Record<string, MessageKey> = {
 	preview_closed: 'error.previewClosed',
+	content_source_shared: 'content.sourceSharedError',
 	caddy_unavailable: 'error.caddyUnavailable',
 	caddy_invalid: 'error.caddyInvalid',
 	site_kind_mismatch: 'caddy.unsupportedPage',
@@ -57,6 +58,7 @@ const codeToKey: Record<string, MessageKey> = {
 	self_management: 'error.selfManagement',
 	account_conflict: 'error.accountConflict',
 	operator_registration_required: 'caddy.operatorRegistration',
+	protected_control_plane: 'caddy.protectedControlPlane',
 	source_missing: 'caddy.missing',
 	source_config_changed: 'caddy.sourceChanged',
 	caddy_validation_failed: 'caddy.validationFailed',

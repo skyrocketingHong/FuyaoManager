@@ -24,6 +24,7 @@ import { usePageHeader } from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import StatusTag from '../../components/StatusTag';
 import { TablePanel } from '../../components/Panel';
+import { useContentScope } from '../../components/ContentScopeProvider';
 import {
 	createPost,
 	deletePost,
@@ -75,6 +76,8 @@ function toForm(post: Post): PostForm {
 
 export default function PostsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
+	const scope = useContentScope();
+	const target = scope.target;
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
 	const [posts, setPosts] = useState<Post[] | null>(null);
@@ -99,10 +102,10 @@ export default function PostsPage() {
 
 	const refresh = useCallback(
 		async (pageArg?: number, queryArg?: string) => {
-			if (!siteId) return;
+			if (!target) return;
 			const my = ++epoch.current;
 			try {
-				const list = await listPosts(siteId, queryArg ?? query, pageArg ?? page, 10);
+				const list = await listPosts(target, queryArg ?? query, pageArg ?? page, 10);
 				if (my !== epoch.current) return;
 				setPosts(list.posts);
 				setTotal(list.total);
@@ -117,39 +120,40 @@ export default function PostsPage() {
 				setErrorKey(key);
 			}
 		},
-		[siteId, navigate, page, query]
+		[target, navigate, page, query]
 	);
 
 	useEffect(() => {
-		if (!siteId) return;
+		if (!target) return;
 		epoch.current++;
 		setSite(null);
 		setPosts(null);
 		setErrorKey(null);
 		let cancelled = false;
-		getSite(siteId)
-			.then((s) => {
-				if (!cancelled) setSite(s);
-			})
-			.catch(() => {});
+		if (siteId && scope.canEdit === undefined)
+			getSite(siteId)
+				.then((s) => {
+					if (!cancelled) setSite(s);
+				})
+				.catch(() => {});
 		void refresh(1, '');
 		return () => {
 			epoch.current++;
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [siteId]);
+	}, [scope.key]);
 
 	const editorEpoch = useRef(0);
 
 	async function openEditor(postPath?: string) {
 		setConflict(false);
-		if (!siteId) return;
+		if (!target) return;
 		const my = ++editorEpoch.current;
 		setTouched(new Set());
 		if (postPath) {
 			try {
-				const { post, etag } = await getPost(siteId, postPath);
+				const { post, etag } = await getPost(target, postPath);
 				if (my !== editorEpoch.current) return; // user closed/switched meanwhile
 				setEditing(post);
 				setDigest(etag);
@@ -179,11 +183,11 @@ export default function PostsPage() {
 	}
 
 	async function handleSave(values: PostForm) {
-		if (!siteId || !editing) return;
+		if (!target || !editing) return;
 		setSaving(true);
 		try {
 			const body: Partial<Post> = toBody(values);
-			await putPost(siteId, editing.path, body, digest);
+			await putPost(target, editing.path, body, digest);
 			void messageApi.success(t('posts.saved'));
 			// If the user kept editing while the request was in flight, the
 			// newer local values differ from what was submitted: keep the
@@ -230,10 +234,10 @@ export default function PostsPage() {
 	// while preserving every locally-touched field: only untouched fields
 	// refresh from the server. Discarding local edits is a separate action.
 	async function syncAfterConflict() {
-		if (!siteId || !editing) return;
+		if (!target || !editing) return;
 		const my = ++editorEpoch.current;
 		try {
-			const { post, etag } = await getPost(siteId, editing.path);
+			const { post, etag } = await getPost(target, editing.path);
 			if (my !== editorEpoch.current) return;
 			const serverForm = toForm(post);
 			setBaseline(serverForm);
@@ -262,7 +266,7 @@ export default function PostsPage() {
 	}
 
 	async function handleCreate(values: PostForm) {
-		if (!siteId) return;
+		if (!target) return;
 		setSaving(true);
 		try {
 			const body: Partial<Post> = {
@@ -276,7 +280,7 @@ export default function PostsPage() {
 					.map((s) => s.trim())
 					.filter(Boolean)
 			};
-			await createPost(siteId, body);
+			await createPost(target, body);
 			void messageApi.success(t('posts.saved'));
 			setEditorOpen(false);
 			await refresh();
@@ -289,10 +293,10 @@ export default function PostsPage() {
 	}
 
 	async function handleDelete(post: Post) {
-		if (!siteId) return;
+		if (!target) return;
 		try {
-			const { etag } = await getPost(siteId, post.path);
-			await deletePost(siteId, post.path, etag);
+			const { etag } = await getPost(target, post.path);
+			await deletePost(target, post.path, etag);
 			await refresh();
 		} catch (err) {
 			const key = apiErrorKey(err);
@@ -300,7 +304,8 @@ export default function PostsPage() {
 		}
 	}
 
-	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
+	const editable =
+		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
 
 	const searchBox = (
 		<Input.Search

@@ -6,6 +6,14 @@ import { MemoryRouter } from 'react-router-dom';
 import SitesPage from '../src/pages/SitesPage';
 import { setLocale } from '../src/lib/i18n';
 import type { Site } from '../src/lib/api/management';
+vi.mock('../src/lib/api/content', async (original) => ({
+	...(await original<object>()),
+	getPlatformContent: vi.fn().mockResolvedValue({
+		canEdit: true,
+		counts: { posts: 12, albums: 3, photos: 42, places: 8, friends: 4 },
+		amap: {}
+	})
+}));
 
 const runtime = vi.hoisted(() => ({
 	state: { status: 'authenticated', user: { id: 'admin', platformRole: 'admin' } },
@@ -85,4 +93,5 @@ it('groups by configuration ownership independently of site kind and links to th
 		'/sites/redirect/caddy'
 	);
 	expect(screen.queryByRole('button', { name: 'Convert to platform management' })).toBeNull();
+	expect(await screen.findByText('42')).toBeDefined();
 });

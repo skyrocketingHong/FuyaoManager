@@ -175,6 +175,38 @@ function findButton(label: string): HTMLButtonElement {
 	return button;
 }
 
+describe('ReleasesPage declared workspace capabilities', () => {
+	it.each([true, false])(
+		'uses deployable=%s instead of the legacy edge switch for an adopted static site',
+		async (deployable) => {
+			const current = succeededBuild('existing');
+			const next = succeededBuild('candidate');
+			primeState(
+				[next, current],
+				[releaseRow('live', current.id, 'live'), releaseRow('previous', current.id, 'superseded')]
+			);
+			vi.mocked(getSite).mockResolvedValue({
+				...site(),
+				kind: 'static',
+				workspace: {
+					themeEnabled: true,
+					themeSelectable: true,
+					buildable: true,
+					deployable,
+					hasCaddy: true
+				}
+			} as Site);
+			vi.mocked(getSiteEdge).mockResolvedValue(edgeState(deployable));
+			mount();
+			await waitFor(() => expect(screen.getByText(/当前生效/)).toBeDefined());
+			await waitFor(() => expect(findButton(zh['releases.publish']).disabled).toBe(!deployable));
+			expect(findButton(zh['releases.rollback']).disabled).toBe(!deployable);
+			expect(screen.queryByText(zh['edge.isolatedNotice'])).toBeNull();
+		},
+		15000
+	);
+});
+
 describe('ReleasesPage publish feedback and candidate binding', () => {
 	it('publishes the explicit unreleased candidate, not the latest succeeded build', async () => {
 		const b1 = succeededBuild('b1-release-1');

@@ -14,6 +14,7 @@ import DataTable from '../../components/DataTable';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import PageLoading from '../../components/PageLoading';
 import { TablePanel } from '../../components/Panel';
+import { useContentScope } from '../../components/ContentScopeProvider';
 import {
 	deleteAlbumPhoto,
 	getAlbums,
@@ -35,6 +36,8 @@ const terminalTask = new Set(['succeeded', 'failed']);
 
 export default function AlbumsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
+	const scope = useContentScope();
+	const target = scope.target;
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
 	const [index, setIndex] = useState<AlbumIndex | null>(null);
@@ -55,10 +58,10 @@ export default function AlbumsPage() {
 
 	const loadYear = useCallback(
 		async (yearArg: string) => {
-			if (!siteId || !yearArg) return;
+			if (!target || !yearArg) return;
 			const my = ++epoch.current;
 			try {
-				const env = await getAlbumYear(siteId, yearArg);
+				const env = await getAlbumYear(target, yearArg);
 				if (my !== epoch.current) return;
 				setDoc(env.year);
 				setDigest(env.digest);
@@ -75,14 +78,14 @@ export default function AlbumsPage() {
 				setErrorKey(key);
 			}
 		},
-		[siteId, navigate]
+		[target, navigate]
 	);
 
 	const loadIndex = useCallback(async () => {
-		if (!siteId) return;
+		if (!target) return;
 		const my = ++epoch.current;
 		try {
-			const env = await getAlbums(siteId);
+			const env = await getAlbums(target);
 			if (my !== epoch.current) return;
 			setIndex(env.index);
 			const years = env.index.years ?? [];
@@ -98,38 +101,39 @@ export default function AlbumsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [siteId, navigate, loadYear]);
+	}, [target, navigate, loadYear]);
 
 	useEffect(() => {
-		if (!siteId) return;
+		if (!target) return;
 		epoch.current++;
 		setSite(null);
 		setIndex(null);
 		setDoc(null);
 		let cancelled = false;
-		getSite(siteId)
-			.then((s) => {
-				if (!cancelled) setSite(s);
-			})
-			.catch(() => {});
+		if (siteId && scope.canEdit === undefined)
+			getSite(siteId)
+				.then((s) => {
+					if (!cancelled) setSite(s);
+				})
+				.catch(() => {});
 		void loadIndex();
 		return () => {
 			epoch.current++;
 			cancelled = true;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [siteId]);
+	}, [scope.key]);
 
 	// Poll task status while anything is queued or running. When processing
 	// finishes, the index reload is skipped while the user has unsaved
 	// metadata edits — a completed background task must never clobber the
 	// editor. The stale index stays visible until the user saves or reloads.
 	useEffect(() => {
-		if (!siteId) return;
+		if (!target) return;
 		if (!tasks.some((task) => !terminalTask.has(task.status))) return;
 		const timer = window.setInterval(async () => {
 			try {
-				const list = await listMediaTasks(siteId);
+				const list = await listMediaTasks(target);
 				setTasks((prev) => (prev.length === 0 && list.length === 0 ? prev : list));
 				if (!list.some((task) => !terminalTask.has(task.status))) {
 					if (!dirty) {
@@ -141,12 +145,12 @@ export default function AlbumsPage() {
 			}
 		}, 3000);
 		return () => window.clearInterval(timer);
-	}, [tasks, siteId, loadIndex, dirty]);
+	}, [tasks, target, loadIndex, dirty]);
 
 	async function refreshTasks() {
-		if (!siteId) return;
+		if (!target) return;
 		try {
-			setTasks(await listMediaTasks(siteId));
+			setTasks(await listMediaTasks(target));
 		} catch {
 			// surfaced on the next poll
 		}
@@ -154,10 +158,10 @@ export default function AlbumsPage() {
 
 	// Upload beforeUpload: store through the typed API, never auto-upload.
 	async function handleUpload(file: File) {
-		if (!siteId) return false;
+		if (!target) return false;
 		setUploading(true);
 		try {
-			await uploadAlbumPhoto(siteId, file);
+			await uploadAlbumPhoto(target, file);
 			void messageApi.success(t('albums.uploadQueued'));
 			await refreshTasks();
 		} catch (err) {
@@ -212,10 +216,10 @@ export default function AlbumsPage() {
 	// Conflict sync: adopt the server digest (baseline marker) while keeping
 	// the local photo edits; discarding them is the separate explicit action.
 	async function syncAfterConflict() {
-		if (!siteId || !year) return;
+		if (!target || !year) return;
 		const my = ++epoch.current;
 		try {
-			const env = await getAlbumYear(siteId, year);
+			const env = await getAlbumYear(target, year);
 			if (my !== epoch.current) return;
 			setDigest(env.digest);
 			if (!dirty) setDoc(env.year);
@@ -227,7 +231,7 @@ export default function AlbumsPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId || !doc || !year) return;
+		if (!target || !doc || !year) return;
 		setSaving(true);
 		try {
 			const photos = doc.photos.map((p) => ({
@@ -237,7 +241,7 @@ export default function AlbumsPage() {
 				alt: p.alt ?? ''
 			}));
 			const saved = await putAlbumYear(
-				siteId,
+				target,
 				year,
 				photos,
 				digest,
@@ -265,9 +269,9 @@ export default function AlbumsPage() {
 	// releases that still reference them. Hard delete additionally removes
 	// files and is refused while referenced.
 	async function handleDelete(photo: AlbumPhotoEntry, mode: 'delete' | 'detach') {
-		if (!siteId || !year) return;
+		if (!target || !year) return;
 		try {
-			await deleteAlbumPhoto(siteId, year, photo.filename, digest, mode);
+			await deleteAlbumPhoto(target, year, photo.filename, digest, mode);
 			await loadYear(year);
 			void messageApi.success(mode === 'detach' ? t('albums.detached') : t('albums.deleted'));
 		} catch (err) {
@@ -276,8 +280,9 @@ export default function AlbumsPage() {
 		}
 	}
 
-	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
-	useUnsavedGuard(editable && dirty);
+	const editable =
+		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
+	useUnsavedGuard(dirty);
 	const activeTask = tasks.find((task) => !terminalTask.has(task.status));
 	const lastFailure = tasks.find((task) => task.status === 'failed');
 
@@ -347,10 +352,12 @@ export default function AlbumsPage() {
 					action={
 						<Button
 							size="small"
+							disabled={!editable}
 							onClick={async () => {
+								if (!target) return;
 								const { processAlbums } = await import('../../lib/api/management');
 								try {
-									await processAlbums(siteId ?? '');
+									await processAlbums(target);
 									await refreshTasks();
 								} catch (err) {
 									const key = apiErrorKey(err);

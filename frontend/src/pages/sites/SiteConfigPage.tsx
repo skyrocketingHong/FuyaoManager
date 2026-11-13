@@ -26,6 +26,9 @@ import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
 interface ConfigForm {
+	siteUrl: string;
+	startDate: string;
+	startYear: string;
 	profileName: string;
 	birthDate: string;
 	avatarUrl: string;
@@ -39,7 +42,14 @@ interface ConfigForm {
 	seoAuthor: string;
 	seoDescription: string;
 	seoKeywords: string;
+	seoTwitterId: string;
 	wallpaperUrl: string;
+	wallpaperApiUrl: string;
+	wallpaperMetadataApiUrl: string;
+	githubProxyUrl: string;
+	analyticsProxyUrl: string;
+	codingActivityProxyUrl: string;
+	codingLanguagesProxyUrl: string;
 	amapBrowserKey: string;
 	amapServiceHost: string;
 	amapSecurityCode: string;
@@ -62,10 +72,14 @@ export default function SiteConfigPage() {
 	const [saving, setSaving] = useState(false);
 	const [conflict, setConflict] = useState(false);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
+	const [validationError, setValidationError] = useState<MessageKey | null>(null);
 	const [messageApi, contextHolder] = message.useMessage();
 	const epoch = useRef(0);
 
 	const toForm = (cfg: SiteConfig): ConfigForm => ({
+		siteUrl: cfg.site?.url ?? '',
+		startDate: cfg.site?.startDate ?? '',
+		startYear: cfg.site?.startYear === undefined ? '' : String(cfg.site.startYear),
 		profileName: cfg.profile?.name ?? '',
 		birthDate: cfg.profile?.birthDate ?? '',
 		avatarUrl: cfg.profile?.avatarUrl ?? '',
@@ -79,7 +93,14 @@ export default function SiteConfigPage() {
 		seoAuthor: cfg.seo?.author ?? '',
 		seoDescription: cfg.seo?.description ?? '',
 		seoKeywords: (cfg.seo?.keywords ?? []).join(', '),
+		seoTwitterId: cfg.seo?.twitterId ?? '',
 		wallpaperUrl: cfg.services?.wallpaper?.defaultUrl ?? '',
+		wallpaperApiUrl: cfg.services?.wallpaper?.apiUrl ?? '',
+		wallpaperMetadataApiUrl: cfg.services?.wallpaper?.metadataApiUrl ?? '',
+		githubProxyUrl: cfg.services?.githubProxyUrl ?? '',
+		analyticsProxyUrl: cfg.services?.analyticsProxyUrl ?? '',
+		codingActivityProxyUrl: cfg.services?.codingActivityProxyUrl ?? '',
+		codingLanguagesProxyUrl: cfg.services?.codingLanguagesProxyUrl ?? '',
 		amapBrowserKey: cfg.services?.amap?.browserKey ?? '',
 		amapServiceHost: cfg.services?.amap?.serviceHost ?? '',
 		amapSecurityCode: ''
@@ -106,6 +127,7 @@ export default function SiteConfigPage() {
 			setConflict(false);
 			setSecurityInput('');
 			setErrorKey(null);
+			setValidationError(null);
 		} catch (err) {
 			if (my !== epoch.current) return;
 			const key = apiErrorKey(err);
@@ -144,6 +166,7 @@ export default function SiteConfigPage() {
 
 	function patch(delta: Partial<ConfigForm>) {
 		setDirty(true);
+		setValidationError(null);
 		setForm((prev) => (prev ? { ...prev, ...delta } : prev));
 	}
 
@@ -164,26 +187,66 @@ export default function SiteConfigPage() {
 
 	async function handleSave() {
 		if (!siteId || !form || !config || saving) return;
+		for (const [value, previous] of [
+			[form.startDate, config.site.startDate ?? ''],
+			[form.birthDate, config.profile.birthDate ?? '']
+		]) {
+			if (
+				value !== previous &&
+				value &&
+				(!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+					!Number(value.slice(0, 4)) ||
+					Number.isNaN(Date.parse(`${value}T00:00:00Z`)) ||
+					new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value)
+			) {
+				setValidationError('config.invalidDate');
+				return;
+			}
+		}
+		if (
+			form.startYear !== String(config.site.startYear ?? '') &&
+			form.startYear &&
+			!/^[1-9]\d{0,3}$/.test(form.startYear)
+		) {
+			setValidationError('config.invalidYear');
+			return;
+		}
+		try {
+			const url = new URL(form.siteUrl);
+			if (!['http:', 'https:'].includes(url.protocol) || !url.hostname) throw new Error();
+		} catch {
+			setValidationError('config.invalidUrl');
+			return;
+		}
+		setValidationError(null);
 		const requestEpoch = epoch.current;
 		setSaving(true);
 		try {
 			const next: SiteConfig = {
 				...config,
+				site: {
+					...config.site,
+					url: form.siteUrl,
+					startDate: form.startDate,
+					startYear: form.startYear === '' ? undefined : Number(form.startYear)
+				},
 				profile: {
 					...config.profile,
 					name: form.profileName,
 					birthDate: form.birthDate,
 					avatarUrl: form.avatarUrl,
-					roles: { 'zh-CN': form.roleZh, 'en-US': form.roleEn },
-					quotes: { 'zh-CN': form.quoteZh, 'en-US': form.quoteEn }
+					roles: { ...config.profile.roles, 'zh-CN': form.roleZh, 'en-US': form.roleEn },
+					quotes: { ...config.profile.quotes, 'zh-CN': form.quoteZh, 'en-US': form.quoteEn }
 				},
 				repository: {
+					...config.repository,
 					name: form.repoName,
 					url: form.repoUrl,
 					owner: form.repoOwner
 				},
 				seo: {
 					...config.seo,
+					twitterId: form.seoTwitterId,
 					author: form.seoAuthor,
 					description: form.seoDescription,
 					keywords: form.seoKeywords
@@ -193,7 +256,16 @@ export default function SiteConfigPage() {
 				},
 				services: {
 					...config.services,
-					wallpaper: { ...config.services?.wallpaper, defaultUrl: form.wallpaperUrl },
+					wallpaper: {
+						...config.services?.wallpaper,
+						defaultUrl: form.wallpaperUrl,
+						apiUrl: form.wallpaperApiUrl,
+						metadataApiUrl: form.wallpaperMetadataApiUrl
+					},
+					githubProxyUrl: form.githubProxyUrl,
+					analyticsProxyUrl: form.analyticsProxyUrl,
+					codingActivityProxyUrl: form.codingActivityProxyUrl,
+					codingLanguagesProxyUrl: form.codingLanguagesProxyUrl,
 					amap: {
 						...config.services?.amap,
 						browserKey: form.amapBrowserKey,
@@ -305,7 +377,13 @@ export default function SiteConfigPage() {
 			{errorKey !== null ? (
 				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
+			{validationError && <Alert type="error" showIcon title={t(validationError)} />}
 			<Panel title={t('config.originSection')}>
+				<div className="form-grid">
+					{field(t('config.siteUrl'), 'siteUrl', 'https://…')}
+					{field(t('config.startDate'), 'startDate', 'YYYY-MM-DD')}
+					{field(t('config.startYear'), 'startYear', '2026')}
+				</div>
 				{effectiveOrigin ? (
 					<>
 						<Space>
@@ -348,9 +426,20 @@ export default function SiteConfigPage() {
 				{field(t('config.repoUrl'), 'repoUrl', 'https://github.com/…')}
 				{field(t('config.seoDescription'), 'seoDescription')}
 				{field(t('config.seoKeywords'), 'seoKeywords', 'Svelte, Go')}
+				{field(t('config.twitterId'), 'seoTwitterId')}
 			</Panel>
 			<Panel title={t('config.servicesSection')}>
 				{field(t('config.wallpaper'), 'wallpaperUrl', 'https://…')}
+				<div className="form-grid">
+					{field(t('config.wallpaperApiUrl'), 'wallpaperApiUrl')}
+					{field(t('config.wallpaperMetadataApiUrl'), 'wallpaperMetadataApiUrl')}
+				</div>
+				<div className="form-grid">
+					{field(t('config.githubProxyUrl'), 'githubProxyUrl')}
+					{field(t('config.analyticsProxyUrl'), 'analyticsProxyUrl')}
+					{field(t('config.codingActivityProxyUrl'), 'codingActivityProxyUrl')}
+					{field(t('config.codingLanguagesProxyUrl'), 'codingLanguagesProxyUrl')}
+				</div>
 				<div className="form-grid">
 					{field('AMap Key', 'amapBrowserKey')}
 					{field('AMap ServiceHost', 'amapServiceHost', 'https://…/_AMapService')}
