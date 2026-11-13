@@ -309,6 +309,22 @@ func (a *API) handlePutSiteTheme(w http.ResponseWriter, r *http.Request, auth st
 		return
 	}
 
+	if a.provisioner != nil {
+		site, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID)
+		if err != nil {
+			writeSiteLookupError(w, err)
+			return
+		}
+		host, hostErr := a.previewHost(r.Context(), siteID, auth.User.ID)
+		if hostErr != nil {
+			writeSiteLookupError(w, hostErr)
+			return
+		}
+		if err = a.provisioner.Provision(site.Site, site.Settings, "https://"+host); err != nil {
+			writeProblem(w, 503, "provision_failed", "Cannot prepare the independent site workspace.")
+			return
+		}
+	}
 	updated, err := a.store.Themes.SaveSelection(r.Context(), siteID, theme.ID, auth.User.ID, themeConfig, expectedRev)
 	if err != nil {
 		switch {

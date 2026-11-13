@@ -31,12 +31,14 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── cmd/fuyao-admin/       # CLI：migrate / serve / init-admin / login-code /
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
+│   │                          # sync-caddy / import-content
 │   ├── cmd/fuyao-caddy-control/ # 单独安装、root 拥有的源配置能力
 │   ├── cmd/fuyao-caddy-inventory/ # 在特权边界内生成安全清单
+│   ├── cmd/fuyao-caddy-register/ # 仅root登记等价源配置和发布策略
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0017）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0019）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
 │   │   │                      # 主题、构建、发布、媒体任务、网络入口、审计
@@ -44,12 +46,17 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   │   │                      # 主题、构建、发布、边缘状态、UI 托管
 │   │   │                      # + testdata/theme（内置测试主题）
 │   │   ├── content/           # 逐站受限内容库（ETag、原子写）
+│   │   ├── contentbind/       # 逐类解析平台或独立来源、生成私有构建输入
+│   │   ├── contentmigration/  # 真实数据原子导入及空库初始化
 │   │   ├── siteprovision/     # 逐站目录供应
 │   │   ├── themeregistry/     # 运维驱动的主题登记
 │   │   ├── themecontract/     # contracts/theme 加载与校验（Go 侧）
 │   │   ├── buildrunner/       # 构建任务、受信适配器、任务工作区、
 │   │   │                      # 预览 origin
 │   │   ├── publish/           # release 密封、原子 live 指针、已发布 origin
+│   │   ├── managedpublish/    # 受管Caddy与数据库激活及失败补偿
+│   │   ├── publicationmedia/  # 冻结媒体清单与受限目录复制
+│   │   ├── traffic/           # 受限loopback Cloudflare单日统计快照
 │   │   ├── mediatask/         # 经主题 Node 脚本的相册索引
 │   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
 │   │   ├── caddyinventory/     # fixed read capability runner
@@ -91,6 +98,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
     ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
+    ├── CONTENT_WORKSPACES.md / CONTENT_WORKSPACES_ZH.md
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # 控制台复用来源及适配边界
     ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # 账号、审计和外观操作说明
@@ -100,3 +108,5 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 ## 运行数据布局
 
 默认运行数据位于 `<repo>/data/`（各根可经 `FUYAO_ADMIN_*` 覆盖）：`data/builds/<taskId>/`（快照 + 产物 + 日志）、`data/sites/<siteId>/{content,config}`、`data/releases/<siteId>/<buildId>/`。部署环境将其指向持久数据目录（`/srv/fuyao-admin/data/...`）；`data/` 下内容一律不入版本控制。
+
+独立平台库位于 `data/platform-content/<scopeId>/`。生产任务保存 `content-input/` 和冻结 `publication-media/`，预览与受管发布使用这些副本。root 服务树及能力状态单独位于 `/var/lib/fuyao-caddy-control/`。

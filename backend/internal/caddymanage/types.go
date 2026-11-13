@@ -8,6 +8,8 @@ import (
 	"errors"
 	"io"
 	"regexp"
+
+	"github.com/google/uuid"
 )
 
 var (
@@ -41,24 +43,30 @@ type Capabilities struct {
 	SecurityHeaders bool `json:"securityHeaders"`
 }
 type Request struct {
-	Operation      string   `json:"operation"`
-	SiteKey        string   `json:"siteKey"`
-	ExpectedDigest string   `json:"expectedDigest,omitempty"`
-	Settings       Settings `json:"settings,omitempty"`
-	ValidationID   string   `json:"validationId,omitempty"`
-	RevisionID     string   `json:"revisionId,omitempty"`
+	Operation           string   `json:"operation"`
+	SiteKey             string   `json:"siteKey"`
+	ExpectedDigest      string   `json:"expectedDigest,omitempty"`
+	Settings            Settings `json:"settings,omitempty"`
+	ValidationID        string   `json:"validationId,omitempty"`
+	RevisionID          string   `json:"revisionId,omitempty"`
+	SiteID              string   `json:"siteId,omitempty"`
+	ReleaseID           string   `json:"releaseId,omitempty"`
+	ManifestDigest      string   `json:"manifestDigest,omitempty"`
+	MediaManifestDigest string   `json:"mediaManifestDigest,omitempty"`
 }
 type Result struct {
-	Registered       bool         `json:"registered"`
-	Adopted          bool         `json:"adopted"`
-	SourceDigest     string       `json:"sourceDigest"`
-	CandidateDigest  string       `json:"candidateDigest,omitempty"`
-	ValidationID     string       `json:"validationId,omitempty"`
-	RootRevisionID   string       `json:"rootRevisionId,omitempty"`
-	Settings         Settings     `json:"settings"`
-	Capabilities     Capabilities `json:"capabilities"`
-	Drifted          bool         `json:"drifted,omitempty"`
-	RuntimeUncertain bool         `json:"runtimeUncertain,omitempty"`
+	Registered         bool         `json:"registered"`
+	Adopted            bool         `json:"adopted"`
+	SourceDigest       string       `json:"sourceDigest"`
+	CandidateDigest    string       `json:"candidateDigest,omitempty"`
+	ValidationID       string       `json:"validationId,omitempty"`
+	RootRevisionID     string       `json:"rootRevisionId,omitempty"`
+	Settings           Settings     `json:"settings"`
+	Capabilities       Capabilities `json:"capabilities"`
+	Drifted            bool         `json:"drifted,omitempty"`
+	RuntimeUncertain   bool         `json:"runtimeUncertain,omitempty"`
+	PublicationEnabled bool         `json:"publicationEnabled,omitempty"`
+	PublishedReleaseID string       `json:"publishedReleaseId,omitempty"`
 }
 type Preserve struct {
 	Compression     string `json:"compression"`
@@ -76,6 +84,29 @@ type Registration struct {
 	InitialDigest  string       `json:"initialDigest"`
 	Capabilities   Capabilities `json:"capabilities"`
 	Preserve       Preserve     `json:"preserve"`
+	Publication    *Publication `json:"publication,omitempty"`
+}
+
+// Publication is installed only by the root operator. All source paths and
+// template slots remain outside the unprivileged request contract.
+type Publication struct {
+	SiteID        string        `json:"siteId"`
+	ReleasesRoot  string        `json:"releasesRoot"`
+	BuildsRoot    string        `json:"buildsRoot"`
+	SourceUID     uint32        `json:"sourceUid"`
+	AllowedThemes []string      `json:"allowedThemes"`
+	Paths         []PublishPath `json:"paths"`
+}
+
+type PublishPath struct {
+	Marker        string `json:"marker"`
+	Preserve      string `json:"preserve"`
+	MediaRelative string `json:"mediaRelative,omitempty"`
+}
+
+func canonicalUUID(value string) bool {
+	parsed, err := uuid.Parse(value)
+	return err == nil && parsed != uuid.Nil && parsed.String() == value
 }
 
 func NormalizeSettings(value Settings) (Settings, error) {
@@ -111,7 +142,7 @@ func DecodeRequest(reader io.Reader) (Request, error) {
 	if err := strictJSON(data, &value); err != nil {
 		return value, ErrInvalidRequest
 	}
-	if !keyPattern.MatchString(value.SiteKey) || !oneOf(value.Operation, "inspect", "adopt", "validate", "deploy", "rollback") {
+	if !keyPattern.MatchString(value.SiteKey) || !oneOf(value.Operation, "inspect", "adopt", "validate", "deploy", "rollback", "restore", "release") {
 		return value, ErrInvalidRequest
 	}
 	if value.Operation != "inspect" && !digestPattern.MatchString(value.ExpectedDigest) {
@@ -120,7 +151,14 @@ func DecodeRequest(reader io.Reader) (Request, error) {
 	if value.Operation == "deploy" && !revisionPattern.MatchString(value.ValidationID) {
 		return value, ErrInvalidRequest
 	}
-	if value.Operation == "rollback" && !revisionPattern.MatchString(value.RevisionID) {
+	if oneOf(value.Operation, "rollback", "restore") && !revisionPattern.MatchString(value.RevisionID) {
+		return value, ErrInvalidRequest
+	}
+	if value.Operation == "release" {
+		if !canonicalUUID(value.SiteID) || !canonicalUUID(value.ReleaseID) || !digestPattern.MatchString(value.ManifestDigest) || !digestPattern.MatchString(value.MediaManifestDigest) || value.ValidationID != "" || value.RevisionID != "" {
+			return value, ErrInvalidRequest
+		}
+	} else if value.SiteID != "" || value.ReleaseID != "" || value.ManifestDigest != "" || value.MediaManifestDigest != "" {
 		return value, ErrInvalidRequest
 	}
 	if _, err := NormalizeSettings(value.Settings); err != nil {

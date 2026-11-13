@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publicationmedia"
 )
 
 // SiteRequirements is the trusted server-side statement of what this site type
@@ -70,7 +71,8 @@ type Config struct {
 	// ContentRoots resolves the per-site production content roots (content,
 	// config, favicon) consumed by prepare-build-inputs in production mode.
 	// nil is only valid for ci mode.
-	ContentRoots func(siteID uuid.UUID) (contentRoot, configRoot, faviconRoot string, err error)
+	ContentRoots       func(siteID uuid.UUID) (contentRoot, configRoot, faviconRoot string, err error)
+	MaterializeContent func(ctx context.Context, build model.Build, target string) (contentRoot, configRoot, faviconRoot string, err error)
 	// AlbumLock serializes the prepare step's album metadata regeneration
 	// against human edits of the same files (same lock the media indexer
 	// runs under). nil disables coordination (ci fixture mode).
@@ -467,11 +469,16 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	// self-contained. Failure keeps the working copy for inspection.
 	prepareEnv := []string{"FUYAO_THEME_CONTRACTS=" + filepath.Join(r.cfg.RepoRoot, "contracts", "theme")}
 	seedFavicon := func() error { return nil }
+	var frozenContentRoot string
 	if r.cfg.Mode == "production" {
 		if r.cfg.ContentRoots == nil {
 			return fail("prepare", "Production builds require per-site content roots; configure FUYAO_ADMIN_SITES_ROOT.")
 		}
 		contentRoot, configRoot, faviconRoot, err := r.cfg.ContentRoots(build.SiteID)
+		if r.cfg.MaterializeContent != nil {
+			contentRoot, configRoot, faviconRoot, err = r.cfg.MaterializeContent(ctx, build, filepath.Join(taskDir, "content-input"))
+			frozenContentRoot = contentRoot
+		}
 		if err != nil {
 			return fail("prepare", "Failed to resolve the site's content roots.")
 		}
@@ -527,6 +534,11 @@ func (r *Runner) runBuild(ctx context.Context, build model.Build) error {
 	}
 	if err != nil {
 		return r.commandFailure("prepare", prepareLog, err)
+	}
+	if frozenContentRoot != "" {
+		if _, err := publicationmedia.Freeze(frozenContentRoot, filepath.Join(taskDir, "publication-media"), build.SiteID, build.ID); err != nil {
+			return fail("snapshot", "Failed to freeze the publication media.")
+		}
 	}
 	snapshotWork := filepath.Join(themeCopy, ".fuyao", "build-inputs", "current")
 	snapshotDir := filepath.Join(taskDir, "snapshot")

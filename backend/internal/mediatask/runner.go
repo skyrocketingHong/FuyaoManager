@@ -127,16 +127,18 @@ func (r *Runner) runAlbumIndex(ctx context.Context, task store.MediaTask) error 
 	}
 	// Resolve the script through the site's selected theme so the executed
 	// code is exactly what the catalog registered.
-	selection, err := r.cfg.Themes.GetSelectionForUser(ctx, task.SiteID, task.RequestedBy)
-	if err != nil {
-		return fmt.Errorf("the site has no theme selection to provide the media scripts: %w", err)
+	var themeID = task.ThemeID
+	if themeID == nil {
+		selection, err := r.cfg.Themes.GetSelectionForUser(ctx, task.SiteID, task.RequestedBy)
+		if err != nil || selection.Selection == nil {
+			return fmt.Errorf("the content task has no frozen importer theme")
+		}
+		selected := selection.Selection.ThemeID
+		themeID = &selected
 	}
-	if selection.Selection == nil {
-		return fmt.Errorf("the site has no theme selection to provide the media scripts")
-	}
-	theme, err := r.cfg.Themes.GetByRowID(ctx, selection.Selection.ThemeID)
+	theme, err := r.cfg.Themes.GetByRowID(ctx, *themeID)
 	if err != nil {
-		return fmt.Errorf("the site's theme is no longer registered: %w", err)
+		return fmt.Errorf("the task's frozen theme is no longer registered: %w", err)
 	}
 	script := filepath.Join(theme.SourcePath, "scripts", "generate-album-index.js")
 	if _, err := os.Stat(script); err != nil {

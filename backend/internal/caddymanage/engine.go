@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,6 +40,7 @@ type currentState struct {
 	RootRevisionID string   `json:"rootRevisionId"`
 	Settings       Settings `json:"settings"`
 	Uncertain      bool     `json:"uncertain,omitempty"`
+	ReleaseID      string   `json:"releaseId,omitempty"`
 }
 type rootRevision struct {
 	ID           string
@@ -47,6 +49,7 @@ type rootRevision struct {
 	Source       []byte
 	Settings     Settings
 	Applied      bool
+	ReleaseID    string
 }
 type validationPlan struct {
 	ID                    string
@@ -58,6 +61,7 @@ type validationPlan struct {
 	CandidateDigest       string
 	Settings              Settings
 	CreatedAt             time.Time
+	ReleaseID             string
 }
 type policy struct {
 	Registration
@@ -73,6 +77,10 @@ func Digest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeT
 // Render substitutes only fixed directive strings into operator-owned slots.
 // Preserve fragments are root trust data, never accepted from a draft.
 func Render(reg Registration, settings Settings, template []byte) ([]byte, error) {
+	return render(reg, settings, template, nil)
+}
+
+func render(reg Registration, settings Settings, template []byte, publicationPaths map[string]string) ([]byte, error) {
 	settings, err := NormalizeSettings(settings)
 	if err != nil {
 		return nil, err
@@ -115,6 +123,22 @@ func Render(reg Registration, settings Settings, template []byte) ([]byte, error
 		}
 		value = strings.ReplaceAll(value, slot.token, slot.replacement)
 	}
+	if reg.Publication != nil {
+		for _, path := range reg.Publication.Paths {
+			if strings.Count(value, path.Marker) != 1 {
+				return nil, ErrPermission
+			}
+			replacement := path.Preserve
+			if publicationPaths != nil {
+				var ok bool
+				replacement, ok = publicationPaths[path.Marker]
+				if !ok {
+					return nil, ErrPermission
+				}
+			}
+			value = strings.Replace(value, path.Marker, replacement, 1)
+		}
+	}
 	if strings.Contains(value, "__FUYAO_") {
 		return nil, ErrPermission
 	}
@@ -152,11 +176,13 @@ func (e *Engine) Run(ctx context.Context, request Request) (Result, error) {
 		return Result{}, err
 	}
 	result := Result{Registered: true, Adopted: state != nil, SourceDigest: Digest(p.source), Capabilities: p.Capabilities}
+	result.PublicationEnabled = p.Publication != nil
 	result.Settings, _ = NormalizeSettings(Settings{})
 	if state != nil {
 		result.Settings = state.Settings
 		result.RootRevisionID = state.RootRevisionID
 		result.RuntimeUncertain = state.Uncertain
+		result.PublishedReleaseID = state.ReleaseID
 		result.Drifted = state.SourceDigest != result.SourceDigest || state.Uncertain
 	}
 	if request.Operation == "inspect" {
@@ -215,7 +241,7 @@ func (e *Engine) Run(ctx context.Context, request Request) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		candidate, err := Render(p.Registration, settings, p.base)
+		candidate, err := e.renderPublication(p, settings, state.ReleaseID)
 		if err != nil {
 			return Result{}, err
 		}
@@ -227,6 +253,23 @@ func (e *Engine) Run(ctx context.Context, request Request) (Result, error) {
 		result.CandidateDigest = plan.CandidateDigest
 		result.Settings = settings
 		return result, nil
+	case "release":
+		if state == nil || result.Drifted || p.Publication == nil || p.Publication.SiteID != request.SiteID {
+			return Result{}, ErrUnsupported
+		}
+		if err := e.sealPublication(ctx, p, request); err != nil {
+			return Result{}, err
+		}
+		candidate, err := e.renderPublication(p, state.Settings, request.ReleaseID)
+		if err != nil {
+			return Result{}, err
+		}
+		plan, err := e.validate(ctx, p, request.SiteKey, candidate, state.Settings)
+		if err != nil {
+			return Result{}, err
+		}
+		plan.ReleaseID = request.ReleaseID
+		return e.apply(ctx, p, request.SiteKey, *state, plan, candidate)
 	case "deploy":
 		if state == nil || result.Drifted {
 			return Result{}, ErrConflict
@@ -246,7 +289,7 @@ func (e *Engine) Run(ctx context.Context, request Request) (Result, error) {
 			return Result{}, ErrConflict
 		}
 		return e.apply(ctx, p, request.SiteKey, *state, plan, candidate)
-	case "rollback":
+	case "rollback", "restore":
 		if state == nil {
 			return Result{}, ErrConflict
 		}
@@ -254,17 +297,29 @@ func (e *Engine) Run(ctx context.Context, request Request) (Result, error) {
 		if err := e.readRecord(filepath.Join(e.stateRoot, "revisions", request.RevisionID+".json"), &revision); err != nil {
 			return Result{}, ErrConflict
 		}
-		if revision.SiteKey != request.SiteKey || !revision.Applied || revision.PolicyDigest != p.digest {
+		if revision.SiteKey != request.SiteKey || !revision.Applied {
 			return Result{}, ErrConflict
 		}
-		candidate, err := Render(p.Registration, revision.Settings, p.base)
-		if err != nil || !bytes.Equal(candidate, revision.Source) {
+		// The immutable site template must reproduce the old bytes. A root
+		// operator registering an unrelated host may change the master template
+		// without invalidating a safe, byte-identical single-site rollback.
+		original, err := e.renderPublication(p, revision.Settings, revision.ReleaseID)
+		if err != nil || !bytes.Equal(original, revision.Source) {
 			return Result{}, ErrConflict
+		}
+		targetRelease := state.ReleaseID
+		if request.Operation == "restore" {
+			targetRelease = revision.ReleaseID
+		}
+		candidate, err := e.renderPublication(p, revision.Settings, targetRelease)
+		if err != nil {
+			return Result{}, err
 		}
 		plan, err := e.validate(ctx, p, request.SiteKey, candidate, revision.Settings)
 		if err != nil {
 			return Result{}, err
 		}
+		plan.ReleaseID = targetRelease
 		return e.apply(ctx, p, request.SiteKey, *state, plan, candidate)
 	}
 	return Result{}, ErrInvalidRequest
@@ -304,9 +359,15 @@ func (e *Engine) loadPolicy(key string) (policy, error) {
 	if p.masterTemplate, err = e.trustedFile(p.MasterTemplate); err != nil {
 		return p, err
 	}
-	master, err := RenderMaster(p.masterTemplate, p.SourceFile)
-	if err != nil || !bytes.Equal(master, p.master) {
-		return p, ErrConflict
+	if _, err := RenderMaster(p.masterTemplate, p.SourceFile); err != nil {
+		return p, err
+	}
+	p.masterTemplate, err = liveMasterTemplate(p.master, p.SourceFile)
+	if err != nil {
+		return p, err
+	}
+	if err := validatePublication(p.Publication); err != nil {
+		return p, err
 	}
 	encoded, _ := json.Marshal(p.Registration)
 	p.digest = Digest(append(append(encoded, p.base...), p.masterTemplate...))
@@ -315,6 +376,11 @@ func (e *Engine) loadPolicy(key string) (policy, error) {
 
 func (e *Engine) validate(ctx context.Context, p policy, key string, candidate []byte, settings Settings) (validationPlan, error) {
 	plan := validationPlan{ID: newID(), SiteKey: key, PolicyDigest: p.digest, SourceDigest: Digest(p.source), CandidateDigest: Digest(candidate), Settings: settings, CreatedAt: time.Now().UTC()}
+	if state, err := e.loadState(key); err != nil {
+		return plan, err
+	} else if state != nil {
+		plan.ReleaseID = state.ReleaseID
+	}
 	before, err := e.runner.Adapt(ctx, p.MasterFile)
 	if err != nil {
 		return plan, ErrValidation
@@ -385,11 +451,8 @@ func (e *Engine) apply(ctx context.Context, p policy, key string, old currentSta
 	if err != nil || Digest(current) != plan.SourceDigest {
 		return Result{}, ErrConflict
 	}
-	revision := rootRevision{ID: newID(), SiteKey: key, PolicyDigest: p.digest, Source: candidate, Settings: plan.Settings}
+	revision := rootRevision{ID: newID(), SiteKey: key, PolicyDigest: p.digest, Source: candidate, Settings: plan.Settings, ReleaseID: plan.ReleaseID}
 	if err := e.saveRevision(revision); err != nil {
-		return Result{}, err
-	}
-	if err := e.replaceSource(p.SourceFile, candidate); err != nil {
 		return Result{}, err
 	}
 	restore := func() {
@@ -397,8 +460,12 @@ func (e *Engine) apply(ctx context.Context, p policy, key string, old currentSta
 		defer cancel()
 		if e.replaceSource(p.SourceFile, current) != nil || e.runner.Validate(recovery, p.MasterFile) != nil || e.runner.Reload(recovery, p.MasterFile) != nil || e.checkActive(recovery, p) != nil {
 			old.Uncertain = true
-			_ = e.saveState(key, old)
 		}
+		_ = e.saveState(key, old)
+	}
+	if err := e.replaceSource(p.SourceFile, candidate); err != nil {
+		restore()
+		return Result{}, err
 	}
 	if e.runner.Validate(ctx, p.MasterFile) != nil {
 		restore()
@@ -433,12 +500,47 @@ func (e *Engine) apply(ctx context.Context, p policy, key string, old currentSta
 		restore()
 		return Result{}, err
 	}
-	state := currentState{SourceDigest: Digest(candidate), RootRevisionID: revision.ID, Settings: plan.Settings}
+	state := currentState{SourceDigest: Digest(candidate), RootRevisionID: revision.ID, Settings: plan.Settings, ReleaseID: plan.ReleaseID}
 	if err := e.saveState(key, state); err != nil {
 		restore()
 		return Result{}, err
 	}
-	return Result{Registered: true, Adopted: true, SourceDigest: state.SourceDigest, CandidateDigest: plan.CandidateDigest, RootRevisionID: revision.ID, Settings: plan.Settings, Capabilities: p.Capabilities}, nil
+	return Result{Registered: true, Adopted: true, SourceDigest: state.SourceDigest, CandidateDigest: plan.CandidateDigest, RootRevisionID: revision.ID, Settings: plan.Settings, Capabilities: p.Capabilities, PublicationEnabled: p.Publication != nil, PublishedReleaseID: state.ReleaseID}, nil
+}
+
+func liveMasterTemplate(master []byte, source string) ([]byte, error) {
+	tokens, err := sourceTokens(master)
+	if err != nil {
+		return nil, ErrConflict
+	}
+	count, start, end, depth := 0, 0, 0, 0
+	for index, token := range tokens {
+		if token.text == "{" {
+			depth++
+			continue
+		}
+		if token.text == "}" {
+			depth--
+			if depth < 0 {
+				return nil, ErrConflict
+			}
+			continue
+		}
+		if depth != 0 || token.text != "import" || index+1 >= len(tokens) || tokens[index+1].text != source {
+			continue
+		}
+		lineStart := bytes.LastIndexByte(master[:token.start], '\n') + 1
+		lineEnd := tokens[index+1].end
+		if strings.TrimSpace(string(master[lineStart:lineEnd])) != "import "+strconv.Quote(source) || (index+2 < len(tokens) && tokens[index+2].text != "\n") {
+			return nil, ErrConflict
+		}
+		start, end = tokens[index+1].start, tokens[index+1].end
+		count++
+	}
+	if count != 1 || depth != 0 {
+		return nil, ErrConflict
+	}
+	return bytes.Join([][]byte{master[:start], []byte(SourceMarker), master[end:]}, nil), nil
 }
 
 func (e *Engine) checkActive(ctx context.Context, p policy) error {
@@ -465,15 +567,22 @@ func (e *Engine) checkActive(ctx context.Context, p policy) error {
 // private temporary filenames, so normalize only those exact hide entries;
 // never globally replace arbitrary strings or compare a standalone site.
 func canonicalConfigDigest(data []byte, names map[string]string) (string, error) {
+	encoded, err := canonicalConfig(data, names)
+	if err != nil {
+		return "", err
+	}
+	return Digest(encoded), nil
+}
+func canonicalConfig(data []byte, names map[string]string) ([]byte, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	var value any
 	if decoder.Decode(&value) != nil {
-		return "", ErrValidation
+		return nil, ErrValidation
 	}
 	var trailing any
 	if decoder.Decode(&trailing) != io.EOF {
-		return "", ErrValidation
+		return nil, ErrValidation
 	}
 	var walk func(any)
 	walk = func(value any) {
@@ -481,12 +590,42 @@ func canonicalConfigDigest(data []byte, names map[string]string) (string, error)
 		case map[string]any:
 			if node["handler"] == "file_server" {
 				if hide, ok := node["hide"].([]any); ok {
-					for i, entry := range hide {
+					filtered := make([]any, 0, len(hide))
+					for _, entry := range hide {
 						if name, ok := entry.(string); ok {
 							if replacement, exists := names[name]; exists {
-								hide[i] = replacement
+								if replacement == "" {
+									continue
+								}
+								entry = replacement
 							}
 						}
+						filtered = append(filtered, entry)
+					}
+					node["hide"] = filtered
+					// Caddy sorts source filenames before adding automatic hides.
+					// Temporary filenames can reverse that order or collapse to
+					// one old filename. Hide rules are an OR set, not a route list;
+					// preserve every distinct pattern while canonicalizing it.
+					stringsOnly := true
+					patterns := make([]string, 0, len(filtered))
+					for _, entry := range filtered {
+						text, ok := entry.(string)
+						if !ok {
+							stringsOnly = false
+							break
+						}
+						patterns = append(patterns, text)
+					}
+					if stringsOnly {
+						sort.Strings(patterns)
+						unique := make([]any, 0, len(patterns))
+						for i, pattern := range patterns {
+							if i == 0 || patterns[i-1] != pattern {
+								unique = append(unique, pattern)
+							}
+						}
+						node["hide"] = unique
 					}
 				}
 			}
@@ -502,9 +641,9 @@ func canonicalConfigDigest(data []byte, names map[string]string) (string, error)
 	walk(value)
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		return "", ErrValidation
+		return nil, ErrValidation
 	}
-	return Digest(encoded), nil
+	return encoded, nil
 }
 func newID() string {
 	var value [16]byte

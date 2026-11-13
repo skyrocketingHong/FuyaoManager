@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
-	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // contentProblem maps content-store errors onto stable problem codes.
 func writeContentError(w http.ResponseWriter, err error, writeContext string) {
 	switch {
+	case errors.Is(err, content.ErrShared):
+		writeProblem(w, http.StatusConflict, "content_source_shared", "This site uses platform content; edit it in the platform library or select independent content.")
 	case errors.Is(err, content.ErrNotFound):
 		writeProblem(w, http.StatusNotFound, "not_found", "The content does not exist.")
 	case errors.Is(err, content.ErrInvalidPath):
@@ -32,35 +33,14 @@ func writeContentError(w http.ResponseWriter, err error, writeContext string) {
 	}
 }
 
-// requireSiteEditor loads the site record and rejects non-editors.
-func (a *API) requireSiteEditor(w http.ResponseWriter, r *http.Request, auth store.AuthSession) (rec store.SiteRecord, ok bool) {
-	siteID, ok := parseSiteID(w, r)
-	if !ok {
-		return store.SiteRecord{}, false
-	}
-	rec, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID)
-	if err != nil {
-		writeSiteLookupError(w, err)
-		return store.SiteRecord{}, false
-	}
-	if rec.Role != model.RoleOwner && rec.Role != model.RoleEditor {
-		writeProblem(w, http.StatusForbidden, "forbidden", "Only owners and editors may change site content.")
-		return store.SiteRecord{}, false
-	}
-	return rec, true
-}
-
 // handleListPosts returns a paginated, searchable projection of the site's
 // markdown posts (any member may read).
 func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	pageSize, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
 	if pageSize > 100 {
@@ -71,12 +51,12 @@ func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request, auth store
 		writeContentError(w, err, "Failed to list posts.")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"posts": posts, "total": total})
+	writeJSON(w, http.StatusOK, map[string]any{"posts": posts, "total": total, "canEdit": target.CanEdit})
 }
 
 // handleCreatePost writes a new markdown post.
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -84,38 +64,35 @@ func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request, auth stor
 	if !decodeJSON(w, r, &body, false) {
 		return
 	}
-	created, err := a.content.CreatePost(rec.Site.ID, body)
+	created, err := a.content.CreatePost(rec.ID, body)
 	if err != nil {
 		writeContentError(w, err, "Failed to create the post.")
 		return
 	}
 	w.Header().Set("ETag", `"`+created.Digest+`"`)
-	writeJSON(w, http.StatusCreated, created)
+	writeJSON(w, http.StatusCreated, postContentDTO{Post: created, CanEdit: rec.CanEdit})
 }
 
 // handleGetPost returns one editable post plus its digest ETag.
 func (a *API) handleGetPost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	post, err := a.content.GetPost(siteID, r.PathValue("postPath"))
 	if err != nil {
 		writeContentError(w, err, "Failed to read the post.")
 		return
 	}
 	w.Header().Set("ETag", `"`+post.Digest+`"`)
-	writeJSON(w, http.StatusOK, post)
+	writeJSON(w, http.StatusOK, postContentDTO{Post: post, CanEdit: target.CanEdit})
 }
 
 // handlePutPost saves a post under read-modify-write concurrency: If-Match
 // carries the digest returned by the previous read.
 func (a *API) handlePutPost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -130,18 +107,18 @@ func (a *API) handlePutPost(w http.ResponseWriter, r *http.Request, auth store.A
 	if postPath := r.PathValue("postPath"); postPath != "" {
 		body.Category, body.Slug = splitPostPath(postPath)
 	}
-	saved, err := a.content.SavePost(rec.Site.ID, body, expected)
+	saved, err := a.content.SavePost(rec.ID, body, expected)
 	if err != nil {
 		writeContentError(w, err, "Failed to save the post.")
 		return
 	}
 	w.Header().Set("ETag", `"`+saved.Digest+`"`)
-	writeJSON(w, http.StatusOK, saved)
+	writeJSON(w, http.StatusOK, postContentDTO{Post: saved, CanEdit: rec.CanEdit})
 }
 
 // handleDeletePost removes a post after digest verification.
 func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -149,7 +126,7 @@ func (a *API) handleDeletePost(w http.ResponseWriter, r *http.Request, auth stor
 	if err != nil {
 		return
 	}
-	if err := a.content.DeletePost(rec.Site.ID, r.PathValue("postPath"), expected); err != nil {
+	if err := a.content.DeletePost(rec.ID, r.PathValue("postPath"), expected); err != nil {
 		writeContentError(w, err, "Failed to delete the post.")
 		return
 	}
@@ -189,26 +166,23 @@ var errAbort = errors.New("response written")
 
 // handleGetFriends returns the whole friends document plus its digest.
 func (a *API) handleGetFriends(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	doc, digest, err := a.content.GetFriends(siteID)
 	if err != nil {
 		writeContentError(w, err, "Failed to read friends.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"friends": doc, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"friends": doc, "digest": digest, "canEdit": target.CanEdit})
 }
 
 // handlePutFriends replaces the friends document under If-Match semantics.
 func (a *API) handlePutFriends(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -222,37 +196,34 @@ func (a *API) handlePutFriends(w http.ResponseWriter, r *http.Request, auth stor
 	if err != nil {
 		return
 	}
-	saved, digest, err := a.content.SaveFriends(rec.Site.ID, body.Friends, expected)
+	saved, digest, err := a.content.SaveFriends(rec.ID, body.Friends, expected)
 	if err != nil {
 		writeContentError(w, err, "Failed to save friends.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"friends": saved, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"friends": saved, "digest": digest, "canEdit": rec.CanEdit})
 }
 
 // handleGetSocialLinks returns the site's social links plus digest.
 func (a *API) handleGetSocialLinks(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	links, digest, err := a.content.GetSocialLinks(siteID)
 	if err != nil {
 		writeContentError(w, err, "Failed to read social links.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"links": links, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"links": links, "digest": digest, "canEdit": target.CanEdit})
 }
 
 // handlePutSocialLinks replaces social-links.yaml under If-Match semantics.
 func (a *API) handlePutSocialLinks(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -266,26 +237,23 @@ func (a *API) handlePutSocialLinks(w http.ResponseWriter, r *http.Request, auth 
 	if err != nil {
 		return
 	}
-	saved, digest, err := a.content.SaveSocialLinks(rec.Site.ID, body.Links, expected)
+	saved, digest, err := a.content.SaveSocialLinks(rec.ID, body.Links, expected)
 	if err != nil {
 		writeContentError(w, err, "Failed to save social links.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"links": saved, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"links": saved, "digest": digest, "canEdit": rec.CanEdit})
 }
 
 // handleGetSiteConfig returns the editable site.yaml projection with the
 // amap security code redacted (only whether one is set is reported).
 func (a *API) handleGetSiteConfig(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	doc, securitySet, digest, err := a.content.GetSiteConfig(siteID)
 	if err != nil {
 		writeContentError(w, err, "Failed to read the site configuration.")
@@ -307,7 +275,7 @@ func (a *API) handleGetSiteConfig(w http.ResponseWriter, r *http.Request, auth s
 // security code is write-only: omitted keeps the stored value, an empty
 // string clears it, and it is never returned.
 func (a *API) handlePutSiteConfig(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -330,12 +298,12 @@ func (a *API) handlePutSiteConfig(w http.ResponseWriter, r *http.Request, auth s
 	if err != nil {
 		return
 	}
-	saved, digest, err := a.content.SaveSiteConfig(rec.Site.ID, body.Config, securityCode, expected)
+	saved, digest, err := a.content.SaveSiteConfig(rec.ID, body.Config, securityCode, expected)
 	if err != nil {
 		writeContentError(w, err, "Failed to save the site configuration.")
 		return
 	}
-	_, securitySet, _, err := a.content.GetSiteConfig(rec.Site.ID)
+	_, securitySet, _, err := a.content.GetSiteConfig(rec.ID)
 	if err != nil {
 		a.logger.Error("reread site config after save", "error", err)
 	}

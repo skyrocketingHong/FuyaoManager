@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"os/exec"
 	"time"
 )
@@ -77,18 +78,18 @@ func errorForCode(code string) error {
 	}
 }
 func ErrorCode(err error) string {
-	switch err {
-	case ErrNotRegistered:
+	switch {
+	case errors.Is(err, ErrNotRegistered):
 		return "not_registered"
-	case ErrConflict:
+	case errors.Is(err, ErrConflict):
 		return "conflict"
-	case ErrValidation:
+	case errors.Is(err, ErrValidation):
 		return "validation"
-	case ErrPermission:
+	case errors.Is(err, ErrPermission):
 		return "permission"
-	case ErrUnsupported:
+	case errors.Is(err, ErrUnsupported):
 		return "unsupported"
-	case ErrInvalidRequest:
+	case errors.Is(err, ErrInvalidRequest):
 		return "invalid_request"
 	default:
 		return "unavailable"

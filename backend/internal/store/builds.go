@@ -23,7 +23,7 @@ type BuildStore struct {
 const buildColumns = `b.id, b.site_id, b.requested_by, b.theme_row_id, b.theme_id, b.theme_version,
 	b.manifest_digest, b.theme_config, b.site_settings, b.site_settings_revision,
 	b.theme_selection_revision, b.status, b.failure, b.artifact_path, b.input_digests,
-	b.source_digest, b.source_file_count, b.created_at, b.started_at, b.finished_at`
+	b.source_digest, b.source_file_count, b.created_at, b.started_at, b.finished_at,b.content_sources`
 
 func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	var b model.Build
@@ -34,7 +34,7 @@ func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	err := scan(&b.ID, &b.SiteID, &b.RequestedBy, &b.ThemeRowID, &b.ThemeID, &b.ThemeVersion,
 		&b.ManifestDigest, &b.ThemeConfig, &b.SiteSettings, &b.SiteSettingsRevision,
 		&b.ThemeSelectionRevision, &b.Status, &failure, &artifactPath, &b.InputDigests,
-		&sourceDigest, &sourceFileCount, &b.CreatedAt, &b.StartedAt, &b.FinishedAt)
+		&sourceDigest, &sourceFileCount, &b.CreatedAt, &b.StartedAt, &b.FinishedAt, &b.ContentSources)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Build{}, ErrNotFound
 	}
@@ -121,6 +121,11 @@ func (s *BuildStore) CreateFromSiteSnapshot(ctx context.Context, siteID, userID 
 	if err != nil {
 		return model.Build{}, err
 	}
+	sourceRecord, err := readContentSources(ctx, tx, siteID)
+	if err != nil {
+		return model.Build{}, err
+	}
+	sourceJSON, _ := json.Marshal(sourceRecord.Sources)
 
 	build := model.Build{
 		ID:                     uuid.New(),
@@ -136,14 +141,15 @@ func (s *BuildStore) CreateFromSiteSnapshot(ctx context.Context, siteID, userID 
 		ThemeSelectionRevision: selRevision,
 		Status:                 model.BuildStatusQueued,
 		CreatedAt:              time.Now().UTC(),
+		ContentSources:         sourceJSON,
 	}
 	_, err = tx.Exec(ctx,
 		`INSERT INTO site_builds (id, site_id, requested_by, theme_row_id, theme_id, theme_version,
-			manifest_digest, theme_config, site_settings, site_settings_revision, theme_selection_revision, status)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+			manifest_digest, theme_config, site_settings, site_settings_revision, theme_selection_revision, status,content_sources)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 		build.ID, build.SiteID, build.RequestedBy, build.ThemeRowID, build.ThemeID, build.ThemeVersion,
 		build.ManifestDigest, []byte(build.ThemeConfig), []byte(build.SiteSettings),
-		build.SiteSettingsRevision, build.ThemeSelectionRevision, build.Status)
+		build.SiteSettingsRevision, build.ThemeSelectionRevision, build.Status, sourceJSON)
 	if err != nil {
 		return model.Build{}, err
 	}

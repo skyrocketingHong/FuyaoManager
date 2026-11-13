@@ -47,6 +47,7 @@ type Build struct {
 	Failure                *BuildFailure
 	ArtifactPath           string
 	InputDigests           json.RawMessage
+	ContentSources         json.RawMessage
 	CreatedAt              time.Time
 	StartedAt              *time.Time
 	FinishedAt             *time.Time

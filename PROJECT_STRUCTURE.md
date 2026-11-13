@@ -37,12 +37,14 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── cmd/fuyao-admin/       # CLI: migrate / serve / init-admin / login-code /
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
+│   │                          # sync-caddy / import-content
 │   ├── cmd/fuyao-caddy-control/ # separately installed root-owned source capability
 │   ├── cmd/fuyao-caddy-inventory/ # sanitizes adapter output before the privilege boundary
+│   ├── cmd/fuyao-caddy-register/ # root-only equivalent source registration/publication policy
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0017)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0019)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries, audit
@@ -51,12 +53,17 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   │   │                      # releases, edge status, UI hosting
 │   │   │                      # + testdata/theme (bundled fixture theme)
 │   │   ├── content/           # per-site jailed content store (ETag, atomic writes)
+│   │   ├── contentbind/       # per-category platform/independent resolution and private build inputs
+│   │   ├── contentmigration/  # atomic real-data import and empty-library initialization
 │   │   ├── siteprovision/     # per-site directory provisioning
 │   │   ├── themeregistry/     # operator-driven theme registration
 │   │   ├── themecontract/     # contracts/theme loader and validators (Go)
 │   │   ├── buildrunner/       # build tasks, trusted adapter, task workspaces,
 │   │   │                      # preview origins
 │   │   ├── publish/           # release sealing, atomic live pointer, published origins
+│   │   ├── managedpublish/    # registered Caddy/database activation and failure compensation
+│   │   ├── publicationmedia/  # immutable media manifests and bounded tree copies
+│   │   ├── traffic/           # bounded loopback daily Cloudflare statistics snapshots
 │   │   ├── mediatask/         # album indexing through the theme's Node script
 │   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
 │   │   ├── caddyinventory/     # fixed read capability runner
@@ -100,6 +107,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
     ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
+    ├── CONTENT_WORKSPACES.md / CONTENT_WORKSPACES_ZH.md
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # reused console modules and boundaries
     ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # account, audit and appearance workflows
@@ -113,3 +121,8 @@ Default runtime data lives under `<repo>/data/` (overridable per root via
 `data/sites/<siteId>/{content,config}`, `data/releases/<siteId>/<buildId>/`.
 Deployments set these to the persistent data directory
 (`/srv/fuyao-admin/data/...`); nothing under `data/` is version controlled.
+
+The independent library lives under `data/platform-content/<scopeId>/`.
+Production tasks retain `content-input/` and frozen `publication-media/`;
+preview and registered publication use those copies. Root-owned serving
+trees and capability state live separately under `/var/lib/fuyao-caddy-control/`.

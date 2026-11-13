@@ -30,9 +30,18 @@ type siteDTO struct {
 	Role             string          `json:"role"`
 	Kind             string          `json:"kind"`
 	ManagementMode   string          `json:"managementMode"`
+	Workspace        siteWorkspace   `json:"workspace"`
 	SettingsRevision int64           `json:"settingsRevision"`
 	CreatedAt        string          `json:"createdAt"`
 	UpdatedAt        string          `json:"updatedAt"`
+}
+
+type siteWorkspace struct {
+	ThemeEnabled    bool `json:"themeEnabled"`
+	ThemeSelectable bool `json:"themeSelectable"`
+	Buildable       bool `json:"buildable"`
+	Deployable      bool `json:"deployable"`
+	HasCaddy        bool `json:"hasCaddy"`
 }
 
 // siteCreate is the strict POST /api/v1/sites body. themeId/themeVersion/
@@ -83,6 +92,7 @@ func toSiteDTO(rec store.SiteRecord) siteDTO {
 		Role:             rec.Role,
 		Kind:             rec.Kind,
 		ManagementMode:   rec.ManagementMode,
+		Workspace:        siteWorkspace{ThemeEnabled: rec.ThemeEnabled || rec.Kind == "theme", ThemeSelectable: rec.Kind == "theme" || (rec.Kind == "static" && rec.ManagementMode == "platform"), Buildable: rec.HasTheme && (rec.ThemeEnabled || rec.Kind == "theme"), HasCaddy: rec.HasCaddy},
 		SettingsRevision: rec.Settings.Revision,
 		CreatedAt:        rec.Site.CreatedAt.UTC().Format(timeFormat),
 		UpdatedAt:        rec.Settings.UpdatedAt.UTC().Format(timeFormat),
@@ -166,7 +176,7 @@ func (a *API) handleListSites(w http.ResponseWriter, r *http.Request, auth store
 	}
 	sites := make([]siteDTO, 0, len(records))
 	for _, rec := range records {
-		sites = append(sites, toSiteDTO(rec))
+		sites = append(sites, a.siteDTO(r, rec, auth))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sites": sites})
 }
@@ -182,7 +192,7 @@ func (a *API) handleGetSite(w http.ResponseWriter, r *http.Request, auth store.A
 		writeSiteLookupError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toSiteDTO(rec))
+	writeJSON(w, http.StatusOK, a.siteDTO(r, rec, auth))
 }
 
 // handleGetSettings returns the settings plus the strong ETag.
@@ -413,7 +423,7 @@ func (a *API) handleCreateSite(w http.ResponseWriter, r *http.Request, auth stor
 	rec, _ = a.provisionSite(r, rec, auth.User.ID)
 	// 201 also when provisioning failed: the site exists, the response
 	// carries provisionState=failed, and the retry endpoint can fix it.
-	writeJSON(w, http.StatusCreated, toSiteDTO(rec))
+	writeJSON(w, http.StatusCreated, a.siteDTO(r, rec, auth))
 }
 
 // handleProvisionSite retries directory provisioning for a site whose
@@ -438,11 +448,11 @@ func (a *API) handleProvisionSite(w http.ResponseWriter, r *http.Request, auth s
 		return
 	}
 	if rec.Site.ProvisionState == model.SiteReady {
-		writeJSON(w, http.StatusOK, toSiteDTO(rec))
+		writeJSON(w, http.StatusOK, a.siteDTO(r, rec, auth))
 		return
 	}
 	rec, _ = a.provisionSite(r, rec, auth.User.ID)
-	writeJSON(w, http.StatusOK, toSiteDTO(rec))
+	writeJSON(w, http.StatusOK, a.siteDTO(r, rec, auth))
 }
 
 // provisionSite runs the directory provisioning and persists the resulting
@@ -540,7 +550,7 @@ func (a *API) handlePutVisibility(w http.ResponseWriter, r *http.Request, auth s
 		writeSiteLookupError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, toSiteDTO(refreshed))
+	writeJSON(w, http.StatusOK, a.siteDTO(r, refreshed, auth))
 }
 
 // isUniqueViolation reports whether err is a PostgreSQL unique-constraint

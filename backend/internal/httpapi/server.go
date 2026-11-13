@@ -39,6 +39,10 @@ type Config struct {
 	CaddyReadCmd           []string
 	CaddyControl           func(context.Context, caddymanage.Request) (caddymanage.Result, error)
 	CaddyManagementEnabled bool
+	PlatformContent        *content.Store
+	PlatformContentThemeID uuid.UUID
+	TrafficStatsURL        string
+	TrafficStatsSiteID     uuid.UUID
 	OpenAPIJSON            []byte
 	RPID                   string
 	RPOrigins              []string
@@ -127,6 +131,7 @@ type API struct {
 	mediaTasks       *store.MediaTaskStore
 	releasesRoot     string
 	deployEnabled    bool
+	platformScope    bool
 	portMin          int
 	portMax          int
 	exchangeLimiter  *exchangeLimiter
@@ -147,7 +152,7 @@ type routeSpec struct {
 // WebAuthn ceremonies carry their own permit/challenge protection; mutating
 // authenticated routes additionally require the CSRF header.
 func (a *API) routes() []routeSpec {
-	return []routeSpec{
+	routes := []routeSpec{
 		{http.MethodGet, "/{previewHost}/{path...}", "getPreviewWrapper", a.handlePreviewWrapper},
 		{http.MethodGet, "/api/v1/openapi", "getOpenAPI", a.requireFullScope(a.handleOpenAPI)},
 		{http.MethodPost, "/api/v1/admin/caddy/sync", "syncCaddySites", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSyncCaddy)))},
@@ -200,6 +205,10 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites", "listSites", a.requireFullScope(a.handleListSites)},
 		{http.MethodPost, "/api/v1/sites", "createSite", a.requireFullScope(a.withCSRF(a.handleCreateSite))},
 		{http.MethodGet, "/api/v1/sites/{siteId}", "getSite", a.requireFullScope(a.handleGetSite)},
+		{http.MethodGet, "/api/v1/content", "getPlatformContent", a.requireFullScope(a.handlePlatformContent)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/overview", "getSiteOverview", a.requireFullScope(a.handleSiteOverview)},
+		{http.MethodGet, "/api/v1/sites/{siteId}/content-sources", "getContentSources", a.requireFullScope(a.handleGetContentSources)},
+		{http.MethodPut, "/api/v1/sites/{siteId}/content-sources", "setContentSources", a.requireFullScope(a.withCSRF(a.handleSetContentSources))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/provision", "provisionSite", a.requireFullScope(a.withCSRF(a.handleProvisionSite))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/visibility", "putSiteVisibility", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handlePutVisibility)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/settings", "getSiteSettings", a.requireFullScope(a.handleGetSettings)},
@@ -258,6 +267,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/release", "getCurrentRelease", a.requireFullScope(a.handleGetCurrentRelease)},
 		{http.MethodPost, "/api/v1/sites/{siteId}/releases/{releaseId}/rollback", "rollbackRelease", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handleRollbackRelease)))},
 	}
+	return append(routes, a.platformContentRoutes()...)
 }
 
 // New assembles the handler with its middleware chain.
@@ -323,6 +333,12 @@ func (a *API) contentRoute(h authedHandler) authedHandler {
 func (a *API) deploymentRoute(h authedHandler) authedHandler {
 	return func(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 		if !a.deployEnabled {
+			if id, err := uuid.Parse(r.PathValue("siteId")); err == nil && strings.HasPrefix(r.URL.Path, "/api/v1/sites/"+id.String()+"/releases") {
+				if site, readErr := a.store.Sites.GetForUser(r.Context(), id, auth.User.ID); readErr == nil && a.canPublishManaged(r.Context(), site, auth) {
+					h(w, r, auth)
+					return
+				}
+			}
 			writeProblem(w, http.StatusServiceUnavailable, "deployment_disabled",
 				"Site deployment is disabled on this server: publishing, rollback, visibility changes, and edge applies are inactive. Enable the deployment switch to use this endpoint.")
 			return
@@ -398,7 +414,11 @@ func (a *API) requireFullScope(h authedHandler) http.HandlerFunc {
 				return
 			}
 			base := "/api/v1/sites/" + id.String()
-			if site.Kind != "theme" && r.URL.Path != base && r.URL.Path != base+"/caddy" && !strings.HasPrefix(r.URL.Path, base+"/caddy/") && r.URL.Path != base+"/settings" {
+			selectable := site.ManagementMode == "platform" && site.Kind == "static"
+			tail := strings.TrimPrefix(r.URL.Path, base)
+			genericContent := strings.HasPrefix(tail, "/posts") || strings.HasPrefix(tail, "/albums") || tail == "/content/friends" || tail == "/content/footprints"
+			publicationRead := r.Method == http.MethodGet && (tail == "/release" || strings.HasPrefix(tail, "/releases"))
+			if !site.ThemeEnabled && site.Kind != "theme" && r.URL.Path != base && r.URL.Path != base+"/caddy" && !strings.HasPrefix(r.URL.Path, base+"/caddy/") && r.URL.Path != base+"/settings" && r.URL.Path != base+"/overview" && r.URL.Path != base+"/content-sources" && !(selectable && (tail == "/theme" || genericContent || publicationRead)) {
 				writeProblem(w, 409, "site_kind_mismatch", "This route is only available for theme-managed sites.")
 				return
 			}

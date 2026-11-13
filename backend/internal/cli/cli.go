@@ -29,10 +29,14 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/caddymanage"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/config"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/contentbind"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/contentmigration"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/httpapi"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/managedpublish"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/mediatask"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
@@ -55,6 +59,8 @@ func Main(args []string) int {
 		err = runMigrate(ctx)
 	case "sync-caddy":
 		err = runSyncCaddy(ctx, args[1:])
+	case "import-content":
+		err = runImportContent(ctx, args[1:])
 	case "serve":
 		err = runServe(ctx)
 	case "init-admin":
@@ -91,6 +97,7 @@ func usage(f *os.File) {
 
 Commands:
   sync-caddy --username X  Register the real Caddy inventory without changing website files.
+  import-content          Copy real website data into the platform library and an independent site workspace.
   migrate                 Apply pending SQL migrations and exit.
   serve                   Run the management API (loopback or a trusted host).
   init-admin              Register the first administrator and print a
@@ -231,6 +238,10 @@ func runServe(ctx context.Context) error {
 	if releasesRoot == "" {
 		releasesRoot = filepath.Join(dataRoot, "releases")
 	}
+	platformRoot := os.Getenv("FUYAO_ADMIN_PLATFORM_CONTENT_ROOT")
+	if platformRoot == "" {
+		platformRoot = filepath.Join(filepath.Dir(sitesRoot), "platform-content")
+	}
 	// The three runtime roots default to three independent directories under
 	// <repo>/data. The real-path overlap check runs BEFORE any directory is
 	// created (missing tails resolve against their deepest existing
@@ -238,8 +249,8 @@ func runServe(ctx context.Context) error {
 	// would let one subsystem write into another's tree, and a rejected
 	// configuration must leave the disk untouched.
 	if err := ensureDistinctRoots(
-		[]string{"sites", "builds", "releases"},
-		[]string{sitesRoot, buildsRoot, releasesRoot},
+		[]string{"sites", "builds", "releases", "platform-content"},
+		[]string{sitesRoot, buildsRoot, releasesRoot, platformRoot},
 	); err != nil {
 		return err
 	}
@@ -256,6 +267,33 @@ func runServe(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("prepare content store: %w", err)
 	}
+	if err = contentmigration.InitializePlatform(platformRoot); err != nil {
+		return err
+	}
+	platformContent, err := content.New(platformRoot)
+	if err != nil {
+		return err
+	}
+	boundContent := &contentbind.Store{Store: contentStore, Platform: platformContent, Resolve: st.GetContentSources}
+	scopeContent := func(id uuid.UUID) *content.Store {
+		if id == content.PlatformScopeID {
+			return platformContent
+		}
+		return contentStore
+	}
+	var platformMediaTheme uuid.UUID
+	if raw := os.Getenv("FUYAO_ADMIN_PLATFORM_MEDIA_THEME_ROW_ID"); raw != "" {
+		platformMediaTheme, err = uuid.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("invalid platform media theme row")
+		}
+	} else if catalog, listErr := st.Themes.List(ctx); listErr == nil {
+		for _, theme := range catalog {
+			if theme.ThemeID == "fuyao-homepage" {
+				platformMediaTheme = theme.ID
+			}
+		}
+	}
 	runner := buildrunner.NewRunner(buildrunner.Config{
 		BuildStore: st.Builds,
 		ThemeStore: st.Themes,
@@ -265,6 +303,28 @@ func runServe(ctx context.Context) error {
 		Mode:       cfg.BuildMode,
 		ContentRoots: func(siteID uuid.UUID) (string, string, string, error) {
 			return contentStore.ContentRoot(siteID), contentStore.ConfigRoot(siteID), contentStore.FaviconRoot(siteID), nil
+		},
+		MaterializeContent: func(ctx context.Context, build model.Build, target string) (string, string, string, error) {
+			sources := store.IndependentSources()
+			if len(build.ContentSources) > 0 {
+				if err := json.Unmarshal(build.ContentSources, &sources); err != nil {
+					return "", "", "", err
+				}
+			}
+			albums, scope := contentStore, build.SiteID
+			if sources.Albums == "platform" {
+				albums, scope = platformContent, content.PlatformScopeID
+			}
+			if albums == nil {
+				return "", "", "", content.ErrNotFound
+			}
+			var contentRoot, configRoot, faviconRoot string
+			err := albums.WithAlbumMetaLock(ctx, scope, func() error {
+				var err error
+				contentRoot, configRoot, faviconRoot, err = contentbind.Materialize(contentStore, platformContent, build.SiteID, sources, target)
+				return err
+			})
+			return contentRoot, configRoot, faviconRoot, err
 		},
 		Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
 		Logger:       logger,
@@ -293,11 +353,7 @@ func runServe(ctx context.Context) error {
 		Ports:              st.NetworkEntries,
 		PortMin:            cfg.PortMin,
 		PortMax:            cfg.PortMax,
-		MediaRoots: func(siteID uuid.UUID) (string, string, error) {
-			contentRoot := contentStore.ContentRoot(siteID)
-			return filepath.Join(contentRoot, "albums", "photos"),
-				filepath.Join(contentRoot, "albums", "thumbnails"), nil
-		},
+		FrozenMediaRoot:    previewFrozenMediaRoot(cfg.BuildMode, buildsRoot),
 	})
 	defer previews.Close()
 
@@ -335,13 +391,13 @@ func runServe(ctx context.Context) error {
 		Tasks:  st.MediaTasks,
 		Themes: st.Themes,
 		ContentRoots: func(siteID uuid.UUID) (string, string, string, error) {
-			contentRoot := contentStore.ContentRoot(siteID)
+			contentRoot := scopeContent(siteID).ContentRoot(siteID)
 			return filepath.Join(contentRoot, "albums", "photos"),
 				filepath.Join(contentRoot, "albums", "thumbnails"),
 				filepath.Join(contentRoot, "albums", "metadata"), nil
 		},
 		AlbumLock: func(siteID uuid.UUID, fn func() error) error {
-			return contentStore.WithAlbumMetaLock(context.Background(), siteID, fn)
+			return scopeContent(siteID).WithAlbumMetaLock(context.Background(), siteID, fn)
 		},
 		Logger: logger,
 	})
@@ -359,7 +415,19 @@ func runServe(ctx context.Context) error {
 	// publish server exists and no edge application ever runs.
 	var publisher httpapi.Publisher
 	var publishedOrigins httpapi.PublishedOrigins
-	if cfg.DeploymentEnabled {
+	var control func(context.Context, caddymanage.Request) (caddymanage.Result, error)
+	var controlCommand []string
+	for _, part := range strings.Split(os.Getenv("FUYAO_ADMIN_CADDY_CONTROL_CMD"), ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			controlCommand = append(controlCommand, part)
+		}
+	}
+	if len(controlCommand) > 0 {
+		control = func(ctx context.Context, request caddymanage.Request) (caddymanage.Result, error) {
+			return caddymanage.Execute(ctx, controlCommand, request)
+		}
+	}
+	if cfg.DeploymentEnabled || cfg.CaddyManagementEnabled {
 		if set, ok := themeContracts.(*themecontract.Set); ok {
 			manager := publish.NewManager(publish.Config{
 				Pool:         pool,
@@ -370,12 +438,15 @@ func runServe(ctx context.Context) error {
 				Contracts:    set,
 				Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
 				Edge:         edgeMgr,
+				Activation:   managedpublish.New(managedpublish.Config{Store: st, Control: control, Enabled: cfg.CaddyManagementEnabled, ReleasesRoot: releasesRoot, BuildsRoot: buildsRoot}),
 				Logger:       logger,
 			})
 			publisher = manager
-			origins := publish.NewServer(st.Releases, releasesRoot)
-			publishedOrigins = origins
-			defer origins.Close()
+			if cfg.DeploymentEnabled {
+				origins := publish.NewServer(st.Releases, releasesRoot)
+				publishedOrigins = origins
+				defer origins.Close()
+			}
 		}
 	}
 
@@ -399,22 +470,21 @@ func runServe(ctx context.Context) error {
 			}
 		}
 	}
-	var control func(context.Context, caddymanage.Request) (caddymanage.Result, error)
-	var controlCommand []string
-	for _, part := range strings.Split(os.Getenv("FUYAO_ADMIN_CADDY_CONTROL_CMD"), ",") {
-		if part = strings.TrimSpace(part); part != "" {
-			controlCommand = append(controlCommand, part)
-		}
-	}
-	if len(controlCommand) > 0 {
-		control = func(ctx context.Context, request caddymanage.Request) (caddymanage.Result, error) {
-			return caddymanage.Execute(ctx, controlCommand, request)
+	var trafficSite uuid.UUID
+	if raw := os.Getenv("FUYAO_ADMIN_TRAFFIC_STATS_SITE_ID"); raw != "" {
+		trafficSite, err = uuid.Parse(raw)
+		if err != nil {
+			return fmt.Errorf("invalid traffic statistics site id")
 		}
 	}
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
 		CaddyReadCmd:           caddyCommand,
 		CaddyControl:           control,
 		CaddyManagementEnabled: cfg.CaddyManagementEnabled,
+		PlatformContent:        platformContent,
+		PlatformContentThemeID: platformMediaTheme,
+		TrafficStatsSiteID:     trafficSite,
+		TrafficStatsURL:        os.Getenv("FUYAO_ADMIN_TRAFFIC_STATS_URL"),
 		OpenAPIJSON:            contractJSON,
 		RPID:                   cfg.RPID,
 		RPOrigins:              cfg.RPOrigins,
@@ -429,7 +499,7 @@ func runServe(ctx context.Context) error {
 		PublishedOrigins:       publishedOrigins,
 		Provisioner:            provisioner,
 		Edge:                   edgeMgr,
-		Content:                contentStore,
+		Content:                boundContent,
 		MediaTasks:             st.MediaTasks,
 		ReleasesRoot:           releasesRoot,
 		DeploymentEnabled:      cfg.DeploymentEnabled,

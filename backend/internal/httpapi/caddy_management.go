@@ -29,7 +29,12 @@ type caddyState struct {
 
 func caddyStatic(c store.CaddySite) bool {
 	var def caddyconfig.Site
-	return c.Kind == "static" && json.Unmarshal(c.Definition, &def) == nil && def.Root != "" && !def.RootHasPlaceholder
+	return c.Kind == "static" && json.Unmarshal(c.Definition, &def) == nil && def.Root != "" && !def.RootHasPlaceholder && !caddymanage.ProtectedEntry(def)
+}
+
+func caddyProtected(c store.CaddySite) bool {
+	var def caddyconfig.Site
+	return json.Unmarshal(c.Definition, &def) == nil && caddymanage.ProtectedEntry(def)
 }
 
 func (a *API) writeCaddyState(w http.ResponseWriter, r *http.Request, auth store.AuthSession, id uuid.UUID) {
@@ -54,6 +59,8 @@ func (a *API) writeCaddyState(w http.ResponseWriter, r *http.Request, auth store
 	}
 	owner := auth.User.PlatformRole == model.PlatformRoleAdmin && site.Role == model.RoleOwner
 	switch {
+	case caddyProtected(c):
+		state.UnavailableReason = "protected_control_plane"
 	case !caddyStatic(c):
 		state.UnavailableReason = "site_kind_unsupported"
 	case !c.Present:
@@ -295,6 +302,22 @@ func (a *API) mutateCaddy(w http.ResponseWriter, r *http.Request, auth store.Aut
 	if err != nil {
 		a.caddyError(w, r, err)
 		return
+	}
+	if operation == "convertCaddySite" && a.provisioner != nil {
+		site, readErr := a.store.Sites.GetForUser(r.Context(), id, auth.User.ID)
+		if readErr != nil {
+			writeSiteLookupError(w, readErr)
+			return
+		}
+		host, readErr := a.previewHost(r.Context(), id, auth.User.ID)
+		if readErr != nil {
+			writeSiteLookupError(w, readErr)
+			return
+		}
+		if provisionErr := a.provisioner.Provision(site.Site, site.Settings, "https://"+host); provisionErr != nil {
+			writeProblem(w, 503, "provision_failed", "The configuration is adopted but its content workspace could not be initialized.")
+			return
+		}
 	}
 	a.writeCaddyState(w, r, auth, id)
 }

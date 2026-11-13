@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,6 +63,7 @@ type PreviewConfig struct {
 	PortMin            int
 	PortMax            int
 	MediaRoots         MediaRoots
+	FrozenMediaRoot    func(siteID, buildID uuid.UUID) (root string, err error)
 	// SweepInterval controls the expiry sweeper (diagnostics and tests);
 	// the default is TTL/4 bounded to [250ms, 30s].
 	SweepInterval time.Duration
@@ -89,19 +89,20 @@ func (o *previewOrigin) cookieName() string {
 // the same build (or a reused port): a page opened by an earlier incarnation
 // cannot ride a later one's cookie past its probe.
 type previewOrigin struct {
-	server      *PreviewServer
-	siteID      uuid.UUID
-	buildID     uuid.UUID
-	instanceID  string
-	mu          sync.Mutex
-	tokens      map[string]time.Time
-	entries     map[string]struct{}
-	ln          net.Listener
-	port        int
-	httpSrv     *http.Server
-	artifactDir string
-	spaFallback string
-	mediaRoots  MediaRoots
+	server          *PreviewServer
+	siteID          uuid.UUID
+	buildID         uuid.UUID
+	instanceID      string
+	mu              sync.Mutex
+	tokens          map[string]time.Time
+	entries         map[string]struct{}
+	ln              net.Listener
+	port            int
+	httpSrv         *http.Server
+	artifactDir     string
+	spaFallback     string
+	mediaRoots      MediaRoots
+	frozenMediaRoot func() (string, error)
 }
 
 // PreviewServer issues short-lived per-build preview links on per-build
@@ -465,6 +466,9 @@ func (p *PreviewServer) originForLocked(siteID, buildID uuid.UUID, artifactDir, 
 		spaFallback: spaFallback,
 		mediaRoots:  p.cfg.MediaRoots,
 	}
+	if p.cfg.FrozenMediaRoot != nil {
+		origin.frozenMediaRoot = func() (string, error) { return p.cfg.FrozenMediaRoot(siteID, buildID) }
+	}
 	origin.httpSrv = &http.Server{Handler: origin, ReadHeaderTimeout: 5 * time.Second}
 	go func() { _ = origin.httpSrv.Serve(ln) }()
 	p.origins[buildID] = origin
@@ -559,6 +563,10 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if o.frozenMediaRoot != nil && frozenMediaPath(r.URL.Path) {
+		o.serveFrozenMedia(w, r)
+		return
+	}
 	// External album media: serve from the site's content tree (the same
 	// authority the published site maps through the edge), path-jailed and
 	// authorized by this origin's cookie. A missing file is a real 404 —
@@ -598,62 +606,7 @@ func (o *previewOrigin) serveMedia(w http.ResponseWriter, r *http.Request) {
 		root = thumbsRoot
 		rel = strings.TrimPrefix(r.URL.Path, "/media/albums/thumbnails/")
 	}
-	if root == "" || rel == "" {
-		http.NotFound(w, r)
-		return
-	}
-	name := path.Clean("/" + rel)
-	if name == "/" || strings.Contains(name, "..") {
-		http.NotFound(w, r)
-		return
-	}
-	rel = strings.TrimPrefix(name, "/")
-	if !fs.ValidPath(rel) {
-		http.NotFound(w, r)
-		return
-	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	target := filepath.Join(resolvedRoot, filepath.FromSlash(rel))
-	resolved, err := filepath.EvalSymlinks(target)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if resolved != resolvedRoot && !strings.HasPrefix(resolved, resolvedRoot+string(os.PathSeparator)) {
-		http.NotFound(w, r)
-		return
-	}
-	file, err := os.Open(resolved)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
-	// Only image content types are served from the media roots.
-	switch strings.ToLower(filepath.Ext(resolved)) {
-	case ".jpg", ".jpeg":
-		w.Header().Set("Content-Type", "image/jpeg")
-	case ".png":
-		w.Header().Set("Content-Type", "image/png")
-	case ".webp":
-		w.Header().Set("Content-Type", "image/webp")
-	case ".gif":
-		w.Header().Set("Content-Type", "image/gif")
-	default:
-		http.NotFound(w, r)
-		return
-	}
-	// *os.File implements io.ReadSeeker, giving range support for images.
-	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+	servePreviewMediaFile(w, r, root, rel, true)
 }
 
 // validToken checks the origin's own token set; tokens from another build's

@@ -5,46 +5,41 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
 // handleGetAlbums returns the album index (years, totals, devices).
 func (a *API) handleGetAlbums(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	index, digest, err := a.content.GetAlbumIndex(siteID)
 	if err != nil {
 		writeContentError(w, err, "Failed to read the album index.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"index": index, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"index": index, "digest": digest, "canEdit": target.CanEdit})
 }
 
 // handleGetAlbumYear returns one year's photos plus digest.
 func (a *API) handleGetAlbumYear(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	doc, digest, err := a.content.GetAlbumYear(siteID, r.PathValue("year"))
 	if err != nil {
 		writeContentError(w, err, "Failed to read the album year.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"year": doc, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"year": doc, "digest": digest, "canEdit": target.CanEdit})
 }
 
 // yearEditBody is the editable projection of one year document: the
@@ -68,7 +63,7 @@ type yearEditBody struct {
 // identical to the stored set — no additions, removals (use delete/detach),
 // or renames through this endpoint.
 func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -80,7 +75,7 @@ func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 	if err != nil {
 		return
 	}
-	saved, digest, err := a.content.SaveAlbumYear(rec.Site.ID, r.PathValue("year"), expected, func(doc *content.AlbumYear) error {
+	saved, digest, err := a.content.SaveAlbumYear(rec.ID, r.PathValue("year"), expected, func(doc *content.AlbumYear) error {
 		if len(body.Photos) != len(doc.Photos) {
 			return errors.New("the photo list changed after it was read; fetch again and retry")
 		}
@@ -141,15 +136,23 @@ func (a *API) handlePutAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"year": saved, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"year": saved, "digest": digest, "canEdit": rec.CanEdit})
 }
 
 // handleUploadAlbumPhoto accepts one original (multipart form field
 // "file"), stores it under a server-controlled path, and queues the album
 // indexing task whose status is queryable.
 func (a *API) handleUploadAlbumPhoto(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
+		return
+	}
+	if a.mediaTasks == nil || (a.platformScope && a.cfg.PlatformContentThemeID == uuid.Nil) {
+		writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "A trusted media importer is not configured.")
+		return
+	}
+	if err := a.requireAlbumWrite(r, rec.ID); err != nil {
+		writeContentError(w, err, "The album content is read-only.")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, content.MaxUploadBytes()+1<<20)
@@ -163,7 +166,7 @@ func (a *API) handleUploadAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 	defer file.Close()
-	rel, err := a.content.StoreUpload(rec.Site.ID, file, 0)
+	rel, err := a.content.StoreUpload(rec.ID, file, 0)
 	if err != nil {
 		if errors.Is(err, content.ErrTooLarge) {
 			writeProblem(w, http.StatusRequestEntityTooLarge, "request_too_large", "The upload exceeds the size limit.")
@@ -176,7 +179,7 @@ func (a *API) handleUploadAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 		writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "Media processing is not configured on this server.")
 		return
 	}
-	task, err := a.mediaTasks.Create(r.Context(), rec.Site.ID, auth.User.ID, "album-index")
+	task, err := a.enqueueContentMediaTask(r, rec.ID, auth.User.ID)
 	if err != nil {
 		a.logger.Error("enqueue media task", "error", err)
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "The upload was stored but processing could not be queued.")
@@ -187,18 +190,26 @@ func (a *API) handleUploadAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 
 // handleEnqueueAlbumTask re-queues the album indexing task (retry).
 func (a *API) handleEnqueueAlbumTask(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
+		return
+	}
+	var body struct{}
+	if !decodeJSON(w, r, &body, true) {
+		return
+	}
+	if a.platformScope && a.cfg.PlatformContentThemeID == uuid.Nil {
+		writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "A trusted media importer is not configured.")
 		return
 	}
 	if a.mediaTasks == nil {
 		writeProblem(w, http.StatusServiceUnavailable, "content_unavailable", "Media processing is not configured on this server.")
 		return
 	}
-	task, err := a.mediaTasks.Create(r.Context(), rec.Site.ID, auth.User.ID, "album-index")
+	task, err := a.enqueueContentMediaTask(r, rec.ID, auth.User.ID)
 	if err != nil {
 		a.logger.Error("enqueue media task", "error", err)
-		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to queue the task.")
+		writeContentError(w, err, "Failed to queue the task.")
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"taskId": task.ID})
@@ -206,11 +217,11 @@ func (a *API) handleEnqueueAlbumTask(w http.ResponseWriter, r *http.Request, aut
 
 // handleListMediaTasks returns the site's recent media tasks.
 func (a *API) handleListMediaTasks(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	tasks, err := a.store.MediaTasks.ListForSite(r.Context(), siteID, auth.User.ID)
+	tasks, err := a.store.MediaTasks.ListForContentScope(r.Context(), target.ID, auth.User.ID)
 	if err != nil {
 		writeSiteLookupError(w, err)
 		return
@@ -229,7 +240,7 @@ func (a *API) handleListMediaTasks(w http.ResponseWriter, r *http.Request, auth 
 		}
 		out = append(out, entry)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tasks": out})
+	writeJSON(w, http.StatusOK, map[string]any{"tasks": out, "canEdit": target.CanEdit})
 }
 
 // handleDeleteAlbumPhoto removes a photo. The default (hard) mode deletes
@@ -239,7 +250,7 @@ func (a *API) handleListMediaTasks(w http.ResponseWriter, r *http.Request, auth 
 // removes the photo from the next build's metadata only, keeping files for
 // releases that still reference them.
 func (a *API) handleDeleteAlbumPhoto(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -248,20 +259,20 @@ func (a *API) handleDeleteAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 	if r.URL.Query().Get("mode") == "detach" {
-		if err := a.content.DetachAlbumPhoto(rec.Site.ID, r.PathValue("year"), r.PathValue("filename"), expected); err != nil {
+		if err := a.content.DetachAlbumPhoto(rec.ID, r.PathValue("year"), r.PathValue("filename"), expected); err != nil {
 			writeContentError(w, err, "Failed to detach the photo.")
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	releaseJSONs, err := content.ReleaseMetadataForSite(a.releasesRoot, rec.Site.ID)
+	releaseJSONs, err := content.ReleaseMetadataForScope(a.releasesRoot, rec.ID, a.platformScope)
 	if err != nil {
-		a.logger.Error("scan release references for photo deletion", "siteId", rec.Site.ID, "error", err)
+		a.logger.Error("scan release references for photo deletion", "siteId", rec.ID, "error", err)
 		writeProblem(w, http.StatusInternalServerError, "reference_scan_failed", "The release reference scan failed; deletion is refused until the references can be verified.")
 		return
 	}
-	err = a.content.DeleteAlbumPhoto(rec.Site.ID, r.PathValue("year"), r.PathValue("filename"), releaseJSONs, expected)
+	err = a.content.DeleteAlbumPhoto(rec.ID, r.PathValue("year"), r.PathValue("filename"), releaseJSONs, expected)
 	if err != nil {
 		var inUse *content.PhotoInUseError
 		if errors.As(err, &inUse) {
@@ -276,27 +287,24 @@ func (a *API) handleDeleteAlbumPhoto(w http.ResponseWriter, r *http.Request, aut
 
 // handleGetFootprints returns the footprints document plus digest.
 func (a *API) handleGetFootprints(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	siteID, ok := parseSiteID(w, r)
+	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	if _, err := a.store.Sites.GetForUser(r.Context(), siteID, auth.User.ID); err != nil {
-		writeSiteLookupError(w, err)
-		return
-	}
+	siteID := target.ID
 	doc, digest, err := a.content.GetFootprints(siteID)
 	if err != nil {
 		writeContentError(w, err, "Failed to read footprints.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"footprints": doc, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"footprints": doc, "digest": digest, "canEdit": target.CanEdit})
 }
 
 // handlePutFootprints replaces the footprints document under If-Match
 // semantics with full schema validation.
 func (a *API) handlePutFootprints(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
-	rec, ok := a.requireSiteEditor(w, r, auth)
+	rec, ok := a.contentTarget(w, r, auth, true)
 	if !ok {
 		return
 	}
@@ -310,11 +318,11 @@ func (a *API) handlePutFootprints(w http.ResponseWriter, r *http.Request, auth s
 	if err != nil {
 		return
 	}
-	saved, digest, err := a.content.SaveFootprints(rec.Site.ID, body.Footprints, expected)
+	saved, digest, err := a.content.SaveFootprints(rec.ID, body.Footprints, expected)
 	if err != nil {
 		writeContentError(w, err, "Failed to save footprints.")
 		return
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
-	writeJSON(w, http.StatusOK, map[string]any{"footprints": saved, "digest": digest})
+	writeJSON(w, http.StatusOK, map[string]any{"footprints": saved, "digest": digest, "canEdit": rec.CanEdit})
 }

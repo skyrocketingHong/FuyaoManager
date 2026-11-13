@@ -27,13 +27,19 @@ type SiteRecord struct {
 	Role           string
 	Kind           string
 	ManagementMode string
+	ThemeEnabled   bool
+	HasCaddy       bool
+	HasTheme       bool
 }
 
 const siteJoinColumns = `si.id, si.slug, si.visibility, si.provision_state, si.provision_failure, si.created_at, si.updated_at,
 	ss.site_id, ss.name, ss.description, ss.default_locale, ss.revision, ss.updated_at,
 	COALESCE((SELECT kind FROM caddy_sites c WHERE c.site_id=si.id),'theme'),
  CASE WHEN EXISTS(SELECT 1 FROM caddy_sites c WHERE c.site_id=si.id)
- AND NOT EXISTS(SELECT 1 FROM caddy_management cm WHERE cm.site_id=si.id) THEN 'caddy' ELSE 'platform' END`
+ AND NOT EXISTS(SELECT 1 FROM caddy_management cm WHERE cm.site_id=si.id) THEN 'caddy' ELSE 'platform' END,
+ (NOT EXISTS(SELECT 1 FROM caddy_sites c WHERE c.site_id=si.id) OR EXISTS(SELECT 1 FROM site_theme_selections ts JOIN caddy_sites c ON c.site_id=ts.site_id JOIN caddy_management cm ON cm.site_id=c.site_id WHERE ts.site_id=si.id AND c.kind='static')),
+ EXISTS(SELECT 1 FROM caddy_sites c WHERE c.site_id=si.id),
+ EXISTS(SELECT 1 FROM site_theme_selections ts WHERE ts.site_id=si.id)`
 
 // NewSiteParams carries the fields of a site creation request. Visibility
 // defaults to private; provisionState starts as provisioning until the
@@ -55,11 +61,11 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
 			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt,
-			&rec.Kind, &rec.ManagementMode, role)
+			&rec.Kind, &rec.ManagementMode, &rec.ThemeEnabled, &rec.HasCaddy, &rec.HasTheme, role)
 	} else {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
-			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt, &rec.Kind, &rec.ManagementMode)
+			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt, &rec.Kind, &rec.ManagementMode, &rec.ThemeEnabled, &rec.HasCaddy, &rec.HasTheme)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SiteRecord{}, ErrNotFound
@@ -184,7 +190,7 @@ func (s *SiteStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]SiteRe
 			&rec.Site.ProvisionFailure, &rec.Site.CreatedAt, &rec.Site.UpdatedAt,
 			&rec.Settings.SiteID, &rec.Settings.Name, &rec.Settings.Description,
 			&rec.Settings.DefaultLocale, &rec.Settings.Revision, &rec.Settings.UpdatedAt,
-			&rec.Kind, &rec.ManagementMode, &rec.Role); err != nil {
+			&rec.Kind, &rec.ManagementMode, &rec.ThemeEnabled, &rec.HasCaddy, &rec.HasTheme, &rec.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, rec)

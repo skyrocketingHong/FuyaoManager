@@ -228,7 +228,15 @@ func (a *API) handleGetCurrentRelease(w http.ResponseWriter, r *http.Request, au
 		return
 	}
 	originURL := ""
-	if a.store.NetworkEntries != nil && a.edge != nil {
+	if c, readErr := a.store.GetCaddySite(r.Context(), siteID, auth.User.ID); readErr == nil {
+		var definition struct {
+			Hosts []string `json:"hosts"`
+		}
+		if json.Unmarshal(c.Definition, &definition) == nil && len(definition.Hosts) > 0 {
+			originURL = "https://" + definition.Hosts[0]
+		}
+	}
+	if originURL == "" && a.store.NetworkEntries != nil && a.edge != nil {
 		// The managed edge entry (operator-approved IP:port) wins when the
 		// site has one; the loopback published origin remains the local
 		// development fallback.

@@ -57,9 +57,10 @@ type SiteConfigDoc struct {
 			SecurityCode string `json:"-" yaml:"securityCode,omitempty"` // secret: write-only through the API
 			ServiceHost  string `json:"serviceHost,omitempty" yaml:"serviceHost,omitempty"`
 		} `json:"amap" yaml:"amap"`
-		GitHubProxyURL         string `json:"githubProxyUrl,omitempty" yaml:"githubProxyUrl,omitempty"`
-		AnalyticsProxyURL      string `json:"analyticsProxyUrl,omitempty" yaml:"analyticsProxyUrl,omitempty"`
-		CodingActivityProxyURL string `json:"codingActivityProxyUrl,omitempty" yaml:"codingActivityProxyUrl,omitempty"`
+		GitHubProxyURL          string `json:"githubProxyUrl,omitempty" yaml:"githubProxyUrl,omitempty"`
+		AnalyticsProxyURL       string `json:"analyticsProxyUrl,omitempty" yaml:"analyticsProxyUrl,omitempty"`
+		CodingActivityProxyURL  string `json:"codingActivityProxyUrl,omitempty" yaml:"codingActivityProxyUrl,omitempty"`
+		CodingLanguagesProxyURL string `json:"codingLanguagesProxyUrl,omitempty" yaml:"codingLanguagesProxyUrl,omitempty"`
 	} `json:"services" yaml:"services"`
 }
 
@@ -112,7 +113,11 @@ func (s *Store) SaveSiteConfig(siteID uuid.UUID, doc SiteConfigDoc, securityCode
 		if securityCode != nil {
 			doc.Services.Amap.SecurityCode = *securityCode
 		}
-		out, err := yaml.Marshal(&doc)
+		existingRaw, _, readErr := s.ReadFile(siteID, RootConfig, "site.yaml")
+		if readErr != nil && !errors.Is(readErr, ErrNotFound) {
+			return readErr
+		}
+		out, err := marshalSiteConfig(&doc, existingRaw)
 		if err != nil {
 			return err
 		}
@@ -183,7 +188,7 @@ func (s *Store) UpdateSiteBaseURL(siteID uuid.UUID, url string) error {
 			return nil
 		}
 		doc.Site.URL = url
-		out, err := yaml.Marshal(&doc)
+		out, err := marshalSiteConfig(&doc, data)
 		if err != nil {
 			return err
 		}

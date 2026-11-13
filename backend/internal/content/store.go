@@ -24,6 +24,7 @@ var (
 	ErrNotFound    = errors.New("content not found")
 	ErrInvalidPath = errors.New("invalid content path")
 	ErrEmptyFile   = errors.New("content file is empty")
+	ErrShared      = errors.New("edit shared content in the platform library")
 )
 
 // Store owns the per-site content and config trees (siteprovision layout).

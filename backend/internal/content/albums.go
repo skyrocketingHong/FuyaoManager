@@ -412,3 +412,40 @@ func (s *Store) DetachAlbumPhoto(siteID uuid.UUID, year, filename string, expect
 		return err
 	})
 }
+
+// Platform originals can be selected by several sites. Unknown release
+// references fail closed rather than treating the library as an empty site.
+func ReleaseMetadataForScope(root string, scopeID uuid.UUID, platform bool) ([][]byte, error) {
+	if !platform {
+		return ReleaseMetadataForSite(root, scopeID)
+	}
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	out := [][]byte{}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil, ErrInvalidPath
+		}
+		if !entry.IsDir() {
+			continue
+		}
+		id, err := uuid.Parse(entry.Name())
+		if err != nil {
+			return nil, ErrInvalidPath
+		}
+		data, err := ReleaseMetadataForSite(root, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, data...)
+	}
+	return out, nil
+}

@@ -8,6 +8,7 @@
 package publish
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
@@ -58,6 +60,7 @@ type Manager struct {
 	contracts    ReleaseContract
 	requirements buildrunner.SiteRequirements
 	edge         EdgeHook
+	activation   ActivationBridge
 	logger       *slog.Logger
 }
 
@@ -73,6 +76,7 @@ type Config struct {
 	Contracts    ReleaseContract
 	Requirements buildrunner.SiteRequirements
 	Edge         EdgeHook
+	Activation   ActivationBridge
 	Logger       *slog.Logger
 }
 
@@ -91,6 +95,7 @@ func NewManager(cfg Config) *Manager {
 		contracts:    cfg.Contracts,
 		requirements: cfg.Requirements,
 		edge:         cfg.Edge,
+		activation:   cfg.Activation,
 		logger:       logger,
 	}
 }
@@ -146,6 +151,17 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		}
 	}
 
+	var session ActivationSession
+	if m.activation != nil {
+		var beginErr error
+		session, beginErr = m.activation.Begin(ctx, siteID, userID)
+		if beginErr != nil {
+			return model.Release{}, beginErr
+		}
+		if session != nil {
+			defer func() { _ = session.Abort(context.WithoutCancel(ctx)) }()
+		}
+	}
 	build, err := m.builds.Get(ctx, buildID)
 	if err != nil || build.SiteID != siteID || build.Status != model.BuildStatusSucceeded {
 		return model.Release{}, ErrBuildNotPublishable
@@ -174,6 +190,11 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 	// phantom record is returned: the caller gets the original error and the
 	// API answers with a plain problem instead of an unroutable DTO.
 	recordFailure := func(err error) (model.Release, error) {
+		if session != nil {
+			if abortErr := session.Abort(context.WithoutCancel(ctx)); abortErr != nil {
+				return model.Release{}, abortErr
+			}
+		}
 		var pe *publishError
 		if errors.As(err, &pe) {
 			failure := pe.failure
@@ -251,6 +272,26 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		return recordFailure(fail(StageReleaseMetadata, "The generated release metadata does not satisfy the release contract."))
 	}
 
+	if session != nil {
+		existing, readErr := readManagedReleaseMetadata(filepath.Join(m.releasesRoot, siteID.String(), releaseID.String(), "release.json"))
+		if readErr != nil && !os.IsNotExist(readErr) {
+			return recordFailure(fail(StageReleaseMetadata, "Cannot verify the existing frozen release metadata."))
+		}
+		if readErr == nil {
+			if err := m.contracts.ValidateRelease(existing); err != nil || !sameFrozenReleaseIdentity(existing, releaseJSON) {
+				return recordFailure(fail(StageReleaseMetadata, "The existing frozen release does not match this build."))
+			}
+			var original struct {
+				Reasons []string `json:"reasons"`
+			}
+			if json.Unmarshal(existing, &original) != nil {
+				return recordFailure(fail(StageReleaseMetadata, "Cannot read the existing frozen release metadata."))
+			}
+			release.Reasons = original.Reasons
+			releaseJSON = bytes.TrimSuffix(existing, []byte("\n"))
+		}
+	}
+
 	// Seal into a per-attempt staging directory, never the shared final
 	// directory: two concurrent publishes of the same build must not be able
 	// to delete each other's sealed artifacts. The staging name carries this
@@ -279,7 +320,12 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 	// Locked activation: read the base state, place the final directory,
 	// insert live, supersede the previous live, re-point the site — one
 	// transaction holding the per-site publish lock.
-	tx, err := m.pool.Begin(ctx)
+	var tx pgx.Tx
+	if session != nil {
+		tx = session.Tx()
+	} else {
+		tx, err = m.pool.Begin(ctx)
+	}
 	if err != nil {
 		_ = cleanupDir(stagingDir)
 		return recordFailure(fail(StagePersist, "Failed to open the publish transaction."))
@@ -349,15 +395,20 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		// touched by cleanup.
 		return recordFailure(fail(StagePersist, "Failed to switch the live release."))
 	}
-	if err := tx.Commit(ctx); err != nil {
-		// Commit outcome uncertain: keep the final directory; never delete a
-		// directory that may already back a committed release row.
+	if session != nil {
+		if err := session.Activate(ctx, release); err != nil {
+			return recordFailure(err)
+		}
+		if err := session.Commit(ctx); err != nil {
+			return model.Release{}, err
+		}
+	} else if err := tx.Commit(ctx); err != nil {
 		return recordFailure(fail(StagePersist, "Failed to commit the publish transaction."))
 	}
 	now := time.Now().UTC()
 	release.Status = model.ReleaseStatusLive
 	release.ActivatedAt = &now
-	if m.edge != nil {
+	if m.edge != nil && session == nil {
 		// The database switch is committed; the edge (current pointer plus
 		// managed entry) follows. A failure here is surfaced — the release is
 		// live but the entry may lag — and Reconcile or the next publish
@@ -376,6 +427,17 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 // as-is (no rebuild) and nothing outside the pointer — settings, selections,
 // builds, unpublished edits — is touched.
 func (m *Manager) Rollback(ctx context.Context, siteID, releaseID, userID uuid.UUID) (model.Release, error) {
+	var session ActivationSession
+	if m.activation != nil {
+		var err error
+		session, err = m.activation.Begin(ctx, siteID, userID)
+		if err != nil {
+			return model.Release{}, err
+		}
+		if session != nil {
+			defer func() { _ = session.Abort(context.WithoutCancel(ctx)) }()
+		}
+	}
 	target, err := m.releases.GetForUser(ctx, releaseID, siteID, userID)
 	if err != nil {
 		return model.Release{}, err
@@ -389,7 +451,12 @@ func (m *Manager) Rollback(ctx context.Context, siteID, releaseID, userID uuid.U
 		return model.Release{}, store.ErrReleaseNotRollbackable
 	}
 
-	tx, err := m.pool.Begin(ctx)
+	var tx pgx.Tx
+	if session != nil {
+		tx = session.Tx()
+	} else {
+		tx, err = m.pool.Begin(ctx)
+	}
 	if err != nil {
 		return model.Release{}, err
 	}
@@ -398,10 +465,20 @@ func (m *Manager) Rollback(ctx context.Context, siteID, releaseID, userID uuid.U
 	if err != nil {
 		return model.Release{}, err
 	}
-	if err := tx.Commit(ctx); err != nil {
+	if session != nil {
+		if err := session.Activate(ctx, rolled); err != nil {
+			if abortErr := session.Abort(context.WithoutCancel(ctx)); abortErr != nil {
+				return model.Release{}, abortErr
+			}
+			return model.Release{}, err
+		}
+		if err := session.Commit(ctx); err != nil {
+			return model.Release{}, err
+		}
+	} else if err := tx.Commit(ctx); err != nil {
 		return model.Release{}, err
 	}
-	if m.edge != nil {
+	if m.edge != nil && session == nil {
 		if err := m.edge.OnLive(ctx, siteID, rolled); err != nil {
 			m.logger.Error("edge apply after rollback", "siteId", siteID, "releaseId", releaseID, "error", err)
 			return rolled, fmt.Errorf("rollback is live but the site entry update failed: %w", err)

@@ -1436,6 +1436,288 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/content/posts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/posts in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformListPosts"];
+        put?: never;
+        /**
+         * Manage content/posts in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        post: operations["platformCreatePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/{postPath}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/posts/{postPath} in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformGetPost"];
+        /**
+         * Manage content/posts/{postPath} in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        put: operations["platformPutPost"];
+        post?: never;
+        /**
+         * Manage content/posts/{postPath} in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        delete: operations["platformDeletePost"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/friends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/friends in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformGetFriends"];
+        /**
+         * Manage content/friends in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        put: operations["platformPutFriends"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/footprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/footprints in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformGetFootprints"];
+        /**
+         * Manage content/footprints in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        put: operations["platformPutFootprints"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/albums in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformGetAlbums"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manage content/albums/photos in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        post: operations["platformUploadAlbumPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Manage content/albums/process in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        post: operations["platformProcessAlbums"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/albums/tasks in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformListMediaTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/{year}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/albums/{year} in the platform library
+         * @description A full session may read the independent platform content library. No site ID is required.
+         */
+        get: operations["platformGetAlbumYear"];
+        /**
+         * Manage content/albums/{year} in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        put: operations["platformPutAlbumYear"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/{year}/{filename}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Manage content/albums/{year}/{filename} in the platform library
+         * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
+         */
+        delete: operations["platformDeleteAlbumPhoto"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** getPlatformContent */
+        get: operations["getPlatformContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        /** getSiteOverview */
+        get: operations["getSiteOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/content-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        /** getContentSources */
+        get: operations["getContentSources"];
+        /** setContentSources */
+        put: operations["setContentSources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1992,6 +2274,7 @@ export interface components {
                 githubProxyUrl?: string;
                 analyticsProxyUrl?: string;
                 codingActivityProxyUrl?: string;
+                codingLanguagesProxyUrl?: string;
             };
         };
         AlbumIndexEnvelope: {
@@ -2127,6 +2410,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            workspace?: components["schemas"]["SiteWorkspace"];
         };
         SiteList: {
             sites: components["schemas"]["Site"][];
@@ -2312,6 +2596,70 @@ export interface components {
                 userHandle: string;
             };
             clientExtensionResults?: Record<string, never>;
+        };
+        ContentSourceSelection: {
+            /** @enum {string} */
+            posts: "platform" | "independent";
+            /** @enum {string} */
+            albums: "platform" | "independent";
+            /** @enum {string} */
+            footprints: "platform" | "independent";
+            /** @enum {string} */
+            friends: "platform" | "independent";
+        };
+        ContentSourceRecord: {
+            sources: components["schemas"]["ContentSourceSelection"];
+            /** Format: int64 */
+            revision: number;
+        };
+        ContentCounts: {
+            posts: number;
+            albums: number;
+            photos: number;
+            places: number;
+            friends: number;
+        };
+        SiteWorkspace: {
+            themeEnabled: boolean;
+            themeSelectable: boolean;
+            buildable: boolean;
+            deployable: boolean;
+            hasCaddy: boolean;
+        };
+        PlatformContent: {
+            canEdit: boolean;
+            counts: components["schemas"]["ContentCounts"];
+            amap: {
+                browserKey?: string;
+                serviceHost?: string;
+            };
+        };
+        SiteOverview: {
+            counts: components["schemas"]["ContentCounts"];
+            sources: components["schemas"]["ContentSourceSelection"];
+            theme: components["schemas"]["SiteThemeSelection"];
+            hasCaddy: boolean;
+            workspace: components["schemas"]["SiteWorkspace"];
+            analytics: components["schemas"]["TrafficSnapshot"];
+        };
+        TrafficDaily: {
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            pageViews: number;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            uniques: number;
+        };
+        TrafficSnapshot: {
+            configured: boolean;
+            available: boolean;
+            /** @enum {string} */
+            provider: "cloudflare";
+            /** @enum {string} */
+            cache: "fresh" | "stale" | "unknown";
+            latest: components["schemas"]["TrafficDaily"] | null;
         };
     };
     responses: {
@@ -5583,6 +5931,895 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformListPosts: {
+        parameters: {
+            query?: {
+                /** @description Case-insensitive filter over title, slug, category, and tags. */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page of posts plus the total count. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostList"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformCreatePost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Post"];
+            };
+        };
+        responses: {
+            /** @description The created post. */
+            201: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Field validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description A post already exists at this path (`content_exists`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description `category/slug.md`, slash encoded as %2F. */
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The post. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Malformed path (`invalid_content_path` or `invalid_site_id`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutPost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Post"];
+            };
+        };
+        responses: {
+            /** @description The saved post with its new digest ETag. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            /** @description Field validation failed or malformed request (`validation_error`, `invalid_if_match`, `invalid_content_path`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The post changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformDeletePost: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                postPath: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Post deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed path or If-Match (`invalid_content_path`, `invalid_if_match`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The post changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetFriends: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The friends document plus its digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for If-Match saves. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FriendsEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutFriends: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FriendsEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved document with its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FriendsEnvelope"];
+                };
+            };
+            /** @description Entry validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The document changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetFootprints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The footprints document plus digest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FootprintsEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutFootprints: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FootprintsEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved document with its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FootprintsEnvelope"];
+                };
+            };
+            /** @description Schema validation failed (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The document changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetAlbums: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The album index (years, totals, devices) plus digest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumIndexEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformUploadAlbumPhoto: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored; processing queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumUploadAccepted"];
+                };
+            };
+            /** @description Not a valid multipart upload or unsupported type (`validation_error`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            413: components["responses"]["RequestBodyTooLarge"];
+            /** @description Media processing is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformProcessAlbums: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Task queued. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumUploadAccepted"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Media processing is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformListMediaTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent tasks with statuses and failure reasons. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaTaskList"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetAlbumYear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The year's photos plus digest. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumYearEnvelope"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutAlbumYear: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                year: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlbumYearEnvelope"];
+            };
+        };
+        responses: {
+            /** @description The saved year document with its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest ETag for the next save. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlbumYearEnvelope"];
+                };
+            };
+            /** @description Validation failed (`validation_error`, `invalid_if_match`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The document changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformDeleteAlbumPhoto: {
+        parameters: {
+            query?: {
+                /** @description `delete` removes files and metadata (reference-checked); `detach` removes the metadata entry only. */
+                mode?: "delete" | "detach";
+            };
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                year: string;
+                filename: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Photo deleted (or detached). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Malformed request (`invalid_if_match`, `invalid_content_path`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The photo is still referenced by a live or rollback-able release (`photo_in_use`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The document changed after it was read (`precondition_failed`). */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            428: components["responses"]["PreconditionRequired"];
+            /** @description The release reference scan failed; deletion is refused (`reference_scan_failed`). */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPlatformContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current resource state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformContent"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getSiteOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current resource state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteOverview"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getContentSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current resource state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSourceRecord"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    setContentSources: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sources: components["schemas"]["ContentSourceSelection"];
+                    /** Format: int64 */
+                    revision?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Current resource state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContentSourceRecord"];
+                };
+            };
+            403: components["responses"]["Problem"];
+            412: components["responses"]["PreconditionFailed"];
             default: components["responses"]["Problem"];
         };
     };
