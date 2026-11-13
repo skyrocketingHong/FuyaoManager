@@ -7,6 +7,19 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.5.0 - 2026-11-13
+
+### Added
+
+- Separate platform-managed websites and Caddy inventory on the home page, with the Simple Icons Caddy brand mark.
+- Convert operator-approved static websites with real directories to platform configuration management while preserving their original rules and contents.
+- Persisted Caddy drafts and applied history, exact-revision validation, controlled deployment and rollback through an independent root-owned capability. Strong ETags, source-drift checks and administrator/owner authorization protect changes.
+
+### Fixed
+
+- The Caddy page now performs explicit configuration actions instead of only displaying inventory metadata.
+- The platform-home sidebar button has symmetric vertical spacing, retaining the reference console's alignment.
+
 ## 0.4.0 - 2026-11-13
 
 ### Added
