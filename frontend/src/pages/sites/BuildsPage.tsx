@@ -48,6 +48,9 @@ export default function BuildsPage() {
 	// dropped lazily. Windows survive site switches — they are independent
 	// origins the user may still be reading.
 	const previewWindows = useRef(new Map<string, Window>());
+	const previewRevisions = useRef(new Map<string, number>());
+	const openingPreviews = useRef(new Set<string>());
+	const closingPreviews = useRef(new Set<string>());
 
 	const refresh = useCallback(async () => {
 		if (!siteId) return;
@@ -135,45 +138,61 @@ export default function BuildsPage() {
 	}
 
 	async function handlePreview(buildID: string, active: boolean) {
-		if (!siteId || opening === buildID) return;
+		if (!siteId) return;
 		const myGen = generation.current;
 		// A live preview reuses its tracked window instead of issuing again.
 		const windowKey = `${siteId}/${buildID}`;
+		if (openingPreviews.current.has(windowKey) || closingPreviews.current.has(windowKey)) return;
+		const revision = previewRevisions.current.get(windowKey) ?? 0;
 		const existing = previewWindows.current.get(windowKey);
 		if (active && existing && !existing.closed) {
 			existing.focus();
 			return;
 		}
 		setOpening(buildID);
+		openingPreviews.current.add(windowKey);
 		// The blank window must be opened synchronously inside the click:
 		// after an await the user gesture is gone and the browser blocks the
 		// popup. The opener is severed before the preview navigation.
 		const win = window.open('', '_blank');
 		if (!win) {
+			openingPreviews.current.delete(windowKey);
 			setOpening(null);
 			void messageApi.warning(t('builds.previewBlocked'));
 			return;
 		}
 		win.opener = null;
+		previewWindows.current.set(windowKey, win);
 		try {
 			const link = await createPreviewLink(siteId, buildID);
-			if (generation.current !== myGen) {
+			if (
+				generation.current !== myGen ||
+				revision !== (previewRevisions.current.get(windowKey) ?? 0)
+			) {
 				// The user switched sites (or left the page) mid-flight: the
 				// response belongs to the previous site, so only the blank
 				// window this request opened is discarded.
 				win.close();
+				if (previewWindows.current.get(windowKey) === win) previewWindows.current.delete(windowKey);
 				return;
 			}
-			previewWindows.current.set(windowKey, win);
 			win.location.href = link.url;
 			await refresh();
 		} catch (err) {
 			win.close();
+			if (previewWindows.current.get(windowKey) === win) previewWindows.current.delete(windowKey);
+			if (
+				generation.current !== myGen ||
+				revision !== (previewRevisions.current.get(windowKey) ?? 0)
+			)
+				return;
 			// Unknown failures still surface: silence would leave a blank
 			// window closing with no explanation.
 			void messageApi.warning(t(apiErrorKey(err) ?? 'error.generic'));
 		} finally {
-			setOpening(null);
+			openingPreviews.current.delete(windowKey);
+			if (generation.current === myGen)
+				setOpening((current) => (current === buildID ? null : current));
 		}
 	}
 
@@ -187,6 +206,9 @@ export default function BuildsPage() {
 		if (!siteId) return;
 		const myGen = generation.current;
 		const windowKey = `${siteId}/${buildID}`;
+		if (closingPreviews.current.has(windowKey)) return;
+		closingPreviews.current.add(windowKey);
+		previewRevisions.current.set(windowKey, (previewRevisions.current.get(windowKey) ?? 0) + 1);
 		setClosing(buildID);
 		try {
 			await closePreviewLink(siteId, buildID);
@@ -202,7 +224,9 @@ export default function BuildsPage() {
 			// always reported, even for unmapped error codes.
 			void messageApi.warning(t(apiErrorKey(err) ?? 'error.generic'));
 		} finally {
-			setClosing(null);
+			closingPreviews.current.delete(windowKey);
+			if (generation.current === myGen)
+				setClosing((current) => (current === buildID ? null : current));
 		}
 	}
 
@@ -312,6 +336,7 @@ export default function BuildsPage() {
 											<Button
 												size="small"
 												loading={opening === record.id}
+												disabled={closing === record.id}
 												onClick={() => void handlePreview(record.id, record.previewActive)}
 											>
 												<Trans text={t('builds.preview')} />
@@ -322,7 +347,15 @@ export default function BuildsPage() {
 												title={t('builds.previewCloseConfirm')}
 												onConfirm={() => void handleClosePreview(record.id)}
 											>
-												<Button size="small" loading={closing === record.id}>
+												<Button
+													size="small"
+													loading={closing === record.id}
+													disabled={
+														!record.previewActive &&
+														opening !== record.id &&
+														!previewWindows.current.has(`${siteId}/${record.id}`)
+													}
+												>
 													<Trans text={t('builds.previewClose')} />
 												</Button>
 											</Popconfirm>

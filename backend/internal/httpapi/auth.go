@@ -50,7 +50,7 @@ func (a *API) consumeAuthState(w http.ResponseWriter, r *http.Request, kind stri
 	invalid := func() {
 		writeProblem(w, http.StatusUnauthorized, "challenge_invalid", "The authentication challenge is unknown, expired, or already used.")
 	}
-	cookie, err := r.Cookie(authTxCookieName)
+	cookie, err := uniqueCookie(r, a.authTxCookieName())
 	if err != nil || cookie.Value == "" {
 		invalid()
 		return store.AuthState{}, false
@@ -289,7 +289,7 @@ func (a *API) handleSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	available := a.wa != nil
-	cookie, err := r.Cookie(sessionCookieName)
+	cookie, err := uniqueCookie(r, a.sessionCookieName())
 	if err != nil || cookie.Value == "" {
 		writeJSON(w, http.StatusOK, sessionResponse{Authenticated: false, PlatformInitialized: initialized, PasskeyAvailable: available})
 		return

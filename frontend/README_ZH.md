@@ -91,7 +91,7 @@ npm run admin:dev            # 在 http://localhost:5174 启动开发服务器�
 npm run admin:check          # tsc --noEmit（类型检查）
 npm run admin:test           # vitest 单元测试（API client、编辑状态机、主题选择、i18n、挂载视图）
 npm run admin:build          # 生产构建到 build/
-npm run admin:api:generate   # 由 contracts/openapi/management.yaml 重新生成 src/lib/api/schema.d.ts
+npm run admin:api:generate   # 由 contracts/openapi/openapi.yaml 重新生成 src/lib/api/schema.d.ts
 npm run admin:api:check      # 已提交的 schema.d.ts 与契约漂移时失败
 npm run admin:contract:lint  # OpenAPI 语义校验（redocly）
 ```
@@ -113,7 +113,7 @@ frontend/src/
 │   │   ├── client.ts             # 同源 fetch 封装：CSRF、If-Match、problem+json、ETag
 │   │   ├── management.ts         # 基于生成 schema 的类型化端点
 │   │   ├── passkey.ts            # @simplewebauthn/browser 的 WebAuthn 仪式（无类型断言）
-│   │   └── schema.d.ts           # 由 contracts/openapi/management.yaml 生成
+│   │   └── schema.d.ts           # 由 contracts/openapi/openapi.yaml 生成
 │   ├── sites/                    # 站点加载与配置编辑状态机
 │   ├── themes/                   # 主题选择存储（目录、If-Match 保存、412 同步）
 │   ├── i18n/                     # zh-CN / en-US 字典与外部存储

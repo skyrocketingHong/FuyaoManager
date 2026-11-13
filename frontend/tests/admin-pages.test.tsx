@@ -122,7 +122,7 @@ function mount(Page = UsersPage) {
 		{
 			path: '*',
 			element: (
-				<ConfigProvider>
+				<ConfigProvider theme={{ token: { motion: false } }}>
 					<AntApp>
 						<PageHeaderProvider scope="admin">
 							<Header />
@@ -342,7 +342,9 @@ it('filters logs by outcome and expands metadata without inventing record detail
 	});
 	mount(LogsPage);
 	expect(await screen.findByText('Change platform role')).toBeDefined();
-	fireEvent.click(await screen.findByRole('button', { name: 'Expand row' }));
+	const disclosure = await screen.findByText('Record details', { selector: 'summary' });
+	fireEvent.click(disclosure);
+	expect((disclosure.closest('details') as HTMLDetailsElement).open).toBe(true);
 	expect(await screen.findByText('/api/v1/admin/users/', { exact: false })).toBeDefined();
 	expect(screen.getByText('Before')).toBeDefined();
 	expect(screen.getByText('After')).toBeDefined();

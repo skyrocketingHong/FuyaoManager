@@ -34,7 +34,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0015）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0016）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
 │   │   │                      # 主题、构建、发布、媒体任务、网络入口、审计
@@ -49,6 +49,8 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   │   │                      # 预览 origin
 │   │   ├── publish/           # release 密封、原子 live 指针、已发布 origin
 │   │   ├── mediatask/         # 经主题 Node 脚本的相册索引
+│   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
+│   │   ├── caddyinventory/     # fixed read capability runner
 │   │   ├── edge/              # 受管 Caddy 片段渲染与应用
 │   │   ├── wa/                # WebAuthn 桥（兼容路径）
 │   │   └── testauth/          # 仅测试用的合成认证器
@@ -74,7 +76,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   │                          # 与各业务页
 │   └── tests/                 # vitest 测试（jsdom）
 ├── contracts/
-│   ├── openapi/management.yaml  # 权威管理 HTTP 契约
+│   ├── openapi/openapi.yaml  # 权威管理 HTTP 契约
 │   └── theme/                   # 权威主题契约
 │       ├── manifest.schema.json / build-input.schema.json / release.schema.json
 │       ├── README.md / README_ZH.md
@@ -85,6 +87,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │                             # favicon.svg）、公网 Caddy vhost 模板（caddy/）
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
+    ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # 控制台复用来源及适配边界
     ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # 账号、审计和外观操作说明

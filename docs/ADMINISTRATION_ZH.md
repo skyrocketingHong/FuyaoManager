@@ -34,4 +34,4 @@
 
 “外观设置”提供日间、夜间、跟随系统、12 种预设颜色、自定义颜色和恢复默认。选择即时应用到管理台组件和 CSS 变量，在当前浏览器保存；系统模式会随系统变化，其他标签页也会同步。同样可以从账号菜单进入；顶栏日夜快捷按钮保留当前强调色。错误、告警等状态颜色独立于强调色，自定义颜色会按实际底色校正文字对比度。
 
-接口定义以 [管理 OpenAPI](../contracts/openapi/management.yaml) 为准，通用界面复用来源见 [UI_REFERENCE_ZH.md](./UI_REFERENCE_ZH.md)。部署保持业务发布隔离；账号授权和外观修改不会应用 Caddy 或切换运行中的网站。
+接口定义以 [管理 OpenAPI](../contracts/openapi/openapi.yaml) 为准，通用界面复用来源见 [UI_REFERENCE_ZH.md](./UI_REFERENCE_ZH.md)。部署保持业务发布隔离；账号授权和外观修改不会应用 Caddy 或切换运行中的网站。

@@ -34,4 +34,4 @@ The management HTTP surface provides audit reads only. PostgreSQL records follow
 
 Appearance provides light, dark and system modes, twelve accent presets, a custom color picker and reset. Changes immediately update console components and CSS variables and persist in the browser. System mode follows OS changes; other tabs synchronize. The account menu also links to appearance, and the top-bar quick toggle preserves the accent. Error/warning colors remain semantic; custom accent text is adjusted for contrast against its actual surfaces.
 
-See the [management OpenAPI](../contracts/openapi/management.yaml) for the contract and [UI_REFERENCE.md](./UI_REFERENCE.md) for reused UI sources. Business publishing stays isolated: account authorization and appearance changes do not apply Caddy or switch running websites.
+See the [management OpenAPI](../contracts/openapi/openapi.yaml) for the contract and [UI_REFERENCE.md](./UI_REFERENCE.md) for reused UI sources. Business publishing stays isolated: account authorization and appearance changes do not apply Caddy or switch running websites.

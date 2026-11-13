@@ -12,6 +12,12 @@
 	gap: var(--space-4);
 	max-width: none;
 }
+.subtle,
+.section-caption {
+	color: var(--muted-foreground);
+	font-size: 12px;
+	line-height: 1.6;
+}
 
 /* Panel: the standard card surface. */
 .panel {
@@ -87,6 +93,17 @@
    transparent, so the surface is drawn exactly once. */
 .table-panel {
 	background: transparent;
+}
+.panel.table-panel {
+	background: transparent;
+	border: 0;
+	border-radius: 0;
+}
+.table-panel-content > .panel-body {
+	padding: 0 0 var(--space-4);
+}
+.table-panel-content > .panel-body:empty {
+	display: none;
 }
 
 .table-panel-header {

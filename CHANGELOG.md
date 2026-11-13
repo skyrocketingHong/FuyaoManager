@@ -7,6 +7,19 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.4.0 - 2026-11-13
+
+### Added
+
+- Real Caddy inventory synchronization, per-site type and permission boundaries, and static/redirect configuration views; existing complex source rules stay read-only.
+- Platform API directory adapted from the reference console; authoritative contract renamed to `contracts/openapi/openapi.yaml`.
+- Independent-host path previews with revocable leases, TLS-port mapping, and hardened HTTPS cookies.
+
+### Fixed
+
+- Closing a preview wins over pending issuance, and old leases cannot reopen it.
+- Logs and sidebar reuse reference component calls and CSS; group headings align with icons.
+
 ## 0.3.0 - 2026-11-13
 
 ### Added

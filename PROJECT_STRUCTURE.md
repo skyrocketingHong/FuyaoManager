@@ -40,7 +40,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0015)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0016)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries, audit
@@ -56,6 +56,8 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   │   │                      # preview origins
 │   │   ├── publish/           # release sealing, atomic live pointer, published origins
 │   │   ├── mediatask/         # album indexing through the theme's Node script
+│   │   ├── caddyconfig/        # Caddy adapter JSON inventory (read-only)
+│   │   ├── caddyinventory/     # fixed read capability runner
 │   │   ├── edge/              # managed Caddy snippet rendering/applying
 │   │   ├── wa/                # WebAuthn bridge (compatibility path)
 │   │   └── testauth/          # test-only synthetic authenticator
@@ -82,7 +84,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   │                          # themes catalog, sites, per-site surfaces
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/
-│   ├── openapi/management.yaml  # authoritative management HTTP contract
+│   ├── openapi/openapi.yaml  # authoritative management HTTP contract
 │   └── theme/                   # authoritative theme contracts
 │       ├── manifest.schema.json / build-input.schema.json / release.schema.json
 │       ├── README.md / README_ZH.md
@@ -94,6 +96,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │                             # branding), public Caddy vhost template (caddy/)
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
+    ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer
     ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # reused console modules and boundaries
     ├── ADMINISTRATION.md / ADMINISTRATION_ZH.md # account, audit and appearance workflows

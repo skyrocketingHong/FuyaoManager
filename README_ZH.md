@@ -55,7 +55,7 @@ FuyaoManager 是自托管的站点与内容管理平台：管理站点、内容�
 ```bash
 # 管理台（frontend/）
 cd frontend && npm ci
-npm run api:generate   # 由 ../contracts/openapi/management.yaml 生成类型
+npm run api:generate   # 由 ../contracts/openapi/openapi.yaml 生成类型
 npm run build
 
 # 后端（backend/）
@@ -126,7 +126,7 @@ FUYAO_TEST_THEME_ROOT=/path/to/FuyaoHomepage/site \
                             └─ 边缘管理器（渲染并应用受管 Caddy 片段）
 ```
 
-权威契约位于 `contracts/`：`openapi/management.yaml`（HTTP 面，配套生成的 TypeScript 类型与路由覆盖测试）与 `theme/`（manifest、build-input、release 三份 JSON Schema 及公开 fixtures，Go 校验器与主题 Node 工具消费同一份契约）。
+权威契约位于 `contracts/`：`openapi/openapi.yaml`（HTTP 面，配套生成的 TypeScript 类型与路由覆盖测试）与 `theme/`（manifest、build-input、release 三份 JSON Schema 及公开 fixtures，Go 校验器与主题 Node 工具消费同一份契约）。
 
 ## 项目结构
 

@@ -12,7 +12,15 @@
  */
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, waitFor, cleanup, fireEvent } from '@testing-library/react';
+import {
+	render,
+	screen,
+	act,
+	waitFor,
+	cleanup,
+	fireEvent,
+	isInaccessible
+} from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import { ApiError } from '../src/lib/api/client';
@@ -105,7 +113,7 @@ function NavBridge() {
 
 function mountAt(initialSite: string) {
 	return render(
-		<ConfigProvider>
+		<ConfigProvider theme={{ token: { motion: false } }}>
 			<MemoryRouter initialEntries={[`/sites/${initialSite}/builds`]}>
 				<NavBridge />
 				<Routes>
@@ -133,18 +141,24 @@ afterEach(() => {
 
 /** antd inserts a space between two-CJK-character button labels. */
 function findButton(label: string): HTMLButtonElement {
-	const button = screen
-		.getAllByRole('button')
-		.find((b) => (b.textContent ?? '').replace(/\s/g, '') === label);
+	const button = matchingButtons(label)[0];
 	if (!(button instanceof HTMLButtonElement)) throw new Error(`button ${label} missing`);
 	return button;
 }
 
+// Filter native button text before computing visibility. Scanning every
+// role repeatedly forces jsdom to recascade all antd styles for each node.
+function matchingButtons(label: string): HTMLButtonElement[] {
+	return Array.from(
+		document.querySelectorAll<HTMLButtonElement>('button:not([role]), button[role="button"]')
+	)
+		.filter((button) => (button.textContent ?? '').replace(/\s/g, '') === label)
+		.filter((button) => !isInaccessible(button));
+}
+
 /** The index-th button with this label, for row-scoped assertions. */
 function findButtonNth(label: string, index: number): HTMLButtonElement {
-	const list = screen
-		.getAllByRole('button')
-		.filter((b) => (b.textContent ?? '').replace(/\s/g, '') === label);
+	const list = matchingButtons(label);
 	const button = list[index];
 	if (!(button instanceof HTMLButtonElement)) throw new Error(`button ${label} #${index} missing`);
 	return button;
@@ -176,7 +190,7 @@ async function confirmPopconfirm(label: string, index = 0) {
 	const ok = await waitFor(() => {
 		// New popovers append at the end of body; pick the newest OK so a
 		// still-mounted previous popover cannot swallow the click.
-		const list = screen.getAllByRole('button').filter((b) => (b.textContent ?? '') === 'OK');
+		const list = matchingButtons('OK');
 		const button = list[list.length - 1];
 		if (!button) throw new Error('Popconfirm OK button missing');
 		return button;
@@ -238,10 +252,67 @@ describe('BuildsPage stale responses', () => {
 });
 
 describe('BuildsPage preview windows', () => {
+	it('does not close a preview that is neither running nor being opened', async () => {
+		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'Site A'));
+		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'inactive')]);
+		mountAt(SITE_A);
+		const close = await waitFor(() => findButton(zh['builds.previewClose']));
+		expect(close.disabled).toBe(true);
+		fireEvent.click(close);
+		expect(closePreviewLink).not.toHaveBeenCalled();
+	});
+	it('does not issue another link while the close request is pending', async () => {
+		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'Site A'));
+		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'closing', true)]);
+		let resolveClose!: () => void;
+		vi.mocked(closePreviewLink).mockReturnValue(
+			new Promise((resolve) => {
+				resolveClose = resolve;
+			})
+		);
+		const open = stubOpen(fakeWindow());
+		mountAt(SITE_A);
+		await waitFor(() => findButton(zh['builds.previewClose']));
+		await confirmPopconfirm(zh['builds.previewClose']);
+		await waitFor(() => expect(closePreviewLink).toHaveBeenCalledTimes(1));
+		const preview = findButton(zh['builds.preview']);
+		expect(preview.disabled).toBe(true);
+		fireEvent.click(preview);
+		expect(open).not.toHaveBeenCalled();
+		expect(createPreviewLink).not.toHaveBeenCalled();
+		await act(async () => {
+			resolveClose();
+		});
+	});
+	it('never navigates a pending popup when close wins before its link response', async () => {
+		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'Site A'));
+		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'pending-close')]);
+		let resolveLink!: (value: ReturnType<typeof previewLink>) => void;
+		vi.mocked(createPreviewLink).mockReturnValue(
+			new Promise((resolve) => {
+				resolveLink = resolve;
+			})
+		);
+		vi.mocked(closePreviewLink).mockResolvedValue(undefined);
+		const win = fakeWindow();
+		stubOpen(win);
+		mountAt(SITE_A);
+		fireEvent.click(await waitFor(() => findButton(zh['builds.preview'])));
+		await waitFor(() => expect(createPreviewLink).toHaveBeenCalledTimes(1));
+		await confirmPopconfirm(zh['builds.previewClose']);
+		await waitFor(() => expect(closePreviewLink).toHaveBeenCalledWith(SITE_A, 'pending-close'));
+		await act(async () => {
+			resolveLink(previewLink('http://127.0.0.1:49203/__preview__/late'));
+		});
+		expect(win.location.href).toBe('');
+		expect(win.close).toHaveBeenCalled();
+	});
 	it('opens the blank window synchronously, severs the opener, navigates, and refreshes', async () => {
 		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'SiteA'));
 		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'b1-open-1')]);
-		vi.mocked(createPreviewLink).mockResolvedValue(previewLink('http://127.0.0.1:49200/__preview__/tok1'));
+		vi.mocked(createPreviewLink).mockResolvedValue(
+			previewLink('http://127.0.0.1:49200/__preview__/tok1')
+		);
 		const win = fakeWindow();
 		stubOpen(win);
 		mountAt(SITE_A);
@@ -303,7 +374,9 @@ describe('BuildsPage preview windows', () => {
 
 	it('discards only its own blank window when the site switches before the link resolves', async () => {
 		const pending = new Map<string, (v: ReturnType<typeof previewLink>) => void>();
-		vi.mocked(getSite).mockImplementation(async (id: string) => site(id, id === SITE_A ? 'SiteA' : 'SiteB'));
+		vi.mocked(getSite).mockImplementation(async (id: string) =>
+			site(id, id === SITE_A ? 'SiteA' : 'SiteB')
+		);
 		vi.mocked(listBuilds).mockImplementation(async (id: string) => {
 			if (id === SITE_A) return [build(SITE_A, 'aaaaaaaa-build-a')];
 			return [build(SITE_B, 'bbbbbbbb-build-b')];
@@ -345,7 +418,9 @@ describe('BuildsPage preview windows', () => {
 		// sees previewActive=true for the live origin.
 		vi.mocked(listBuilds).mockResolvedValueOnce([build(SITE_A, 'b1-active')]);
 		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'b1-active', true)]);
-		vi.mocked(createPreviewLink).mockResolvedValue(previewLink('http://127.0.0.1:49203/__preview__/tok4'));
+		vi.mocked(createPreviewLink).mockResolvedValue(
+			previewLink('http://127.0.0.1:49203/__preview__/tok4')
+		);
 		const win = fakeWindow();
 		stubOpen(win);
 		mountAt(SITE_A);
@@ -370,7 +445,10 @@ describe('BuildsPage preview windows', () => {
 
 	it('closes exactly its own window on success and keeps it on failure', async () => {
 		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'SiteA'));
-		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'b1-close-1'), build(SITE_A, 'b2-close-2')]);
+		vi.mocked(listBuilds).mockResolvedValue([
+			build(SITE_A, 'b1-close-1'),
+			build(SITE_A, 'b2-close-2')
+		]);
 		vi.mocked(createPreviewLink)
 			.mockResolvedValueOnce(previewLink('http://127.0.0.1:49204/__preview__/tokA'))
 			.mockResolvedValueOnce(previewLink('http://127.0.0.1:49205/__preview__/tokB'));
@@ -401,9 +479,7 @@ describe('BuildsPage preview windows', () => {
 		// A failed close keeps b2's window untouched.
 		vi.mocked(closePreviewLink).mockRejectedValue(new ApiError(500, 'internal_error', '', null));
 		await confirmPopconfirm(zh['builds.previewClose'] as string, 1);
-		await waitFor(() =>
-			expect(screen.getByText(zh['error.generic'] as string)).toBeDefined()
-		);
+		await waitFor(() => expect(screen.getByText(zh['error.generic'] as string)).toBeDefined());
 		expect(winB.close).not.toHaveBeenCalled();
 	}, 15000);
 });
@@ -416,7 +492,9 @@ describe('BuildsPage generation guards', () => {
 		vi.mocked(listBuilds).mockImplementation(async (id: string) =>
 			id === SITE_A ? [build(SITE_A, 'aaaaaaaa-build-a')] : [build(SITE_B, 'bbbbbbbb-build-b')]
 		);
-		vi.mocked(createPreviewLink).mockResolvedValue(previewLink('http://127.0.0.1:49300/__preview__/tok1'));
+		vi.mocked(createPreviewLink).mockResolvedValue(
+			previewLink('http://127.0.0.1:49300/__preview__/tok1')
+		);
 		let resolveClose!: () => void;
 		vi.mocked(closePreviewLink).mockImplementation(
 			() => new Promise<void>((resolve) => (resolveClose = resolve))
@@ -488,7 +566,9 @@ describe('BuildsPage generation guards', () => {
 	it('a close response after unmount still closes the original window', async () => {
 		vi.mocked(getSite).mockResolvedValue(site(SITE_A, 'SiteA'));
 		vi.mocked(listBuilds).mockResolvedValue([build(SITE_A, 'b1-unmount')]);
-		vi.mocked(createPreviewLink).mockResolvedValue(previewLink('http://127.0.0.1:49301/__preview__/tok2'));
+		vi.mocked(createPreviewLink).mockResolvedValue(
+			previewLink('http://127.0.0.1:49301/__preview__/tok2')
+		);
 		let resolveClose!: () => void;
 		vi.mocked(closePreviewLink).mockImplementation(
 			() => new Promise<void>((resolve) => (resolveClose = resolve))

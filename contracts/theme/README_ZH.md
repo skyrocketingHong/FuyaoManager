@@ -4,7 +4,7 @@
 
 公开前台与内容平台解耦的权威、机器可校验契约。主题声明自己消费与产出的内容；平台在任何构建、预览或发布之前先判断站点需求是否被覆盖。契约采用 JSON Schema（draft 2020-12），由 Go 包 `backend/internal/themecontract` 校验。
 
-范围边界：`contracts/openapi/management.yaml` 管理后台 HTTP 接口（传输、鉴权、错误）；本目录管理构建期主题契约（标识、输入、输出）。HTTP 接口变更随各后端阶段同步进 OpenAPI 文件；主题契约不描述任何 HTTP 接口。
+范围边界：`contracts/openapi/openapi.yaml` 管理后台 HTTP 接口（传输、鉴权、错误）；本目录管理构建期主题契约（标识、输入、输出）。HTTP 接口变更随各后端阶段同步进 OpenAPI 文件；主题契约不描述任何 HTTP 接口。
 
 ## 文档
 

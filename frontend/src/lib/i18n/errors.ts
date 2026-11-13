@@ -3,6 +3,10 @@ import type { MessageKey } from './index';
 import { ApiError } from '../api/client';
 
 const codeToKey: Record<string, MessageKey> = {
+	preview_closed: 'error.previewClosed',
+	caddy_unavailable: 'error.caddyUnavailable',
+	caddy_invalid: 'error.caddyInvalid',
+	site_kind_mismatch: 'caddy.unsupportedPage',
 	invalid_permit: 'error.invalidPermit',
 	permit_used: 'error.permitUsed',
 	permit_expired: 'error.permitExpired',

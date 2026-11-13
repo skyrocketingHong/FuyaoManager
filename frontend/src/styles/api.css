@@ -1,0 +1,201 @@
+/* API 接口目录：筛选行 + 统计行 + 折叠列表（行内展开鉴权与契约详情）。 */
+.topbar-api-content {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.topbar-api-content > .ant-select {
+	width: 132px;
+	flex: none;
+}
+.topbar-api-content > .ant-input-affix-wrapper {
+	flex: 1 1 180px;
+	max-width: 250px;
+}
+.topbar-api-content > .ant-btn {
+	flex: none;
+}
+.topbar-api-count,
+.topbar-api-version {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+}
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+.api-catalog-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-3);
+}
+.api-catalog-filters > .ant-input-affix-wrapper {
+	flex: 1 1 240px;
+	min-width: 0;
+}
+.api-catalog-filters > .ant-select {
+	width: 150px;
+}
+
+.api-catalog-meta {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: var(--space-3);
+	margin: var(--space-4) 0 var(--space-2);
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+}
+
+.api-catalog-list {
+	background: var(--card);
+	margin-top: 0;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+}
+.api-catalog-list > .ant-collapse-item {
+	border-bottom: 1px solid var(--border);
+}
+.api-catalog-list > .ant-collapse-item:first-child {
+	border-top: 0;
+}
+.api-catalog-list > .ant-collapse-item:last-child {
+	border-bottom: 0;
+}
+.api-catalog-list .ant-collapse-header:hover {
+	background: var(--surface-high);
+}
+.api-catalog-list .ant-collapse-header {
+	padding-block: var(--space-3);
+}
+.api-catalog-list .ant-collapse-content-box {
+	padding: var(--space-2) 0 var(--space-5) 26px;
+}
+
+.api-row {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.api-route-line {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-width: 0;
+}
+.api-route-line > .api-path {
+	flex: 1;
+	min-width: 0;
+}
+.api-row-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: start;
+	gap: var(--space-3);
+	min-width: 0;
+	font-size: var(--text-caption);
+}
+.api-version-label {
+	flex: 0 0 auto;
+	color: var(--muted-foreground);
+	white-space: nowrap;
+}
+.api-method.status-tag {
+	width: 58px;
+	font-family: var(--font-mono);
+	white-space: nowrap;
+}
+
+.api-catalog-list .api-path {
+	font-size: var(--text-body);
+	color: var(--foreground);
+}
+.api-path {
+	overflow-wrap: anywhere;
+}
+.api-summary {
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+	line-height: 1.5;
+	min-width: 0;
+}
+.api-row-group {
+	margin-left: auto;
+	flex: none;
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+}
+
+.api-catalog-list .ant-table-content,
+.api-operation-detail .ant-table-content {
+	overflow-x: auto;
+}
+
+.api-permissions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+	overflow-wrap: anywhere;
+}
+
+.api-operation-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+
+.api-operation-detail section {
+	margin-top: var(--space-4);
+	padding-top: var(--space-3);
+	border-top: 1px solid var(--border);
+}
+.api-operation-detail h3,
+.api-operation-detail h4 {
+	margin-bottom: var(--space-2);
+}
+
+.api-description {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.api-schema {
+	padding: var(--space-3);
+	margin-block: var(--space-2);
+	max-height: 360px;
+	overflow: auto;
+	background: var(--surface-high);
+	border: 1px solid var(--border);
+	border-radius: 4px;
+	font-size: var(--text-caption);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.api-schema:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+	.api-row-group {
+		display: none;
+	}
+}

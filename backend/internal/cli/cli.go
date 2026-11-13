@@ -5,15 +5,19 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"gopkg.in/yaml.v3"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -48,6 +52,8 @@ func Main(args []string) int {
 	switch args[0] {
 	case "migrate":
 		err = runMigrate(ctx)
+	case "sync-caddy":
+		err = runSyncCaddy(ctx, args[1:])
 	case "serve":
 		err = runServe(ctx)
 	case "init-admin":
@@ -83,6 +89,7 @@ func usage(f *os.File) {
 	fmt.Fprint(f, `Usage: fuyao-admin <command> [flags]
 
 Commands:
+  sync-caddy --username X  Register the real Caddy inventory without changing website files.
   migrate                 Apply pending SQL migrations and exit.
   serve                   Run the management API (loopback or a trusted host).
   init-admin              Register the first administrator and print a
@@ -271,14 +278,20 @@ func runServe(ctx context.Context) error {
 	// platform allocation table so a port never silently switches builds,
 	// and the bind address reaches remote (private-network) browsers in
 	// deployment while staying loopback in local development.
+	managerOrigin := ""
+	if strings.HasPrefix(cfg.RPOrigins[0], "https://") {
+		managerOrigin = cfg.RPOrigins[0]
+	}
 	previews := buildrunner.NewPreviewServer(buildrunner.PreviewConfig{
-		Target:       st.Builds,
-		BuildsRoot:   buildsRoot,
-		BindAddr:     cfg.PreviewBind,
-		ExternalBase: cfg.PreviewExternalBase,
-		Ports:        st.NetworkEntries,
-		PortMin:      cfg.PortMin,
-		PortMax:      cfg.PortMax,
+		ManagerOrigin:      managerOrigin,
+		ExternalPortOffset: cfg.PreviewPortOffset,
+		Target:             st.Builds,
+		BuildsRoot:         buildsRoot,
+		BindAddr:           cfg.PreviewBind,
+		ExternalBase:       cfg.PreviewExternalBase,
+		Ports:              st.NetworkEntries,
+		PortMin:            cfg.PortMin,
+		PortMax:            cfg.PortMax,
 		MediaRoots: func(siteID uuid.UUID) (string, string, error) {
 			contentRoot := contentStore.ContentRoot(siteID)
 			return filepath.Join(contentRoot, "albums", "photos"),
@@ -365,7 +378,29 @@ func runServe(ctx context.Context) error {
 		}
 	}
 
+	contractData, err := os.ReadFile(filepath.Join(repoRoot, "contracts", "openapi", "openapi.yaml"))
+	if err != nil {
+		return err
+	}
+	var document map[string]any
+	if err = yaml.Unmarshal(contractData, &document); err != nil {
+		return err
+	}
+	contractJSON, err := json.Marshal(document)
+	if err != nil {
+		return err
+	}
+	var caddyCommand []string
+	if raw := os.Getenv("FUYAO_ADMIN_CADDY_READ_CMD"); raw != "" {
+		for _, arg := range strings.Split(raw, ",") {
+			if arg = strings.TrimSpace(arg); arg != "" {
+				caddyCommand = append(caddyCommand, arg)
+			}
+		}
+	}
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
+		CaddyReadCmd:      caddyCommand,
+		OpenAPIJSON:       contractJSON,
 		RPID:              cfg.RPID,
 		RPOrigins:         cfg.RPOrigins,
 		CookieSecure:      cfg.CookieSecure,
@@ -391,7 +426,11 @@ func runServe(ctx context.Context) error {
 		if _, err := os.Stat(filepath.Join(cfg.AdminUIDir, "index.html")); err != nil {
 			return fmt.Errorf("admin UI directory %s has no index.html: %w", cfg.AdminUIDir, err)
 		}
-		handler = httpapi.WithUI(handler, cfg.AdminUIDir)
+		previewHost := ""
+		if parsed, err := url.Parse(cfg.PreviewExternalBase); err == nil && parsed.Scheme == "https" {
+			previewHost = parsed.Hostname()
+		}
+		handler = httpapi.WithUI(handler, cfg.AdminUIDir, previewHost)
 	}
 
 	server := &http.Server{

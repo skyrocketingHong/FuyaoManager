@@ -52,16 +52,18 @@ type MediaRoots func(siteID uuid.UUID) (photosRoot, thumbnailsRoot string, err e
 // Ports the origins use OS-assigned ports on the bind address. MediaRoots
 // enables /media/albums serving for previews; without it media paths 404.
 type PreviewConfig struct {
-	Target       PreviewTarget
-	BuildsRoot   string
-	TTL          time.Duration
-	MaxOrigins   int
-	BindAddr     string
-	ExternalBase string // e.g. "http://100.117.154.115"
-	Ports        PortSource
-	PortMin      int
-	PortMax      int
-	MediaRoots   MediaRoots
+	Target             PreviewTarget
+	BuildsRoot         string
+	TTL                time.Duration
+	MaxOrigins         int
+	BindAddr           string
+	ExternalBase       string // e.g. "http://100.117.154.115"
+	ManagerOrigin      string // Enables authenticated path wrappers over an independent HTTPS origin.
+	ExternalPortOffset int    // TLS edge port minus the allocated loopback backend port.
+	Ports              PortSource
+	PortMin            int
+	PortMax            int
+	MediaRoots         MediaRoots
 	// SweepInterval controls the expiry sweeper (diagnostics and tests);
 	// the default is TTL/4 bounded to [250ms, 30s].
 	SweepInterval time.Duration
@@ -93,6 +95,7 @@ type previewOrigin struct {
 	instanceID  string
 	mu          sync.Mutex
 	tokens      map[string]time.Time
+	entries     map[string]struct{}
 	ln          net.Listener
 	port        int
 	httpSrv     *http.Server
@@ -110,9 +113,19 @@ type PreviewServer struct {
 	cfg     PreviewConfig
 	mu      sync.Mutex
 	origins map[uuid.UUID]*previewOrigin
+	pending map[uuid.UUID]map[*previewIssue]struct{}
+	leases  map[string]PreviewLease
 	closed  bool
 	stop    chan struct{}
 	done    chan struct{}
+}
+
+// A link request can still be resolving its frozen target when the user
+// closes it. Keep that attempt in the lifecycle before doing any I/O, so a
+// successful close cannot be undone by the older request returning late.
+type previewIssue struct {
+	siteID   uuid.UUID
+	canceled bool
 }
 
 // NewPreviewServer assembles the preview service and starts the expiry
@@ -138,9 +151,12 @@ func NewPreviewServer(cfg PreviewConfig) *PreviewServer {
 		cfg.SweepInterval = interval
 	}
 	cfg.ExternalBase = strings.TrimRight(cfg.ExternalBase, "/")
+	cfg.ManagerOrigin = strings.TrimRight(cfg.ManagerOrigin, "/")
 	p := &PreviewServer{
 		cfg:     cfg,
 		origins: make(map[uuid.UUID]*previewOrigin),
+		pending: make(map[uuid.UUID]map[*previewIssue]struct{}),
+		leases:  make(map[string]PreviewLease),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
@@ -171,6 +187,11 @@ func (p *PreviewServer) sweepLoop() {
 func (p *PreviewServer) sweepExpired() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	for token, lease := range p.leases {
+		if !time.Now().Before(lease.ExpiresAt) {
+			delete(p.leases, token)
+		}
+	}
 	var expired []*previewOrigin
 	for id, origin := range p.origins {
 		if origin.expired() {
@@ -208,12 +229,16 @@ func (o *previewOrigin) expired() bool {
 func (o *previewOrigin) revoke() {
 	o.mu.Lock()
 	o.tokens = make(map[string]time.Time)
+	o.entries = make(map[string]struct{})
 	o.mu.Unlock()
 }
 
 // ErrPreviewNotReady marks issue requests for builds that have no servable
 // artifacts.
 var ErrPreviewNotReady = errors.New("preview target is not ready")
+
+// ErrPreviewClosed means this issue began before a matching explicit close.
+var ErrPreviewClosed = errors.New("preview link request was canceled by close")
 
 // Issue mints a fresh token for one build and returns the entry URL on that
 // build's own private origin. Visiting the URL exchanges the token for an
@@ -222,6 +247,29 @@ var ErrPreviewNotReady = errors.New("preview target is not ready")
 // anonymous directory access. Expired origins are reclaimed lazily first,
 // so a full capacity never stays pinned by stale previews.
 func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt time.Time, err error) {
+	return p.issue(siteID, buildID, "")
+}
+
+func (p *PreviewServer) issue(siteID, buildID uuid.UUID, wrapperHost string) (url string, expiresAt time.Time, err error) {
+	p.mu.Lock()
+	if p.closed {
+		p.mu.Unlock()
+		return "", time.Time{}, ErrPreviewNotReady
+	}
+	attempt := &previewIssue{siteID: siteID}
+	if p.pending[buildID] == nil {
+		p.pending[buildID] = make(map[*previewIssue]struct{})
+	}
+	p.pending[buildID][attempt] = struct{}{}
+	p.mu.Unlock()
+	defer func() {
+		p.mu.Lock()
+		delete(p.pending[buildID], attempt)
+		if len(p.pending[buildID]) == 0 {
+			delete(p.pending, buildID)
+		}
+		p.mu.Unlock()
+	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	artifactPath, spaFallback, err := p.cfg.Target.GetPreviewTarget(ctx, buildID)
@@ -248,6 +296,9 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if attempt.canceled {
+		return "", time.Time{}, ErrPreviewClosed
+	}
 	origin, err := p.originForLocked(siteID, buildID, resolvedArtifact, spaFallback)
 	if err != nil {
 		return "", time.Time{}, err
@@ -259,14 +310,28 @@ func (p *PreviewServer) Issue(siteID, buildID uuid.UUID) (url string, expiresAt 
 	expiresAt = time.Now().Add(p.cfg.TTL)
 	origin.mu.Lock()
 	origin.tokens[token] = expiresAt
+	if wrapperHost == "" {
+		origin.entries[token] = struct{}{}
+	}
 	origin.mu.Unlock()
+	if wrapperHost != "" {
+		if len(p.leases) >= p.cfg.MaxOrigins*64 {
+			return "", time.Time{}, ErrPreviewNotReady
+		}
+		leaseToken, err := NewPreviewToken()
+		if err != nil {
+			return "", time.Time{}, err
+		}
+		p.leases[leaseToken] = PreviewLease{SiteID: siteID, BuildID: buildID, Host: wrapperHost, InstanceID: origin.instanceID, ExpiresAt: expiresAt}
+		return p.cfg.ExternalBase + "/" + wrapperHost + "/?lease=" + leaseToken, expiresAt, nil
+	}
 	// The URL always carries the externally reachable base; the listener's
 	// own address (loopback or private bind) is never leaked to browsers.
-	base := p.cfg.ExternalBase
-	if base == "" {
-		base = "http://" + p.cfg.BindAddr
+	base, err := p.externalOrigin(origin.port)
+	if err != nil {
+		return "", time.Time{}, err
 	}
-	return base + ":" + strconv.Itoa(origin.port) + "/__preview__/" + token, expiresAt, nil
+	return base + "/__preview__/" + token, expiresAt, nil
 }
 
 // CloseOrigin tears down one build's preview: every issued token is revoked,
@@ -279,6 +344,11 @@ func (p *PreviewServer) CloseOrigin(siteID, buildID uuid.UUID) error {
 	origin, ok := p.origins[buildID]
 	if ok && origin.siteID != siteID {
 		return ErrPreviewNotReady
+	}
+	for attempt := range p.pending[buildID] {
+		if attempt.siteID == siteID {
+			attempt.canceled = true
+		}
 	}
 	if ok {
 		delete(p.origins, buildID)
@@ -350,6 +420,9 @@ func (p *PreviewServer) originForLocked(siteID, buildID uuid.UUID, artifactDir, 
 		return nil, ErrPreviewNotReady
 	}
 	if origin, ok := p.origins[buildID]; ok {
+		if origin.siteID != siteID {
+			return nil, ErrPreviewNotReady
+		}
 		return origin, nil
 	}
 	if len(p.origins) >= p.cfg.MaxOrigins {
@@ -385,6 +458,7 @@ func (p *PreviewServer) originForLocked(siteID, buildID uuid.UUID, artifactDir, 
 		buildID:     buildID,
 		instanceID:  uuid.NewString(),
 		tokens:      make(map[string]time.Time),
+		entries:     make(map[string]struct{}),
 		ln:          ln,
 		port:        port,
 		artifactDir: artifactDir,
@@ -408,12 +482,16 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// remaining a distinct origin from the management API, so cross-origin
 	// management responses stay unreadable to theme scripts. frame-ancestors
 	// 'none' keeps admin UIs from embedding it.
+	ancestors := "frame-ancestors 'none'"
+	if _, parentOrigin, err := o.server.wrapperOrigins(); err == nil {
+		ancestors = "frame-ancestors " + parentOrigin
+	}
 	w.Header().Set("Content-Security-Policy",
 		"default-src 'self'; script-src 'self' 'unsafe-inline' https://webapi.amap.com; "+
 			"style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "+
 			"font-src 'self' data:; connect-src 'self' data: blob: https:; "+
 			"worker-src 'self' blob:; base-uri 'self'; form-action 'self'; "+
-			"frame-ancestors 'none'")
+			ancestors)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// Match the production front end's referrer behavior (browser default:
 	// strict-origin-when-cross-origin). Domain-whitelisted services such as
@@ -434,7 +512,13 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Token entry: exchange and redirect to the origin root.
 	if strings.HasPrefix(r.URL.Path, "/__preview__/") {
 		token := strings.TrimPrefix(r.URL.Path, "/__preview__/")
-		if !o.validToken(token) {
+		next, err := previewPath(r.URL.Query().Get("next"))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		expiry, valid := o.consumeEntry(token)
+		if !valid {
 			http.NotFound(w, r)
 			return
 		}
@@ -443,10 +527,11 @@ func (o *previewOrigin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Value:    token,
 			Path:     "/",
 			HttpOnly: true,
+			Secure:   strings.HasPrefix(o.server.cfg.ExternalBase, "https://"),
 			SameSite: http.SameSiteLaxMode,
-			MaxAge:   int(o.server.cfg.TTL.Seconds()),
+			MaxAge:   int((time.Until(expiry) + time.Second - 1) / time.Second),
 		})
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
 
@@ -573,6 +658,21 @@ func (o *previewOrigin) serveMedia(w http.ResponseWriter, r *http.Request) {
 
 // validToken checks the origin's own token set; tokens from another build's
 // origin are invalid here, which is what keeps builds from cross-serving.
+func (o *previewOrigin) consumeEntry(token string) (time.Time, bool) {
+	if len(token) != 64 || !isHex(token) {
+		return time.Time{}, false
+	}
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	expiry, live := o.tokens[token]
+	_, unused := o.entries[token]
+	if !live || !unused || !time.Now().Before(expiry) {
+		return time.Time{}, false
+	}
+	delete(o.entries, token)
+	return expiry, true
+}
+
 func (o *previewOrigin) validToken(token string) bool {
 	if token == "" || len(token) != 64 || !isHex(token) {
 		return false
@@ -646,7 +746,11 @@ func (o *previewOrigin) serveFile(w http.ResponseWriter, r *http.Request, root f
 	}
 	if seeker, ok := file.(io.ReadSeeker); ok {
 		if strings.EqualFold(filepath.Ext(name), ".html") {
-			servePreviewHTML(w, r, info, seeker, o.instanceID)
+			parentOrigin := ""
+			if _, origin, err := o.server.wrapperOrigins(); err == nil {
+				parentOrigin = origin
+			}
+			servePreviewHTML(w, r, info, seeker, o.instanceID, parentOrigin)
 			return
 		}
 		http.ServeContent(w, r, info.Name(), info.ModTime(), seeker)

@@ -4,7 +4,7 @@ English | [简体中文](./README_ZH.md)
 
 Authoritative, machine-checkable contracts that decouple the public site from the content platform. A theme declares what it consumes and produces; the platform decides whether a site's needs are covered before any build, preview, or publication runs. The contracts are JSON Schema (draft 2020-12) documents validated by the Go package `backend/internal/themecontract`.
 
-Scope boundary: `contracts/openapi/management.yaml` governs the management HTTP API (transport, auth, errors). This directory governs the build-time theme contract (identity, inputs, outputs). HTTP surface changes land in the OpenAPI file as the backend phases implement them; the theme contract never describes HTTP endpoints.
+Scope boundary: `contracts/openapi/openapi.yaml` governs the management HTTP API (transport, auth, errors). This directory governs the build-time theme contract (identity, inputs, outputs). HTTP surface changes land in the OpenAPI file as the backend phases implement them; the theme contract never describes HTTP endpoints.
 
 ## Documents
 

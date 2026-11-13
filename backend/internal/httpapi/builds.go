@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
@@ -239,7 +240,26 @@ func (a *API) handleCreatePreviewLink(w http.ResponseWriter, r *http.Request, au
 		writeProblem(w, http.StatusConflict, "build_not_succeeded", "Preview links exist only for succeeded builds.")
 		return
 	}
-	url, expiresAt, err := a.previews.Issue(siteID, buildID)
+	var url string
+	var expiresAt time.Time
+	if wrappers, ok := a.previews.(previewWrapperIssuer); ok && wrappers.WrapperEnabled() {
+		host, hostErr := a.previewHost(r.Context(), siteID, auth.User.ID)
+		if hostErr != nil {
+			writeSiteLookupError(w, hostErr)
+			return
+		}
+		url, expiresAt, err = wrappers.IssueWrapper(siteID, buildID, host)
+	} else {
+		url, expiresAt, err = a.previews.Issue(siteID, buildID)
+	}
+	if errors.Is(err, buildrunner.ErrPreviewUnsafeOrigin) {
+		writeProblem(w, http.StatusServiceUnavailable, "preview_unavailable", "Preview requires independent HTTPS origins.")
+		return
+	}
+	if errors.Is(err, buildrunner.ErrPreviewClosed) {
+		writeProblem(w, http.StatusConflict, "preview_closed", "This preview was closed while its link was being issued. Open a fresh preview.")
+		return
+	}
 	if err != nil {
 		writeProblem(w, http.StatusConflict, "build_not_succeeded", "Preview artifacts are not available for this build.")
 		return

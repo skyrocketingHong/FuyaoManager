@@ -87,6 +87,7 @@ type Config struct {
 	AdminUIDir          string
 	PreviewBind         string
 	PreviewExternalBase string
+	PreviewPortOffset   int
 	EdgeSnippetDir      string
 	EdgeApplyCmd        []string
 	EdgePrivateBind     string
@@ -172,6 +173,7 @@ func Load() (Config, error) {
 	}
 	setInt(EnvPortMin, &cfg.PortMin, 20000)
 	setInt(EnvPortMax, &cfg.PortMax, 20100)
+	setInt("FUYAO_ADMIN_PREVIEW_PORT_OFFSET", &cfg.PreviewPortOffset, 0)
 	if intErr != nil {
 		return Config{}, intErr
 	}
@@ -206,6 +208,9 @@ func envInt(key string, fallback int) (int, error) {
 }
 
 func (c *Config) validate() error {
+	if c.PreviewPortOffset < 0 || c.PreviewPortOffset > 65535-c.PortMax {
+		return fmt.Errorf("preview external port range is invalid")
+	}
 	if c.DatabaseURL == "" {
 		return fmt.Errorf("%s is required", EnvDatabaseURL)
 	}

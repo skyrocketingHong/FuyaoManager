@@ -1,6 +1,7 @@
 package buildrunner
 
 import (
+	"errors"
 	"net/http"
 	"net/http/cookiejar"
 	"os"
@@ -337,7 +338,7 @@ func TestPreviewConcurrentIssueCloseReopen(t *testing.T) {
 		go func(closer bool) {
 			defer wg.Done()
 			for j := 0; j < 10; j++ {
-				if _, _, err := p.Issue(site, build); err != nil {
+				if _, _, err := p.Issue(site, build); err != nil && !errors.Is(err, ErrPreviewClosed) {
 					t.Errorf("concurrent issue: %v", err)
 					return
 				}

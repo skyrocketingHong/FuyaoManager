@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,7 @@ const uiCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-i
 // Headers: the document itself is never cached (redeploys must apply on
 // reload); hashed assets under /assets/ may be cached. A restrictive CSP
 // keeps the console self-contained (antd requires inline styles).
-func WithUI(api http.Handler, uiDir string) http.Handler {
+func WithUI(api http.Handler, uiDir string, previewHost ...string) http.Handler {
 	root, err := filepath.Abs(uiDir)
 	if err != nil {
 		panic("resolve UI dir: " + err.Error())
@@ -28,7 +29,14 @@ func WithUI(api http.Handler, uiDir string) http.Handler {
 	fileServer := http.FileServer(http.Dir(root))
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" {
+		if len(previewHost) > 0 {
+			parsed, _ := url.Parse("http://" + r.Host)
+			if parsed != nil && parsed.User == nil && strings.EqualFold(parsed.Hostname(), previewHost[0]) {
+				api.ServeHTTP(w, r)
+				return
+			}
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/preview/") || r.URL.Path == "/preview" {
 			api.ServeHTTP(w, r)
 			return
 		}

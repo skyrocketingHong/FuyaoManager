@@ -98,7 +98,7 @@ npm run admin:dev            # start the dev server on http://localhost:5174 (pi
 npm run admin:check          # tsc --noEmit (types)
 npm run admin:test           # vitest unit tests (API client, editor state machine, theme selection, i18n, mounted views)
 npm run admin:build          # production build to build/
-npm run admin:api:generate   # regenerate src/lib/api/schema.d.ts from contracts/openapi/management.yaml
+npm run admin:api:generate   # regenerate src/lib/api/schema.d.ts from contracts/openapi/openapi.yaml
 npm run admin:api:check      # fail if the committed schema.d.ts drifted from the contract
 npm run admin:contract:lint  # semantic OpenAPI lint (redocly)
 ```
@@ -121,7 +121,7 @@ frontend/src/
 │   │   ├── client.ts             # same-origin fetch wrapper: CSRF, If-Match, problem+json, ETag
 │   │   ├── management.ts         # typed endpoints over the generated schema
 │   │   ├── passkey.ts            # WebAuthn ceremonies via @simplewebauthn/browser (no casts)
-│   │   └── schema.d.ts           # generated from contracts/openapi/management.yaml
+│   │   └── schema.d.ts           # generated from contracts/openapi/openapi.yaml
 │   ├── sites/                    # site-detail loading; settings-editor state machine
 │   ├── themes/                   # theme-selection store (catalog, If-Match save, 412 sync)
 │   ├── i18n/                     # zh-CN / en-US dictionaries + external store

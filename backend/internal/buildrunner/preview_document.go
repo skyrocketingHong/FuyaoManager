@@ -2,6 +2,7 @@ package buildrunner
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -26,9 +27,9 @@ const previewInstanceParam = "instance"
 // Every served HTML document gets a working stop mechanism — before
 // </body>, before </html>, appended at the end, or as a streaming head for
 // documents beyond the buffering cap.
-func servePreviewHTML(w http.ResponseWriter, r *http.Request, info os.FileInfo, source io.ReadSeeker, instanceID string) {
+func servePreviewHTML(w http.ResponseWriter, r *http.Request, info os.FileInfo, source io.ReadSeeker, instanceID string, parentOrigin ...string) {
 	const maxDocumentSize = 8 << 20
-	script := []byte(previewLifecycleScript(instanceID))
+	script := []byte(previewLifecycleScript(instanceID, parentOrigin...))
 	if info.Size() > maxDocumentSize {
 		streamLifecycleHead(w, source, script)
 		return
@@ -84,9 +85,16 @@ func injectLifecycleScript(data, script []byte) []byte {
 // rejected at the origin, so no offline cache keeps a closed preview
 // "running"; the probe decides liveness, never the service worker. Frozen
 // artifacts stay untouched — the script exists only in served responses.
-func previewLifecycleScript(instanceID string) string {
+func previewLifecycleScript(instanceID string, parentOrigin ...string) string {
+	parent := ""
+	if len(parentOrigin) > 0 {
+		parent = parentOrigin[0]
+	}
+	encodedParent, _ := json.Marshal(parent)
 	return `<script data-fuyao-preview-lifecycle>
 (()=>{let ended=false,failures=0,busy=false,timer=0;const inst='` + instanceID + `';const zh=navigator.language.toLowerCase().startsWith('zh');
+const parentOrigin=` + string(encodedParent) + `;const publish=()=>{if(parentOrigin&&parent!==window)parent.postMessage({type:'fuyao-preview-route',instance:inst,path:location.pathname+location.search+location.hash},parentOrigin);};
+if(parentOrigin){for(const name of ['pushState','replaceState']){const original=history[name];history[name]=function(...args){const result=Reflect.apply(original,this,args);publish();return result;};}addEventListener('popstate',publish);addEventListener('hashchange',publish);addEventListener('pageshow',publish);publish();}
 const finish=(lost)=>{if(ended)return;ended=true;clearInterval(timer);timer=0;const title=zh?(lost?'预览连接已断开':'预览已关闭'):(lost?'Preview disconnected':'Preview closed');const detail=zh?'返回管理台可重新开启预览。':'Return to the manager to open another preview.';const page='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Fuyao Manager - '+title+'</title><style>body{margin:0;min-height:100vh;display:grid;place-content:center;background:#f2f5fa;color:#1e293b;font:14px system-ui;text-align:center}h1{font-size:20px;font-weight:600}p{color:#526176}</style></head><body><h1>'+title+'</h1><p>'+detail+'</p></body></html>';location.replace(URL.createObjectURL(new Blob([page],{type:'text/html'})));};
 const check=async()=>{if(ended||busy)return;busy=true;const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),2500);try{const r=await fetch('/__fuyao_preview__/status?'+new URLSearchParams({instance:inst}),{cache:'no-store',credentials:'same-origin',signal:controller.signal});if(r.status===204)failures=0;else if(r.status===410||r.status===401||r.status===404)finish(false);else if(++failures>=2)finish(true);}catch{if(++failures>=2)finish(true);}finally{clearTimeout(timeout);busy=false;}};
 const start=()=>{if(timer)clearInterval(timer);timer=setInterval(check,1500);};const stop=()=>{clearInterval(timer);timer=0;};

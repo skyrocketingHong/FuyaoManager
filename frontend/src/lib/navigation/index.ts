@@ -22,6 +22,20 @@ export interface NavItem {
 
 export const navItems: readonly NavItem[] = [
 	{
+		id: 'api',
+		path: '/api-reference',
+		scope: 'platform',
+		group: 'administration',
+		titleKey: 'nav.api'
+	},
+	{
+		id: 'site.caddy',
+		path: '/sites/:siteId/caddy',
+		scope: 'site',
+		group: 'settings',
+		titleKey: 'nav.caddy'
+	},
+	{
 		id: 'sites',
 		path: '/sites',
 		scope: 'platform',

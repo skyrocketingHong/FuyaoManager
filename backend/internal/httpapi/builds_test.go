@@ -399,12 +399,12 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 		}
 	}
 
-	// Open the issued URL exactly as a browser would: the entry swaps the
 	// Redeem the entry URL exactly as a browser would: one shared cookie
 	// jar and default redirect following store the origin's uniquely named
 	// authorization cookie (HttpOnly, Lax) — never a manually re-attached
 	// fixed-name cookie. The entry response attributes are asserted first.
-	noFollow := &http.Client{Timeout: 15 * time.Second,
+	jar, _ := cookiejar.New(nil)
+	noFollow := &http.Client{Timeout: 15 * time.Second, Jar: jar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		}}
@@ -423,9 +423,18 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 		t.Fatalf("preview entry cookie must be uniquely named, HttpOnly, and Lax: %+v", setCookie)
 	}
 
-	jar, _ := cookiejar.New(nil)
+	// The inspected 303 already consumed this entry. Continue with its stored
+	// cookie, rather than handing the used ticket to a different browser.
+	replay, err := noFollow.Get(link.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	replay.Body.Close()
+	if replay.StatusCode != http.StatusNotFound {
+		t.Fatalf("consumed entry replay = %d, want 404", replay.StatusCode)
+	}
 	browser := &http.Client{Timeout: 15 * time.Second, Jar: jar}
-	rootResp, err := browser.Get(link.URL)
+	rootResp, err := browser.Get(originBase + "/")
 	if err != nil || rootResp.StatusCode != http.StatusOK {
 		t.Fatalf("preview open: err=%v status=%v", err, rootResp)
 	}
@@ -528,13 +537,27 @@ func TestBuildPreviewClosedLoop(t *testing.T) {
 	if page1 := readAll(t, firstAgain); !strings.Contains(page1, "Build Site 标记名") || strings.Contains(page1, "Build Site 第二名") {
 		t.Fatalf("first preview origin was contaminated by the second build")
 	}
-	// The first build's entry token is invalid on the second origin.
-	firstToken := link.URL[strings.LastIndex(link.URL, "/")+1:]
+	// A fresh, unused first-build ticket must not redeem on the second
+	// origin. Its own-origin redemption afterwards must still work.
+	status, _, raw = ownerClient.do("POST", buildPath+"/preview-links", nil, nil)
+	if status != http.StatusCreated {
+		t.Fatalf("fresh first-build ticket = %d: %s", status, raw)
+	}
+	var freshFirst struct {
+		URL string `json:"url"`
+	}
+	decodeJSONBody(t, raw, &freshFirst)
+	firstToken := freshFirst.URL[strings.LastIndex(freshFirst.URL, "/")+1:]
 	crossResp, err := browser.Get(origin2 + "/__preview__/" + firstToken)
 	if err != nil || crossResp.StatusCode != http.StatusNotFound {
 		t.Fatalf("cross-origin token must be rejected: err=%v status=%v", err, crossResp)
 	}
 	crossResp.Body.Close()
+	validFirst, err := browser.Get(freshFirst.URL)
+	if err != nil || validFirst.StatusCode != http.StatusOK {
+		t.Fatalf("fresh ticket lost its own-origin validity: err=%v status=%v", err, validFirst)
+	}
+	readAll(t, validFirst)
 
 	// Without any cookie nothing is served on any origin: a separate
 	// cookie-less client (no jar) gets 404 everywhere.

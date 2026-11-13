@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fixed read operation. No caller-supplied arguments or inherited environment.
+set -eu
+test "$#" -eq 0 || exit 64
+exec /usr/bin/env -i PATH=/usr/bin:/bin HOME=/var/lib/caddy /usr/sbin/runuser -u caddy -- /usr/bin/caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile

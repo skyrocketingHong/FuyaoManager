@@ -20,7 +20,7 @@ import (
 // authoritative OpenAPI contract plus the backend module. Any other project
 // or website fails the check.
 func isRepoRoot(dir string) bool {
-	return fileExists(filepath.Join(dir, "contracts", "openapi", "management.yaml")) &&
+	return fileExists(filepath.Join(dir, "contracts", "openapi", "openapi.yaml")) &&
 		fileExists(filepath.Join(dir, "backend", "go.mod"))
 }
 

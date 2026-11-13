@@ -22,7 +22,7 @@ func makeRepoTree(t *testing.T) string {
 	if err := os.MkdirAll(filepath.Join(root, "backend"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, "contracts", "openapi", "management.yaml"), []byte("openapi: 3.0.3\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, "contracts", "openapi", "openapi.yaml"), []byte("openapi: 3.0.3\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "backend", "go.mod"), []byte("module test\n"), 0o644); err != nil {

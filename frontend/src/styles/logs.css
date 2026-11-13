@@ -1,0 +1,66 @@
+/* robot-platform/styles/features/settings/logs.css. */
+.operation-logs-table .ant-table-cell {
+	vertical-align: top;
+}
+.operation-logs-table .log-type,
+.operation-logs-table .log-operation {
+	white-space: nowrap;
+}
+.operation-logs-table .status-tag {
+	min-width: 5em;
+}
+.log-address {
+	white-space: nowrap;
+}
+.log-summary {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-width: 26rem;
+	max-width: 72ch;
+}
+.log-record-detail {
+	max-width: 100%;
+	color: var(--muted-foreground);
+}
+.log-record-detail summary {
+	cursor: pointer;
+	width: fit-content;
+	font-size: var(--text-caption);
+}
+.log-record-detail summary:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+.log-record-detail dl {
+	display: grid;
+	gap: var(--space-2);
+	margin: var(--space-2) 0;
+}
+.log-record-detail dl > div {
+	display: grid;
+	grid-template-columns: 6em minmax(0, 1fr);
+	gap: var(--space-2);
+}
+.log-record-detail dt,
+.log-record-detail dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.log-record-detail dd {
+	color: var(--foreground);
+}
+.topbar-log-content {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+}
+.topbar-log-content > .ant-select {
+	min-width: 118px;
+}
+.topbar-log-content > .ant-input-affix-wrapper {
+	flex: 1 1 150px;
+	max-width: 220px;
+}

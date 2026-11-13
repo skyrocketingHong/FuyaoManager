@@ -19,6 +19,7 @@ import {
 	UserRound,
 	UsersRound,
 	ScrollText,
+	Code2,
 	type LucideIcon
 } from 'lucide-react';
 import { i18nSnapshot, subscribeI18n, t, type MessageKey } from '../../lib/i18n';
@@ -42,6 +43,8 @@ import TopBar from './TopBar';
 
 type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
+	api: Code2,
+	'site.caddy': Settings,
 	themes: Palette,
 	appearance: Palette,
 	users: UsersRound,
@@ -90,6 +93,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					item.scope === (siteId ? 'site' : 'platform') &&
 					item.group === group.id &&
 					item.menu !== false &&
+					(item.scope !== 'site' || !!currentSite) &&
+					(item.scope !== 'site' ||
+						((currentSite?.kind ?? 'theme') === 'theme'
+							? item.id !== 'site.caddy'
+							: item.id === 'site.caddy')) &&
 					(!item.adminOnly || session.user?.platformRole === 'admin')
 			)
 			.map((item) => menuEntry(item.id, siteId));

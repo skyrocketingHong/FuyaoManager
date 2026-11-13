@@ -11,13 +11,13 @@ import (
 // TestRouteContractCoverage asserts the Go route table and the OpenAPI
 // contract describe exactly the same operation set: every registered route
 // has a path+method entry with a matching operationId in
-// contracts/openapi/management.yaml, and the contract declares no operation
+// contracts/openapi/openapi.yaml, and the contract declares no operation
 // the server does not register. Generating types and linting the file is not
 // enough — an implemented route missing from the contract (or vice versa)
 // fails here.
 func TestRouteContractCoverage(t *testing.T) {
 	contractOps := parseOpenAPIOperations(t, filepath.Join(repoRoot(t),
-		"contracts", "openapi", "management.yaml"))
+		"contracts", "openapi", "openapi.yaml"))
 
 	routes := (&API{}).routes()
 	if len(routes) == 0 {

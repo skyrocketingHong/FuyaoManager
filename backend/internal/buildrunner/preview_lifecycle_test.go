@@ -21,6 +21,76 @@ func (t lifecycleTarget) GetPreviewTarget(ctx context.Context, id uuid.UUID) (st
 	return t.path, "", nil
 }
 
+type pendingPreviewTarget struct {
+	path    string
+	entered chan struct{}
+	resume  chan struct{}
+	once    sync.Once
+}
+
+func (target *pendingPreviewTarget) GetPreviewTarget(ctx context.Context, _ uuid.UUID) (string, string, error) {
+	target.once.Do(func() { close(target.entered) })
+	select {
+	case <-target.resume:
+		return target.path, "", nil
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	}
+}
+
+// Closing must also revoke a link request still resolving its frozen build.
+// Otherwise an earlier slow Issue can create a fresh listener after Close
+// has already reported success.
+func TestPreviewCloseCancelsPendingIssue(t *testing.T) {
+	p, dir := lifecycleServer(t, time.Hour, 4, nil, 0, 0)
+	target := &pendingPreviewTarget{path: dir, entered: make(chan struct{}), resume: make(chan struct{})}
+	p.cfg.Target = target
+	siteID, buildID := uuid.New(), uuid.New()
+	result := make(chan error, 1)
+	go func() { _, _, err := p.Issue(siteID, buildID); result <- err }()
+	<-target.entered
+	if err := p.CloseOrigin(siteID, buildID); err != nil {
+		t.Fatal(err)
+	}
+	close(target.resume)
+	if err := <-result; err == nil {
+		t.Fatal("a pre-close issue recreated a live preview after close succeeded")
+	}
+	if p.IsActive(siteID, buildID) {
+		t.Fatal("pending link request survived explicit close")
+	}
+	// A new, deliberate open after the close may create a fresh instance.
+	client, base := previewEntry(t, p, siteID, buildID)
+	response, err := client.Get(base + "/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("fresh preview = %d", response.StatusCode)
+	}
+}
+
+func TestPreviewOtherSiteCloseDoesNotCancelPendingIssue(t *testing.T) {
+	p, dir := lifecycleServer(t, time.Hour, 4, nil, 0, 0)
+	target := &pendingPreviewTarget{path: dir, entered: make(chan struct{}), resume: make(chan struct{})}
+	p.cfg.Target = target
+	siteID, buildID := uuid.New(), uuid.New()
+	result := make(chan error, 1)
+	go func() { _, _, err := p.Issue(siteID, buildID); result <- err }()
+	<-target.entered
+	if err := p.CloseOrigin(uuid.New(), buildID); err != nil {
+		t.Fatal(err)
+	}
+	close(target.resume)
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
+	if !p.IsActive(siteID, buildID) {
+		t.Fatal("a foreign site's close canceled this site's link request")
+	}
+}
+
 // lifecycleServer builds a preview server over one artifact dir with tiny
 // TTLs and, when ports is non-nil, persistent allocation.
 func lifecycleServer(t *testing.T, ttl time.Duration, maxOrigins int, ports PortSource, portMin, portMax int) (*PreviewServer, string) {

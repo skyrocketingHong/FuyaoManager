@@ -17,6 +17,7 @@ const alice = {
 	platformRole: 'admin'
 };
 const siteAbc = {
+	kind: 'theme' as 'theme' | 'static' | 'redirect' | 'reverse_proxy' | 'unsupported',
 	siteId: 'abc',
 	slug: 'abc',
 	visibility: 'private',
@@ -57,11 +58,13 @@ vi.mock('../src/lib/sites/site-list', () => ({
 }));
 
 const getSite = vi.fn();
+const apiRequest = vi.fn();
 vi.mock('../src/lib/api/management', () => ({
 	getSite: (...args: unknown[]) => getSite(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
 	currentAuthGeneration: () => 0,
+	api: (...args: unknown[]) => apiRequest(...args),
 	ApiError: class ApiError extends Error {
 		constructor(
 			public status: number,
@@ -104,6 +107,7 @@ vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-them
 vi.mock('../src/pages/UsersPage', () => ({ default: () => <div>page-users</div> }));
 vi.mock('../src/pages/LogsPage', () => ({ default: () => <div>page-logs</div> }));
 vi.mock('../src/pages/AppearancePage', () => ({ default: () => <div>page-appearance</div> }));
+vi.mock('../src/pages/ApiPage', () => ({ default: () => <div>page-api</div> }));
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
 vi.mock('../src/pages/sites/SiteConfigPage', () => ({ default: () => <div>page-config</div> }));
@@ -349,5 +353,83 @@ describe('sidebar shell', () => {
 			'unsaved'
 		);
 		expect(document.title).toBe('Fuyao Manager - Sites');
+	});
+});
+
+describe('site kind workspaces', () => {
+	beforeEach(() => authenticated());
+	it('does not guess a theme menu for an unknown type while the catalogue is loading', async () => {
+		mockSiteListState = { status: 'loading', sites: [], errorKey: null };
+		getSite.mockResolvedValue({ ...siteAbc, kind: 'static' });
+		renderAt('/sites/abc/posts');
+		expect(await screen.findByText(zh['caddy.unsupportedPage'])).toBeDefined();
+		expect(document.querySelector('.app-sider nav')?.textContent).not.toContain(zh['nav.posts']);
+	});
+	it.each(['static', 'redirect', 'reverse_proxy', 'unsupported'] as const)(
+		'shows the %s configuration without theme-only menu entries',
+		async (kind) => {
+			const site = { ...siteAbc, kind };
+			mockSiteListState = { status: 'ready', sites: [site], errorKey: null };
+			getSite.mockResolvedValue(site);
+			apiRequest.mockResolvedValue({
+				data: {
+					siteId: site.siteId,
+					kind,
+					present: true,
+					syncedAt: site.updatedAt,
+					definition: {
+						hosts: ['existing.example.com'],
+						listen: [':443'],
+						root: '/srv/existing-static-site',
+						readOnly: true,
+						...(kind === 'redirect'
+							? { redirect: { location: 'https://destination.example.com{uri}', statusCode: 308 } }
+							: {})
+					}
+				},
+				etag: null
+			});
+			renderAt('/sites/abc/caddy');
+			expect(await screen.findByText('/srv/existing-static-site')).toBeDefined();
+			const menu = document.querySelector('.app-sider nav')!;
+			for (const key of [
+				'nav.posts',
+				'nav.friends',
+				'nav.albums',
+				'nav.footprints',
+				'nav.theme',
+				'nav.builds',
+				'nav.releases',
+				'nav.config'
+			])
+				expect(menu.textContent).not.toContain(zh[key as keyof typeof zh]);
+			expect(menu.textContent).toContain(zh['nav.caddy']);
+			expect(screen.getByText(zh['caddy.protected'])).toBeDefined();
+			expect(screen.queryByText('page-config')).toBeNull();
+			expect(screen.queryByText('page-theme')).toBeNull();
+			if (kind === 'redirect')
+				expect(
+					screen.getByRole('link', { name: zh['caddy.openTarget'] }).getAttribute('href')
+				).toBe('https://destination.example.com');
+		}
+	);
+	it.each(['static', 'redirect'] as const)(
+		'does not let a %s posts deep link enter a theme editor',
+		async (kind) => {
+			const site = { ...siteAbc, kind };
+			mockSiteListState = { status: 'ready', sites: [site], errorKey: null };
+			getSite.mockResolvedValue(site);
+			renderAt('/sites/abc/posts');
+			expect(await screen.findByText(zh['caddy.unsupportedPage'])).toBeDefined();
+			expect(screen.queryByText('page-posts')).toBeNull();
+			expect(apiRequest).not.toHaveBeenCalled();
+		}
+	);
+	it('keeps the original theme workspace and rejects its unrelated Caddy editor route', async () => {
+		renderAt('/sites/abc/caddy');
+		expect(await screen.findByText(zh['caddy.unsupportedPage'])).toBeDefined();
+		expect(document.querySelector('.app-sider nav')?.textContent).toContain(zh['nav.posts']);
+		expect(document.querySelector('.app-sider nav')?.textContent).not.toContain(zh['nav.caddy']);
+		expect(apiRequest).not.toHaveBeenCalled();
 	});
 });

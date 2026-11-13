@@ -131,7 +131,7 @@
 	width: 100%;
 	min-width: 0;
 	height: 40px;
-	padding-inline: var(--space-2);
+	padding-inline: var(--sidebar-gutter);
 	gap: var(--space-2);
 	justify-content: flex-start;
 	font-size: var(--text-body);
@@ -169,17 +169,23 @@
 	font-size: var(--text-caption);
 	font-weight: 600;
 	color: var(--muted-foreground);
-	padding-inline: 32px;
+	padding: var(--space-3) var(--sidebar-gutter) var(--space-1);
 }
 .app-sider .ant-menu-item {
+	display: flex;
+	align-items: center;
 	margin-inline: 0;
 	width: 100%;
+	padding-inline: var(--sidebar-gutter) !important;
 }
 .app-sider .ant-menu-item .ant-menu-item-icon {
 	width: 16px;
+	min-width: 16px;
 	height: 16px;
 }
-.app-sider .ant-menu-item-icon + .ant-menu-title-content {
+.app-sider .ant-menu-item .ant-menu-title-content {
+	flex: 1 1 auto;
+	min-width: 0;
 	margin-inline-start: var(--space-2);
 }
 .sidebar-foot {

@@ -5,6 +5,9 @@ import { useSyncExternalStore } from 'react';
 import { Button, Card, Result, Spin } from 'antd';
 import AppShell from './components/layout/AppShell';
 import SiteBoundary from './components/layout/SiteBoundary';
+import SiteRoute from './components/layout/SiteRoute';
+import CaddySitePage from './pages/sites/CaddySitePage';
+import ApiPage from './pages/ApiPage';
 import { initLocale, t } from './lib/i18n';
 import { initTheme } from './lib/theme';
 import { navItems } from './lib/navigation';
@@ -32,6 +35,8 @@ import ReleasesPage from './pages/sites/ReleasesPage';
 /** Page components keyed by navigation item id; the route table consumes
  * the same metadata as the sidebar menu, so they cannot drift apart. */
 const pageByNavId: Record<string, ComponentType> = {
+	api: ApiPage,
+	'site.caddy': CaddySitePage,
 	sites: SitesPage,
 	themes: ThemesCatalogPage,
 	'site.overview': SiteDetailPage,
@@ -157,7 +162,9 @@ export default function App() {
 													/>
 												) : item.scope === 'site' ? (
 													<SiteBoundary>
-														<Page />
+														<SiteRoute page={item.id}>
+															<Page />
+														</SiteRoute>
 													</SiteBoundary>
 												) : (
 													<Page />

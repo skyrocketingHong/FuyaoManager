@@ -28,6 +28,7 @@ type siteDTO struct {
 	ProvisionState   string          `json:"provisionState"`
 	ProvisionFailure json.RawMessage `json:"provisionFailure,omitempty"`
 	Role             string          `json:"role"`
+	Kind             string          `json:"kind"`
 	SettingsRevision int64           `json:"settingsRevision"`
 	CreatedAt        string          `json:"createdAt"`
 	UpdatedAt        string          `json:"updatedAt"`
@@ -66,6 +67,9 @@ type settingsPatch struct {
 }
 
 func toSiteDTO(rec store.SiteRecord) siteDTO {
+	if rec.Kind == "" {
+		rec.Kind = "theme"
+	}
 	return siteDTO{
 		SiteID:           rec.Site.ID.String(),
 		Slug:             rec.Site.Slug,
@@ -76,6 +80,7 @@ func toSiteDTO(rec store.SiteRecord) siteDTO {
 		ProvisionState:   rec.Site.ProvisionState,
 		ProvisionFailure: rec.Site.ProvisionFailure,
 		Role:             rec.Role,
+		Kind:             rec.Kind,
 		SettingsRevision: rec.Settings.Revision,
 		CreatedAt:        rec.Site.CreatedAt.UTC().Format(timeFormat),
 		UpdatedAt:        rec.Settings.UpdatedAt.UTC().Format(timeFormat),

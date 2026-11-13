@@ -5,6 +5,14 @@ import type { ReactNode } from 'react';
 
 export type StatusKind = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
-export default function StatusTag({ kind, children }: { kind: StatusKind; children: ReactNode }) {
-	return <span className={`status-tag status-tag--${kind}`}>{children}</span>;
+export default function StatusTag({
+	kind,
+	children,
+	className = ''
+}: {
+	kind: StatusKind;
+	children: ReactNode;
+	className?: string;
+}) {
+	return <span className={`status-tag status-tag--${kind} ${className}`.trim()}>{children}</span>;
 }

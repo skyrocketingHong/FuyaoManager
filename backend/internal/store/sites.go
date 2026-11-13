@@ -25,10 +25,12 @@ type SiteRecord struct {
 	Site     model.Site
 	Settings model.SiteSettings
 	Role     string
+	Kind     string
 }
 
 const siteJoinColumns = `si.id, si.slug, si.visibility, si.provision_state, si.provision_failure, si.created_at, si.updated_at,
-	ss.site_id, ss.name, ss.description, ss.default_locale, ss.revision, ss.updated_at`
+	ss.site_id, ss.name, ss.description, ss.default_locale, ss.revision, ss.updated_at,
+	COALESCE((SELECT kind FROM caddy_sites c WHERE c.site_id=si.id),'theme')`
 
 // NewSiteParams carries the fields of a site creation request. Visibility
 // defaults to private; provisionState starts as provisioning until the
@@ -50,11 +52,11 @@ func scanSiteJoin(row pgx.Row, role *string) (SiteRecord, error) {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
 			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt,
-			role)
+			&rec.Kind, role)
 	} else {
 		err = row.Scan(&site.ID, &site.Slug, &site.Visibility, &site.ProvisionState, &site.ProvisionFailure,
 			&site.CreatedAt, &site.UpdatedAt,
-			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt)
+			&st.SiteID, &st.Name, &st.Description, &st.DefaultLocale, &st.Revision, &st.UpdatedAt, &rec.Kind)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return SiteRecord{}, ErrNotFound
@@ -179,7 +181,7 @@ func (s *SiteStore) ListForUser(ctx context.Context, userID uuid.UUID) ([]SiteRe
 			&rec.Site.ProvisionFailure, &rec.Site.CreatedAt, &rec.Site.UpdatedAt,
 			&rec.Settings.SiteID, &rec.Settings.Name, &rec.Settings.Description,
 			&rec.Settings.DefaultLocale, &rec.Settings.Revision, &rec.Settings.UpdatedAt,
-			&rec.Role); err != nil {
+			&rec.Kind, &rec.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, rec)

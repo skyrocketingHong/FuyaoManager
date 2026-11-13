@@ -94,7 +94,7 @@ platform development history preserved; see
 ```bash
 # Console (frontend/)
 cd frontend && npm ci
-npm run api:generate   # types from ../contracts/openapi/management.yaml
+npm run api:generate   # types from ../contracts/openapi/openapi.yaml
 npm run build
 
 # Backend (backend/)
@@ -128,15 +128,15 @@ Root `package.json` forwards to the isolated frontend package:
 
 Backend (run inside `backend/`):
 
-| Command                       | Purpose                                                          |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `fuyao-admin migrate`         | Apply all SQL migrations                                         |
-| `fuyao-admin serve`           | Start the management API (+ console if `FUYAO_ADMIN_UI_DIR` set) |
+| Command                       | Purpose                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `fuyao-admin migrate`         | Apply all SQL migrations                                                         |
+| `fuyao-admin serve`           | Start the management API (+ console if `FUYAO_ADMIN_UI_DIR` set)                 |
 | `fuyao-admin init-admin`      | First-run identity; prints a one-time init code (bind a passkey after redeeming) |
-| `fuyao-admin login-code`      | Identity-confirmation / recovery code for an existing admin      |
-| `fuyao-admin revoke-sessions` | Revoke a user's sessions                                         |
-| `fuyao-admin register-theme`  | Register/refresh a theme in the catalog                          |
-| `fuyao-admin validate-theme`  | Validate a theme root against the contracts                      |
+| `fuyao-admin login-code`      | Identity-confirmation / recovery code for an existing admin                      |
+| `fuyao-admin revoke-sessions` | Revoke a user's sessions                                                         |
+| `fuyao-admin register-theme`  | Register/refresh a theme in the catalog                                          |
+| `fuyao-admin validate-theme`  | Validate a theme root against the contracts                                      |
 
 ## Verification
 
@@ -166,7 +166,7 @@ Console (React) ──/api──▶ Go management API ──▶ PostgreSQL (site
                               └─ edge manager (renders + applies the managed Caddy snippet)
 ```
 
-Authoritative contracts live in `contracts/`: `openapi/management.yaml`
+Authoritative contracts live in `contracts/`: `openapi/openapi.yaml`
 (the HTTP surface, with generated TypeScript types and a route-coverage
 test) and `theme/` (manifest, build-input, and release JSON Schemas plus
 public fixtures, consumed identically by the Go validator and the theme's

@@ -72,9 +72,89 @@ security:
   - sessionCookie: []
 
 paths:
+  /{previewHost}/{path...}:
+    get:
+      operationId: getPreviewWrapper
+      tags: [Builds]
+      summary: Open an isolated preview lease on the preview hostname
+      description: Only served on the configured preview hostname. The first segment is the formal website hostname. The lease is issued after management authentication and site-membership validation, expires and is revoked on close. This request never creates or reopens an origin.
+      security: []
+      parameters:
+        - name: previewHost
+          in: path
+          required: true
+          schema: { type: string }
+        - name: path...
+          in: path
+          required: true
+          schema: { type: string }
+        - name: lease
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The controlled preview frame wrapper.
+          content:
+            text/html:
+              schema: { type: string }
+        '404': { description: 'Wrong host, path, or unknown lease.' }
+        '410': { description: The preview lease has been closed or expired. }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/openapi:
+    get:
+      operationId: getOpenAPI
+      tags: [Administration]
+      summary: Read the platform OpenAPI document
+      responses:
+        '200':
+          description: The authoritative OpenAPI document as JSON.
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/admin/caddy/sync:
+    post:
+      operationId: syncCaddySites
+      tags: [Administration]
+      summary: Synchronize the real Caddy inventory through a fixed read-only helper
+      x-required-platform-role: admin
+      description: Does not rewrite Caddyfile or grant root access. Existing complex configuration is retained and exposed read-only. Manager control-plane routes are excluded.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      responses:
+        '200':
+          description: Number of imported or refreshed real site records.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [imported]
+                properties:
+                  imported: { type: integer }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        default: { $ref: '#/components/responses/Problem' }
+  /api/v1/sites/{siteId}/caddy:
+    parameters:
+      - $ref: '#/components/parameters/SiteId'
+    get:
+      operationId: getCaddySite
+      tags: [Sites]
+      summary: Read the imported Caddy configuration for a member site
+      responses:
+        '200':
+          description: Sanitized configuration metadata, never arbitrary Caddy JSON.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CaddySite' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
   /api/v1/admin/users:
     get:
       operationId: listUsers
+      x-required-platform-role: admin
       tags: [Administration]
       summary: List and filter accounts as a platform administrator
       parameters:
@@ -98,6 +178,7 @@ paths:
         default: { $ref: '#/components/responses/Problem' }
     post:
       operationId: createUser
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Create a member account and a one-time registration code
       description: The code is valid for ten minutes, returned once and never logged. Redeeming it requires binding a passkey before business access. Roles and site access are granted through separate guarded endpoints.
@@ -120,6 +201,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     get:
       operationId: getUser
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Inspect an account, site memberships, passkeys and active sessions
       responses:
@@ -133,6 +215,7 @@ paths:
         default: { $ref: '#/components/responses/Problem' }
     delete:
       operationId: deleteUser
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Permanently soft-delete an account and revoke its login artifacts
       description: Self-deletion, removing the last active administrator and removing the sole active owner of any site are refused. History and site files are retained. Deleted accounts cannot be restored.
@@ -150,6 +233,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     patch:
       operationId: updateUserProfile
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Update an account username and display name
       security:
@@ -171,6 +255,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     put:
       operationId: setUserRole
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Set the platform role without changing site memberships
       security:
@@ -197,6 +282,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     put:
       operationId: setUserStatus
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Disable or re-enable an account
       description: Disabling revokes sessions, codes and outstanding ceremonies. Re-enabling does not revive any old login artifact. The self, final administrator and active owner guards apply.
@@ -224,6 +310,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     post:
       operationId: issueUserLoginCode
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Issue a ten-minute recovery or registration code for an active account
       description: Previous unused codes are expired. The new code is returned once and never logged; existing passkeys are preserved.
@@ -242,6 +329,7 @@ paths:
       - $ref: '#/components/parameters/SiteId'
     put:
       operationId: setUserSiteAccess
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Grant, change or remove a single site membership
       description: Empty role removes access. This never changes site content or publishes a website. Removing the final active owner is refused under the account lifecycle lock.
@@ -278,6 +366,7 @@ paths:
       - $ref: '#/components/parameters/UserId'
     delete:
       operationId: revokeUserSessions
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Terminate every active session of one account
       security:
@@ -294,6 +383,7 @@ paths:
       - $ref: '#/components/parameters/SessionId'
     delete:
       operationId: revokeUserSession
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Terminate a session belonging to the specified account
       security:
@@ -311,6 +401,7 @@ paths:
       - $ref: '#/components/parameters/PasskeyId'
     delete:
       operationId: revokeUserPasskey
+      x-required-platform-role: admin
       tags: [Administration]
       summary: Revoke a passkey and the account's live login artifacts
       description: The key UUID is metadata, never credential bytes. All sessions, unused codes and pending ceremonies for the account are revoked. Removing your own final passkey for the current RP is refused. Another account can recover through a newly issued code and binding.
@@ -326,6 +417,7 @@ paths:
   /api/v1/admin/audit:
     get:
       operationId: listAuditEvents
+      x-required-platform-role: admin
       tags: [Audit]
       summary: Filter and page the append-only operation and authentication history
       description: Records begin when this version is deployed; historical events are not fabricated. Events contain operation IDs, route templates, UUID targets and outcomes, never request bodies, code values, cookies, credential bytes or raw query strings. Peer IP is the transport peer, not a forwarded header.
@@ -2673,7 +2765,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '409':
-          description: The build has not succeeded or its artifacts are no longer available (`build_not_succeeded`).
+          description: The build has not succeeded or its artifacts are no longer available (`build_not_succeeded`), or the pending preview was closed (`preview_closed`).
           content:
             application/problem+json:
               schema:
@@ -3099,10 +3191,12 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: fuyao_admin_session
+      name: __Host-fuyao-admin-session
       description: |
-        Server-side session cookie (HttpOnly, SameSite=Lax; Secure in any
-        https configuration). Sessions are revocable and expire server-side.
+        HTTPS uses __Host-fuyao-admin-session: Secure, HttpOnly, SameSite=Lax,
+        Path=/ and no Domain. Legacy names are not accepted on HTTPS and
+        duplicate authentication cookies are rejected. Plain HTTP localhost
+        uses fuyao_admin_session. Sessions are revoked and expire server-side.
     csrfHeader:
       type: apiKey
       in: header
@@ -3261,6 +3355,16 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    CaddySite:
+      type: object
+      required: [siteId, sourceKey, kind, definition, present, syncedAt]
+      properties:
+        siteId: { type: string, format: uuid }
+        sourceKey: { type: string }
+        kind: { type: string, enum: [static, redirect, reverse_proxy, unsupported] }
+        definition: { type: object, additionalProperties: true }
+        present: { type: boolean }
+        syncedAt: { type: string, format: date-time }
     AdminProfileInput:
       type: object
       additionalProperties: false
@@ -3651,6 +3755,16 @@ components:
           description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, username_taken, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
+            - preview_closed
+            - caddy_unavailable
+            - caddy_invalid
+            - catalog_unavailable
+            - site_kind_mismatch
+            - last_admin
+            - last_owner
+            - last_passkey
+            - self_management
+            - account_conflict
             - csrf_token_invalid
             - origin_rejected
             - forbidden
@@ -4260,6 +4374,10 @@ components:
           updatedAt
         ]
       properties:
+        kind:
+          type: string
+          enum: [theme, static, redirect, reverse_proxy, unsupported]
+          description: Determines the available workspace; legacy omitted values mean theme.
         siteId:
           type: string
           format: uuid

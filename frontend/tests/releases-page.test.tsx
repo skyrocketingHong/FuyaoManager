@@ -6,7 +6,7 @@
  */
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, act, waitFor, cleanup, isInaccessible } from '@testing-library/react';
 import { fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
@@ -113,7 +113,7 @@ async function settled(rounds = 12): Promise<void> {
 
 function mount() {
 	return render(
-		<ConfigProvider>
+		<ConfigProvider theme={{ token: { motion: false } }}>
 			<MemoryRouter initialEntries={[`/sites/${SITE}/releases`]}>
 				<Routes>
 					<Route path="/sites/:siteId/releases" element={<ReleasesPage />} />
@@ -166,9 +166,11 @@ afterEach(() => {
 
 /** antd inserts a space between two-CJK-character button labels. */
 function findButton(label: string): HTMLButtonElement {
-	const button = screen
-		.getAllByRole('button')
-		.find((b) => (b.textContent ?? '').replace(/\s/g, '') === label);
+	const button = Array.from(
+		document.querySelectorAll<HTMLButtonElement>('button:not([role]), button[role="button"]')
+	)
+		.filter((candidate) => (candidate.textContent ?? '').replace(/\s/g, '') === label)
+		.find((candidate) => !isInaccessible(candidate));
 	if (!(button instanceof HTMLButtonElement)) throw new Error(`button ${label} missing`);
 	return button;
 }
@@ -256,7 +258,10 @@ describe('ReleasesPage publish feedback and candidate binding', () => {
 describe('ReleasesPage isolation facts', () => {
 	it('disables publish and rollback and hides the site link while isolated', async () => {
 		const b1 = succeededBuild('b1-isolated');
-		primeState([b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		primeState(
+			[b1],
+			[releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]
+		);
 		vi.mocked(getSiteEdge).mockResolvedValue(edgeState(true));
 		mount();
 		// Flush the edge promise: the isolated facts gate the write buttons.
@@ -275,7 +280,10 @@ describe('ReleasesPage isolation facts', () => {
 	it('keeps publish, rollback, and the site link available while enabled', async () => {
 		const b1 = succeededBuild('b1-enabled');
 		const b2 = succeededBuild('b2-enabled');
-		primeState([b2, b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		primeState(
+			[b2, b1],
+			[releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]
+		);
 		mount();
 		await waitFor(() => expect(screen.getByText(/当前生效/)).toBeDefined());
 		// The edge facts land through their own promise: wait for the notice
@@ -314,7 +322,10 @@ describe('ReleasesPage isolation facts', () => {
 		);
 		vi.mocked(getCurrentRelease).mockImplementation(async (id: string) => {
 			if (id === SITE) {
-				return { release: releaseRow('rel-1', 'b1-late-a', 'live'), originUrl: 'http://127.0.0.1:41000' };
+				return {
+					release: releaseRow('rel-1', 'b1-late-a', 'live'),
+					originUrl: 'http://127.0.0.1:41000'
+				};
 			}
 			throw new ApiError(404, 'no_live_release', '', null);
 		});
@@ -325,11 +336,14 @@ describe('ReleasesPage isolation facts', () => {
 					resolveEdgeA = resolve;
 				});
 			}
-			return Promise.resolve({ ...edgeState(true), site: { ...edgeState(true).site, siteId: SITE_B } });
+			return Promise.resolve({
+				...edgeState(true),
+				site: { ...edgeState(true).site, siteId: SITE_B }
+			});
 		});
 
 		render(
-			<ConfigProvider>
+			<ConfigProvider theme={{ token: { motion: false } }}>
 				<MemoryRouter initialEntries={[`/sites/${SITE}/releases`]}>
 					<NavBridge />
 					<Routes>
@@ -373,12 +387,13 @@ describe('ReleasesPage cross-site action guards', () => {
 		vi.mocked(listBuilds).mockImplementation(async (id: string) =>
 			id === SITE ? [succeededBuild('b1-publish')] : []
 		);
-		vi.mocked(listReleases).mockImplementation(async (id: string) =>
-			id === SITE ? [] : []
-		);
+		vi.mocked(listReleases).mockImplementation(async (id: string) => (id === SITE ? [] : []));
 		vi.mocked(getCurrentRelease).mockImplementation(async (id: string) => {
 			if (id === SITE) {
-				return { release: releaseRow('rel-a', 'b1-publish', 'live'), originUrl: 'http://127.0.0.1:41000' };
+				return {
+					release: releaseRow('rel-a', 'b1-publish', 'live'),
+					originUrl: 'http://127.0.0.1:41000'
+				};
 			}
 			throw new ApiError(404, 'no_live_release', '', null);
 		});
@@ -395,7 +410,7 @@ describe('ReleasesPage cross-site action guards', () => {
 		);
 
 		render(
-			<ConfigProvider>
+			<ConfigProvider theme={{ token: { motion: false } }}>
 				<MemoryRouter initialEntries={[`/sites/${SITE}/releases`]}>
 					<NavBridge />
 					<Routes>
@@ -414,7 +429,9 @@ describe('ReleasesPage cross-site action guards', () => {
 		await act(async () => {
 			navigateRef?.(`/sites/${SITE_B}/releases`);
 		});
-		await waitFor(() => expect(screen.getByText(zh['error.noLiveRelease'] as string)).toBeDefined());
+		await waitFor(() =>
+			expect(screen.getByText(zh['error.noLiveRelease'] as string)).toBeDefined()
+		);
 
 		await act(async () => {
 			resolvePublish(releaseRow('rel-b', 'b1-publish', 'live'));
@@ -432,7 +449,10 @@ describe('ReleasesPage cross-site action guards', () => {
 describe('ReleasesPage payload identity', () => {
 	it('a ready payload for another site keeps publish and rollback disabled', async () => {
 		const b1 = succeededBuild('b1-foreign');
-		primeState([b1], [releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]);
+		primeState(
+			[b1],
+			[releaseRow('rel-1', b1.id, 'live'), releaseRow('rel-2', b1.id, 'superseded')]
+		);
 		vi.mocked(getSiteEdge).mockResolvedValue({
 			...edgeState(false),
 			site: { ...edgeState(false).site, siteId: '99999999-9999-9999-9999-999999999999' }

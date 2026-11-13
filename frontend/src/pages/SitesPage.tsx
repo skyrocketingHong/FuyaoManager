@@ -6,7 +6,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import { Alert, Button, Col, Empty, Form, Input, Modal, Row, Select } from 'antd';
+import { Alert, Button, Col, Empty, Form, Input, Modal, Row, Select, Space } from 'antd';
+import { api } from '../lib/api/client';
+import { useAdminMutation } from '../lib/admin/requests';
 import {
 	createSite,
 	listThemes,
@@ -46,6 +48,7 @@ function provisionKind(site: Site): StatusKind {
 }
 
 export default function SitesPage() {
+	const sync = useAdminMutation();
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const siteList = useSyncExternalStore(subscribeSiteList, siteListSnapshot);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -85,9 +88,24 @@ export default function SitesPage() {
 	}, [createOpen, themes]);
 
 	const createButton = (
-		<Button type="primary" onClick={() => setCreateOpen(true)}>
-			{t('sites.create')}
-		</Button>
+		<Space>
+			{session.user?.platformRole === 'admin' && (
+				<Button
+					loading={sync.busy}
+					onClick={() =>
+						void sync.run(
+							() => api('POST', '/api/v1/admin/caddy/sync'),
+							() => loadSiteList(true)
+						)
+					}
+				>
+					{t('caddy.sync')}
+				</Button>
+			)}
+			<Button type="primary" onClick={() => setCreateOpen(true)}>
+				{t('sites.create')}
+			</Button>
+		</Space>
 	);
 	// The shell's top bar carries the primary action when the provider is
 	// present; standalone rendering (tests) keeps it local.
@@ -165,6 +183,7 @@ export default function SitesPage() {
 
 	return (
 		<div className="page-stack">
+			{sync.error && <Alert type="error" showIcon title={t(sync.error)} />}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
 			) : null}
@@ -179,6 +198,21 @@ export default function SitesPage() {
 						pagination={false}
 						dataSource={sites}
 						columns={[
+							{
+								title: t('caddy.kind'),
+								render: (_, site) =>
+									(site.kind ?? 'theme') === 'theme'
+										? t('nav.theme')
+										: t(
+												site.kind === 'static'
+													? 'caddy.static'
+													: site.kind === 'redirect'
+														? 'caddy.redirect'
+														: site.kind === 'reverse_proxy'
+															? 'caddy.proxy'
+															: 'caddy.complex'
+											)
+							},
 							{
 								title: t('site.name'),
 								dataIndex: 'name',
@@ -205,32 +239,38 @@ export default function SitesPage() {
 								title: t('site.visibility'),
 								dataIndex: 'visibility',
 								width: 100,
-								render: (v: string) => (
-									<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
-										{t(`site.visibility.${v}` as never)}
-									</StatusTag>
-								)
+								render: (v: string, site) =>
+									site.kind && site.kind !== 'theme' ? (
+										t('caddy.sourceValue')
+									) : (
+										<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
+											{t(`site.visibility.${v}` as never)}
+										</StatusTag>
+									)
 							},
 							{
 								title: t('site.provisionState'),
 								dataIndex: 'provisionState',
 								width: 190,
-								render: (_: string, site) => (
-									<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-										<StatusTag kind={provisionKind(site)}>
-											{t(`site.provision.${site.provisionState}` as never)}
-										</StatusTag>
-										{site.provisionState === 'failed' ? (
-											<Button
-												size="small"
-												loading={retrying === site.siteId}
-												onClick={() => void handleRetry(site)}
-											>
-												{t('sites.retryProvision')}
-											</Button>
-										) : null}
-									</span>
-								)
+								render: (_: string, site) =>
+									site.kind && site.kind !== 'theme' ? (
+										t('caddy.protected')
+									) : (
+										<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+											<StatusTag kind={provisionKind(site)}>
+												{t(`site.provision.${site.provisionState}` as never)}
+											</StatusTag>
+											{site.provisionState === 'failed' ? (
+												<Button
+													size="small"
+													loading={retrying === site.siteId}
+													onClick={() => void handleRetry(site)}
+												>
+													{t('sites.retryProvision')}
+												</Button>
+											) : null}
+										</span>
+									)
 							}
 						]}
 					/>
