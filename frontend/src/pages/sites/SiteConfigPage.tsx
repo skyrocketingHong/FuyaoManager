@@ -6,7 +6,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Input, Space, Typography, message } from 'antd';
+import { Alert, Button, Empty, Input, Space, Tooltip, Typography, message } from 'antd';
+import { Info, Plus, X } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
@@ -122,6 +123,11 @@ export default function SiteConfigPage() {
 		setSite(null);
 		setConfig(null);
 		setForm(null);
+		setDirty(false);
+		setLinksDirty(false);
+		setSecurityInput('');
+		setErrorKey(null);
+		setSaving(false);
 		let cancelled = false;
 		getSite(siteId)
 			.then((s) => {
@@ -143,13 +149,13 @@ export default function SiteConfigPage() {
 
 	function field(label: string, key: keyof ConfigForm, placeholder = '') {
 		return (
-			<label style={{ display: 'block', marginBottom: 8 }}>
-				<span style={{ display: 'block', fontSize: 12, marginBottom: 2 }}>{label}</span>
+			<label className="field">
+				<span className="field-label">{label}</span>
 				<Input
 					size="small"
 					value={form ? form[key] : ''}
 					placeholder={placeholder}
-					disabled={!site || site.role === 'viewer'}
+					disabled={!site || site.role === 'viewer' || saving}
 					onChange={(e) => patch({ [key]: e.target.value } as Partial<ConfigForm>)}
 				/>
 			</label>
@@ -157,7 +163,8 @@ export default function SiteConfigPage() {
 	}
 
 	async function handleSave() {
-		if (!siteId || !form || !config) return;
+		if (!siteId || !form || !config || saving) return;
+		const requestEpoch = epoch.current;
 		setSaving(true);
 		try {
 			const next: SiteConfig = {
@@ -197,20 +204,18 @@ export default function SiteConfigPage() {
 			// The security code is write-only: send it only when the user
 			// typed something; an explicit empty field keeps the stored value.
 			const securityCode = securityInput !== '' ? securityInput : undefined;
-			// Snapshot what this save submits: if the user kept editing while
-			// the request was in flight, the newer edits stay in the form and
-			// the editor stays dirty instead of being reset to "saved".
-			const submitted = form;
 			const saved = await putSiteConfig(siteId, next, digest, securityCode);
+			if (requestEpoch !== epoch.current) return;
 			setDigest(saved.digest);
+			setConfig(saved.config);
+			setForm(toForm(saved.config));
 			setSecuritySet(saved.amapSecurityCodeSet ?? false);
 			setSecurityInput('');
-			if (JSON.stringify(form) === JSON.stringify(submitted)) {
-				setDirty(false);
-			}
+			setDirty(false);
 			setConflict(false);
 			void messageApi.success(t('config.saved'));
 		} catch (err) {
+			if (requestEpoch !== epoch.current) return;
 			if (apiErrorKey(err) === 'error.conflict') {
 				setConflict(true);
 			} else {
@@ -218,34 +223,39 @@ export default function SiteConfigPage() {
 				if (key !== null) void messageApi.warning(t(key));
 			}
 		} finally {
-			setSaving(false);
+			if (requestEpoch === epoch.current) setSaving(false);
 		}
 	}
 
 	async function handleSaveLinks() {
-		if (!siteId) return;
+		if (!siteId || saving) return;
+		const requestEpoch = epoch.current;
 		setSaving(true);
 		try {
 			const saved = await putSocialLinks(siteId, links, linksDigest);
+			if (requestEpoch !== epoch.current) return;
 			setLinksDigest(saved.digest);
 			setLinks(saved.links);
 			setLinksDirty(false);
 			void messageApi.success(t('config.saved'));
 		} catch (err) {
+			if (requestEpoch !== epoch.current) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
 		} finally {
-			setSaving(false);
+			if (requestEpoch === epoch.current) setSaving(false);
 		}
 	}
 
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
-	useUnsavedGuard(editable && (dirty || linksDirty || securityInput !== ''));
+	useUnsavedGuard(editable && (dirty || linksDirty || securityInput !== '' || saving));
 
 	const headerActions = (
 		<Space size={8}>
 			{conflict ? (
-				<Button onClick={() => void load()}>{t('posts.conflictAction')}</Button>
+				<Button disabled={saving} onClick={() => void load()}>
+					{t('posts.conflictAction')}
+				</Button>
 			) : null}
 			<Button
 				type="primary"
@@ -298,60 +308,65 @@ export default function SiteConfigPage() {
 			<Panel title={t('config.originSection')}>
 				{effectiveOrigin ? (
 					<>
-						<div>{effectiveOrigin}</div>
-						<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-							{t('config.originHint')}
-						</Typography.Text>
+						<Space>
+							<span className="version-text">{effectiveOrigin}</span>
+							<Tooltip title={t('config.originHint')}>
+								<Button
+									type="text"
+									size="small"
+									icon={<Info size={14} />}
+									aria-label={t('config.originSection')}
+								/>
+							</Tooltip>
+						</Space>
 					</>
 				) : (
 					<Typography.Text type="secondary">{t('config.originPending')}</Typography.Text>
 				)}
 			</Panel>
 			<Panel title={t('config.profileSection')}>
-				<Space size={12} style={{ display: 'flex' }} align="start">
-					<div style={{ flex: 1 }}>{field(t('config.profileName'), 'profileName')}</div>
-					<div style={{ flex: 1 }}>{field(t('config.avatar'), 'avatarUrl', 'https://…')}</div>
-					<div style={{ flex: 1 }}>{field(t('config.birthDate'), 'birthDate', '2000-01-01')}</div>
-				</Space>
-				<Space size={12} style={{ display: 'flex' }} align="start">
-					<div style={{ flex: 1 }}>{field(`${t('config.role')} (zh)`, 'roleZh')}</div>
-					<div style={{ flex: 1 }}>{field(`${t('config.role')} (en)`, 'roleEn')}</div>
-				</Space>
-				<Space size={12} style={{ display: 'flex' }} align="start">
-					<div style={{ flex: 1 }}>{field(`${t('config.quote')} (zh)`, 'quoteZh')}</div>
-					<div style={{ flex: 1 }}>{field(`${t('config.quote')} (en)`, 'quoteEn')}</div>
-				</Space>
+				<div className="form-grid">
+					{field(t('config.profileName'), 'profileName')}
+					{field(t('config.avatar'), 'avatarUrl', 'https://…')}
+					{field(t('config.birthDate'), 'birthDate', '2000-01-01')}
+				</div>
+				<div className="form-grid">
+					{field(`${t('config.role')} (zh)`, 'roleZh')}
+					{field(`${t('config.role')} (en)`, 'roleEn')}
+				</div>
+				<div className="form-grid">
+					{field(`${t('config.quote')} (zh)`, 'quoteZh')}
+					{field(`${t('config.quote')} (en)`, 'quoteEn')}
+				</div>
 			</Panel>
 			<Panel title={t('config.seoSection')}>
-				<Space size={12} style={{ display: 'flex' }} align="start">
-					<div style={{ flex: 1 }}>{field(t('config.seoAuthor'), 'seoAuthor')}</div>
-					<div style={{ flex: 1 }}>{field(t('config.repoName'), 'repoName')}</div>
-					<div style={{ flex: 1 }}>{field(t('config.repoOwner'), 'repoOwner')}</div>
-				</Space>
+				<div className="form-grid">
+					{field(t('config.seoAuthor'), 'seoAuthor')}
+					{field(t('config.repoName'), 'repoName')}
+					{field(t('config.repoOwner'), 'repoOwner')}
+				</div>
 				{field(t('config.repoUrl'), 'repoUrl', 'https://github.com/…')}
 				{field(t('config.seoDescription'), 'seoDescription')}
 				{field(t('config.seoKeywords'), 'seoKeywords', 'Svelte, Go')}
 			</Panel>
 			<Panel title={t('config.servicesSection')}>
 				{field(t('config.wallpaper'), 'wallpaperUrl', 'https://…')}
-				<Space size={12} style={{ display: 'flex' }} align="start">
-					<div style={{ flex: 1 }}>{field('AMap Key', 'amapBrowserKey')}</div>
-					<div style={{ flex: 1 }}>
-						{field('AMap ServiceHost', 'amapServiceHost', 'https://…/_AMapService')}
-					</div>
-					<label style={{ display: 'block', flex: 1, marginBottom: 8 }}>
-						<span style={{ display: 'block', fontSize: 12, marginBottom: 2 }}>
+				<div className="form-grid">
+					{field('AMap Key', 'amapBrowserKey')}
+					{field('AMap ServiceHost', 'amapServiceHost', 'https://…/_AMapService')}
+					<label className="field">
+						<span className="field-label">
 							AMap {t('config.securityCode')} {securitySet ? `(${t('config.securitySet')})` : ''}
 						</span>
 						<Input.Password
 							size="small"
 							value={securityInput}
-							disabled={!editable}
+							disabled={!editable || saving}
 							placeholder={t('config.securityPlaceholder')}
 							onChange={(e) => setSecurityInput(e.target.value)}
 						/>
 					</label>
-				</Space>
+				</div>
 			</Panel>
 			<Panel
 				title={t('config.socialSection')}
@@ -360,6 +375,8 @@ export default function SiteConfigPage() {
 						<Space>
 							<Button
 								size="small"
+								icon={<Plus size={15} />}
+								disabled={saving}
 								onClick={() => {
 									setLinks([...links, { name: '', href: '' }]);
 									setLinksDirty(true);
@@ -371,7 +388,7 @@ export default function SiteConfigPage() {
 								size="small"
 								type="primary"
 								loading={saving}
-								disabled={!linksDirty}
+								disabled={!linksDirty || saving}
 								onClick={() => void handleSaveLinks()}
 							>
 								{t('common.save')}
@@ -380,14 +397,17 @@ export default function SiteConfigPage() {
 					) : null
 				}
 			>
+				{links.length === 0 ? (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('config.noLinks')} />
+				) : null}
 				{links.map((link, index) => (
-					<Space key={index} style={{ display: 'flex', marginBottom: 4 }} align="center">
+					<div key={index} className="social-link-row">
 						<Input
 							size="small"
-							style={{ width: 140 }}
+							aria-label={`${t('friends.fieldName')} ${index + 1}`}
 							placeholder={t('friends.fieldName')}
 							value={link.name}
-							disabled={!editable}
+							disabled={!editable || saving}
 							onChange={(e) => {
 								const next = links.map((l, i) =>
 									i === index ? { ...l, name: e.target.value } : l
@@ -398,10 +418,10 @@ export default function SiteConfigPage() {
 						/>
 						<Input
 							size="small"
-							style={{ width: 240 }}
+							aria-label={`${t('config.linkUrl')} ${index + 1}`}
 							placeholder="https://… / mailto:…"
 							value={link.href}
-							disabled={!editable}
+							disabled={!editable || saving}
 							onChange={(e) => {
 								const next = links.map((l, i) =>
 									i === index ? { ...l, href: e.target.value } : l
@@ -412,10 +432,10 @@ export default function SiteConfigPage() {
 						/>
 						<Input
 							size="small"
-							style={{ width: 120 }}
+							aria-label={`${t('config.linkIcon')} ${index + 1}`}
 							placeholder="icon"
 							value={link.icon ?? ''}
-							disabled={!editable}
+							disabled={!editable || saving}
 							onChange={(e) => {
 								const next = links.map((l, i) =>
 									i === index ? { ...l, icon: e.target.value } : l
@@ -429,15 +449,16 @@ export default function SiteConfigPage() {
 								size="small"
 								type="text"
 								danger
+								disabled={saving}
+								aria-label={`${t('common.delete')} ${link.name || index + 1}`}
+								icon={<X size={15} />}
 								onClick={() => {
 									setLinks(links.filter((_, i) => i !== index));
 									setLinksDirty(true);
 								}}
-							>
-								×
-							</Button>
+							/>
 						) : null}
-					</Space>
+					</div>
 				))}
 			</Panel>
 		</div>

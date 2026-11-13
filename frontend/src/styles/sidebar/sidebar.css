@@ -1,127 +1,49 @@
-/* Sidebar: the fixed brand/scope regions, the independently scrolling menu,
-   and the fixed action region outside the menu; the workspace stays the only
-   other scroll region.
-   Ported from the robot platform's styles/sidebar/sidebar.css
-   (/Volumes/Thunderbolt 5 SSD (2TB)/Code/HZJQ/robot-platform/frontend, read-only
-   reference), adapted to this console's class names, spacing tokens, and the
-   antd 6 inline menu — no device business, no 16:9 stage height rules. */
-
+/* Generic regions and metrics from robot-platform/frontend/styles/sidebar/
+   sidebar.css and SideMenu.tsx; manager-specific scope data is supplied as props. */
 .app-sider {
+	--sidebar-gutter: var(--space-4);
 	background: var(--sidebar-bg) !important;
 	border-inline-end: 1px solid var(--border);
-	height: 100vh;
-	position: sticky;
-	top: 0;
+	height: 100%;
 	display: flex;
 	flex-direction: column;
 }
-
 .app-sider .ant-layout-sider-children {
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
-	flex: 1;
+	height: 100%;
 }
-
 .sidebar-brand {
 	display: flex;
 	align-items: center;
+	min-height: 56px;
+	flex: 0 0 auto;
+	padding: var(--space-3) var(--sidebar-gutter);
+}
+.sidebar-brand a {
+	display: flex;
+	align-items: center;
 	gap: var(--space-2);
-	padding: var(--space-4) var(--space-4) var(--space-2);
+	color: var(--foreground);
 	font-size: var(--text-title);
 	font-weight: 600;
-	white-space: nowrap;
+	text-decoration: none;
 }
-
 .sidebar-brand img {
 	flex: 0 0 auto;
 }
-
-.site-context {
-	padding: var(--space-2) var(--space-4) var(--space-3);
-	border-bottom: 1px solid var(--border);
-	flex: 0 0 auto;
-}
-
-.site-context .site-name {
-	font-weight: 600;
-	overflow-wrap: anywhere;
-}
-
-.site-context .site-meta {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2);
-	margin-top: 2px;
-	color: var(--muted-foreground);
-	font-size: var(--text-caption);
-	overflow-wrap: anywhere;
-}
-
-/* The menu region is the only scrolling part of the sidebar. */
-.app-sider nav {
-	flex: 1 1 auto;
-	min-height: 0;
-	padding: var(--space-1) var(--space-1) var(--space-4);
-	overflow-x: hidden;
-	overflow-y: auto;
-	scrollbar-width: thin;
-	scrollbar-gutter: stable;
-}
-
-/* antd inline menus carry a 1px colorSplit inline-end border at the root,
-   which would draw a stray line inside the sidebar; only the root border
-   goes — the selected item's indicator stays. */
-.app-sider .ant-menu-inline,
-.app-sider .ant-menu-vertical {
-	border-inline-end: none !important;
-	background: transparent;
-}
-
-.app-sider .ant-menu-item {
-	display: flex;
-	align-items: center;
-	margin-inline: 0;
-	width: 100%;
-	padding-inline: var(--space-4) !important;
-}
-
-.app-sider .ant-menu-item .ant-menu-item-icon {
-	width: 16px;
-	min-width: 16px;
-}
-
-.app-sider .ant-menu-item .ant-menu-title-content {
-	flex: 1 1 auto;
-	min-width: 0;
-	margin-inline-start: var(--space-2);
-}
-
-.app-sider .ant-menu-item-group-title {
-	padding: var(--space-3) var(--space-4) var(--space-1);
-	font-size: var(--text-caption);
-	font-weight: 600;
-	color: var(--muted-foreground);
-}
-
-/* Fixed action region below the menu: full-width text buttons with an
-   active accent surface; the fade line separates it from the menu region. */
-.sidebar-actions {
+.sidebar-info {
 	position: relative;
-	display: flex;
 	flex: 0 0 auto;
-	flex-direction: column;
-	align-items: stretch;
-	gap: var(--space-1);
-	min-height: 48px;
-	padding: var(--space-1) var(--space-1) var(--space-2);
+	min-width: 0;
 }
-
-.sidebar-actions::before {
-	content: "";
+.sidebar-info::before,
+.sidebar-info::after,
+.sidebar-actions::after {
+	content: '';
 	position: absolute;
 	inset-inline: 0;
-	top: 0;
 	height: 1px;
 	background: linear-gradient(
 		to right,
@@ -132,46 +54,162 @@
 	);
 	pointer-events: none;
 }
-
+.sidebar-info::before {
+	top: 0;
+}
+.sidebar-info::after,
+.sidebar-actions::after {
+	bottom: 0;
+}
+.sidebar-info > * {
+	min-width: 0;
+	min-height: 0;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	gap: var(--space-2);
+	padding: var(--space-4) var(--sidebar-gutter);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+}
+.info-head {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--space-1) var(--space-2);
+	min-width: 0;
+}
+.info-head strong {
+	grid-column: 1 / -1;
+	min-width: 0;
+	font-size: var(--text-body);
+	font-weight: 600;
+	line-height: 1.4;
+	color: var(--foreground);
+	overflow-wrap: anywhere;
+}
+.info-foot {
+	display: grid;
+	gap: var(--space-2);
+}
+.info-stats {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: var(--space-2);
+	margin: 0;
+}
+.scope-stat {
+	display: grid;
+	gap: 1px;
+	min-width: 0;
+}
+.scope-stat dt {
+	font-size: var(--text-caption);
+	line-height: 14px;
+	color: var(--muted-foreground);
+}
+.scope-stat dd {
+	margin: 0;
+	font-size: var(--text-secondary);
+	font-weight: 600;
+	line-height: 17px;
+	color: var(--foreground);
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+.sidebar-actions {
+	position: relative;
+	display: flex;
+	flex: 0 0 auto;
+	flex-direction: column;
+	align-items: stretch;
+	gap: var(--space-1);
+	min-height: 48px;
+	padding: var(--space-2) var(--space-1);
+}
 .sidebar-actions .ant-btn {
 	width: 100%;
 	min-width: 0;
 	height: 40px;
-	padding-inline: var(--space-3);
+	padding-inline: var(--sidebar-gutter);
 	gap: var(--space-2);
 	justify-content: flex-start;
+	font-size: var(--text-body);
 }
-
 .sidebar-actions .ant-btn > span:not(.ant-btn-icon) {
 	flex: 1 1 auto;
 	min-width: 0;
 	text-align: left;
 }
-
+.sidebar-actions .ant-btn .ant-btn-content {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-2);
+}
 .sidebar-actions .ant-btn.is-active {
 	background: var(--accent);
 	color: var(--primary);
 }
-
+.app-sider nav {
+	flex: 1 1 0;
+	min-height: 0;
+	padding-inline: var(--space-1);
+	overflow-x: hidden;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-gutter: stable;
+}
+.app-sider .ant-menu-inline,
+.app-sider .ant-menu-vertical {
+	border-inline-end: 0;
+	background: transparent;
+}
+.app-sider .ant-menu-item-group-title {
+	font-size: var(--text-caption);
+	font-weight: 600;
+	color: var(--muted-foreground);
+}
 .sidebar-foot {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 9px;
 	flex: 0 0 auto;
+	margin: var(--space-3) var(--sidebar-gutter) var(--space-4);
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+}
+.version-line {
 	display: flex;
 	align-items: center;
-	padding: var(--space-2) var(--space-4);
-	border-top: 1px solid var(--border);
-	color: var(--muted-foreground);
-	overflow-wrap: anywhere;
+	justify-content: space-between;
+	gap: var(--space-2);
+	padding-top: var(--space-2);
+	border-top: 1px solid transparent;
+	border-image: linear-gradient(
+			to right,
+			transparent,
+			var(--border) 20%,
+			var(--border) 80%,
+			transparent
+		)
+		1;
+	min-width: 0;
+	font-size: 11px;
+	line-height: 1.5;
 }
-
-/* Narrow screens: the sidebar becomes a full-width block above the
-   workspace; the menu stays reachable inside its own scroll region. */
+.version-line code {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+	color: var(--foreground);
+}
+.version-line a {
+	display: inline-flex;
+	color: inherit;
+}
 @media (max-width: 991px) {
-	.app-shell {
-		flex-direction: column;
-	}
-
 	.app-sider.ant-layout-sider {
-		position: relative;
 		width: 100% !important;
 		min-width: 0 !important;
 		max-width: none !important;
@@ -180,8 +218,14 @@
 		border-inline-end: none;
 		border-bottom: 1px solid var(--border);
 	}
-
+	.sidebar-brand {
+		min-height: 48px;
+	}
 	.app-sider nav {
-		max-height: 45vh;
+		flex: 0 1 auto;
+		max-height: 35vh;
+	}
+	.sidebar-foot {
+		margin-bottom: var(--space-2);
 	}
 }

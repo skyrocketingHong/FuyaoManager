@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Popconfirm, Space, Table, Typography, message } from 'antd';
+import { Alert, Button, Popconfirm, Space, Typography, message } from 'antd';
+import DataTable from '../../components/DataTable';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -208,7 +209,11 @@ export default function BuildsPage() {
 	const editable = site !== null && canEditSite(site);
 
 	const createButton = (
-		<Popconfirm title={t('builds.create')} onConfirm={() => void handleCreate()} disabled={!editable}>
+		<Popconfirm
+			title={t('builds.create')}
+			onConfirm={() => void handleCreate()}
+			disabled={!editable}
+		>
 			<Button type="primary" loading={creating} disabled={!editable}>
 				<Trans text={t('builds.create')} />
 			</Button>
@@ -238,96 +243,96 @@ export default function BuildsPage() {
 				</TablePanel>
 			) : (
 				<TablePanel>
-				<Table<BuildTask>
-					rowKey="id"
-					dataSource={builds}
-					pagination={false}
-					columns={[
-						{
-							title: 'ID',
-							dataIndex: 'id',
-							render: (id: string) => (
-								<Typography.Text copyable code>
-									{id.slice(0, 8)}
-								</Typography.Text>
-							)
-						},
-						{
-							title: t('builds.status'),
-							dataIndex: 'status',
-							render: (status: string) => (
-								<StatusTag
-									kind={
-										status === 'succeeded'
-											? 'success'
-											: status === 'failed'
-												? 'danger'
-												: status === 'running'
-													? 'info'
-													: 'neutral'
-									}
-								>
-									{t(`builds.status.${status}` as never)}
-								</StatusTag>
-							)
-						},
-						{
-							title: t('releases.themeColumn'),
-							render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
-						},
-						{
-							title: t('builds.siteSettingsRevision'),
-							dataIndex: 'siteSettingsRevision'
-						},
-						{
-							title: t('builds.themeRevision'),
-							dataIndex: 'themeSelectionRevision'
-						},
-						{
-							title: t('builds.inputDigests'),
-							render: (_, record) =>
-								record.inputDigests ? (
-									<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-										{String(
-											(record.inputDigests as Record<string, string>).contentDigest ?? ''
-										).slice(7, 19)}
-										…
+					<DataTable<BuildTask>
+						rowKey="id"
+						dataSource={builds}
+						pagination={false}
+						columns={[
+							{
+								title: 'ID',
+								dataIndex: 'id',
+								render: (id: string) => (
+									<Typography.Text copyable code>
+										{id.slice(0, 8)}
 									</Typography.Text>
-								) : null
-						},
-						{
-							render: (_, record) => (
-								<Space>
-									{record.failure ? (
-										<Typography.Text type="danger">
-											{t('builds.failureStage')}: {record.failure.stage}
+								)
+							},
+							{
+								title: t('builds.status'),
+								dataIndex: 'status',
+								render: (status: string) => (
+									<StatusTag
+										kind={
+											status === 'succeeded'
+												? 'success'
+												: status === 'failed'
+													? 'danger'
+													: status === 'running'
+														? 'info'
+														: 'neutral'
+										}
+									>
+										{t(`builds.status.${status}` as never)}
+									</StatusTag>
+								)
+							},
+							{
+								title: t('releases.themeColumn'),
+								render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
+							},
+							{
+								title: t('builds.siteSettingsRevision'),
+								dataIndex: 'siteSettingsRevision'
+							},
+							{
+								title: t('builds.themeRevision'),
+								dataIndex: 'themeSelectionRevision'
+							},
+							{
+								title: t('builds.inputDigests'),
+								render: (_, record) =>
+									record.inputDigests ? (
+										<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+											{String(
+												(record.inputDigests as Record<string, string>).contentDigest ?? ''
+											).slice(7, 19)}
+											…
 										</Typography.Text>
-									) : null}
-									{record.status === 'succeeded' ? (
-										<Button
-											size="small"
-											loading={opening === record.id}
-											onClick={() => void handlePreview(record.id, record.previewActive)}
-										>
-											<Trans text={t('builds.preview')} />
-										</Button>
-									) : null}
-									{record.status === 'succeeded' && editable ? (
-										<Popconfirm
-											title={t('builds.previewCloseConfirm')}
-											onConfirm={() => void handleClosePreview(record.id)}
-										>
-											<Button size="small" loading={closing === record.id}>
-												<Trans text={t('builds.previewClose')} />
+									) : null
+							},
+							{
+								render: (_, record) => (
+									<Space>
+										{record.failure ? (
+											<Typography.Text type="danger">
+												{t('builds.failureStage')}: {record.failure.stage}
+											</Typography.Text>
+										) : null}
+										{record.status === 'succeeded' ? (
+											<Button
+												size="small"
+												loading={opening === record.id}
+												onClick={() => void handlePreview(record.id, record.previewActive)}
+											>
+												<Trans text={t('builds.preview')} />
 											</Button>
-										</Popconfirm>
-									) : null}
-								</Space>
-							)
-						}
-					]}
-				/>
-			</TablePanel>
+										) : null}
+										{record.status === 'succeeded' && editable ? (
+											<Popconfirm
+												title={t('builds.previewCloseConfirm')}
+												onConfirm={() => void handleClosePreview(record.id)}
+											>
+												<Button size="small" loading={closing === record.id}>
+													<Trans text={t('builds.previewClose')} />
+												</Button>
+											</Popconfirm>
+										) : null}
+									</Space>
+								)
+							}
+						]}
+					/>
+				</TablePanel>
 			)}
 		</div>
 	);

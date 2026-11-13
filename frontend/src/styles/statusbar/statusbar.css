@@ -1,0 +1,201 @@
+/* Ported from robot-platform/frontend/styles/statusbar/statusbar.css:
+   shared single-row slots, layered background, 32px controls, user menu. */
+.topbar {
+	--topbar-control-height: 32px;
+	position: sticky;
+	top: 0;
+	z-index: 30;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	min-height: 44px;
+	flex: 0 0 auto;
+	padding: 0 var(--space-4);
+	border-bottom: 1px solid var(--border);
+	background: var(--card);
+}
+@supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+	.topbar {
+		background: transparent;
+	}
+}
+.topbar-blur {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+}
+.topbar-blur i {
+	position: absolute;
+	inset: 0;
+	-webkit-backdrop-filter: blur(var(--blur));
+	backdrop-filter: blur(var(--blur));
+	-webkit-mask-image: var(--fade);
+	mask-image: var(--fade);
+}
+.topbar-blur i:nth-child(1) {
+	--blur: 16px;
+	--fade: linear-gradient(to bottom, #000 0%, transparent 30%);
+}
+.topbar-blur i:nth-child(2) {
+	--blur: 11px;
+	--fade: linear-gradient(to bottom, #000 0%, transparent 46%);
+}
+.topbar-blur i:nth-child(3) {
+	--blur: 7px;
+	--fade: linear-gradient(to bottom, #000 0%, transparent 62%);
+}
+.topbar-blur i:nth-child(4) {
+	--blur: 4px;
+	--fade: linear-gradient(to bottom, #000 0%, transparent 80%);
+}
+.topbar-blur i:nth-child(5) {
+	--blur: 2px;
+	--fade: linear-gradient(to bottom, #000 8%, transparent 100%);
+}
+.topbar-blur::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(
+		to bottom,
+		color-mix(in srgb, var(--card) 86%, transparent),
+		color-mix(in srgb, var(--card) 55%, transparent) 68%,
+		transparent
+	);
+}
+.topbar-main,
+.topbar-session {
+	position: relative;
+	z-index: 1;
+}
+.topbar-main {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: var(--space-2);
+	font-size: var(--text-body);
+	color: var(--muted-foreground);
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding-block: 6px;
+	scrollbar-width: thin;
+	overscroll-behavior-inline: contain;
+}
+.topbar-main > * {
+	flex-shrink: 0;
+}
+.topbar .ant-btn:not(.ant-btn-link) {
+	height: var(--topbar-control-height);
+	min-height: var(--topbar-control-height);
+	padding-block: 4px;
+	padding-inline: 12px;
+	font-size: var(--text-body);
+	line-height: 22px;
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+.topbar .ant-btn.topbar-icon {
+	width: var(--topbar-control-height);
+	padding: 0;
+}
+.topbar .ant-select {
+	height: var(--topbar-control-height);
+}
+.topbar .ant-input,
+.topbar .ant-input-affix-wrapper,
+.topbar .ant-select-selector {
+	min-height: var(--topbar-control-height);
+	height: var(--topbar-control-height);
+	padding-block: 0;
+}
+.topbar .ant-input-affix-wrapper .ant-input {
+	min-height: 0;
+	height: 100%;
+}
+.topbar-identity {
+	min-width: max-content;
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	flex: 1 0 auto;
+}
+.topbar-identity:empty {
+	display: none;
+}
+.topbar-page-content {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	min-width: 0;
+	flex: 1 0 auto;
+}
+.topbar-page-actions {
+	display: flex;
+	flex-wrap: nowrap;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--space-2);
+	margin-inline: auto var(--space-3);
+}
+.topbar-tabs.ant-segmented {
+	display: inline-flex;
+	min-width: 0;
+	width: max-content;
+	flex: 0 0 auto;
+	max-width: none;
+}
+.topbar-tabs .ant-segmented-group {
+	margin: 0;
+	width: max-content;
+	flex: none;
+}
+.topbar-tabs .ant-segmented-item-label {
+	white-space: nowrap;
+}
+.topbar-tabs .ant-segmented-item {
+	min-height: 30px;
+	line-height: 28px;
+}
+.topbar-session {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	justify-content: flex-end;
+	gap: var(--space-2);
+	min-width: max-content;
+}
+.topbar .ant-btn.user-button {
+	gap: var(--space-2);
+	padding-inline: 10px;
+	justify-content: flex-start;
+	max-width: 220px;
+}
+.operator-name {
+	color: var(--muted-foreground);
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.avatar {
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	background: var(--muted);
+	color: var(--foreground);
+	font-size: 11px;
+}
+@container (max-width: 640px) {
+	.topbar {
+		grid-template-columns: minmax(160px, 1fr) max-content;
+		overflow-x: auto;
+		scrollbar-width: thin;
+		overscroll-behavior-inline: contain;
+	}
+}

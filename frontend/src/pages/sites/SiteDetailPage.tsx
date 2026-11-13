@@ -19,6 +19,7 @@ import {
 	type SiteEdgeState
 } from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
+import { currentAuthGeneration } from '../../lib/api/client';
 import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
 import { upsertSite } from '../../lib/sites/site-list';
 import PageLoading from '../../components/PageLoading';
@@ -34,10 +35,7 @@ type ReleaseState =
 
 /** Edge facts are explicit per-site state: loading and error never carry
  * facts, so the UI cannot borrow the previous site's deployable answer. */
-type EdgeFacts =
-	| { kind: 'loading' }
-	| { kind: 'error' }
-	| { kind: 'ready'; state: SiteEdgeState };
+type EdgeFacts = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; state: SiteEdgeState };
 
 export default function SiteDetailPage() {
 	const { siteId } = useParams<{ siteId: string }>();
@@ -151,11 +149,12 @@ export default function SiteDetailPage() {
 	async function handleVisibility(publicOn: boolean) {
 		if (!siteId || !site) return;
 		const myGen = generation.current;
+		const authGen = currentAuthGeneration();
 		setSwitching(true);
 		try {
 			const updated = await putSiteVisibility(siteId, publicOn ? 'public' : 'private');
 			if (generation.current !== myGen) return;
-			upsertSite(updated);
+			upsertSite(updated, authGen);
 			await detail.load(siteId, async () => {});
 			await refreshEdge();
 		} catch (err) {
@@ -170,10 +169,11 @@ export default function SiteDetailPage() {
 	async function handleRetryProvision() {
 		if (!siteId) return;
 		const myGen = generation.current;
+		const authGen = currentAuthGeneration();
 		try {
 			const refreshed = await provisionSite(siteId);
 			if (generation.current !== myGen) return;
-			upsertSite(refreshed);
+			upsertSite(refreshed, authGen);
 			await detail.load(siteId, async () => {});
 		} catch (err) {
 			if (generation.current !== myGen) return;
@@ -277,7 +277,12 @@ export default function SiteDetailPage() {
 					</Space>
 				) : trustedEdge.site?.port ? (
 					<Space wrap>
-						<a href={trustedEdge.site.originUrl} target="_blank" rel="noreferrer" className="version-text">
+						<a
+							href={trustedEdge.site.originUrl}
+							target="_blank"
+							rel="noreferrer"
+							className="version-text"
+						>
 							{trustedEdge.site.originUrl}
 						</a>
 						<StatusTag kind={trustedEdge.inSync ? 'success' : 'warning'}>

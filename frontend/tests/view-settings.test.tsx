@@ -5,8 +5,8 @@
  * editor's baseline or form changes.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { cleanup, render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import type { Site, SiteSettings } from '../src/lib/api/management';
@@ -68,10 +68,6 @@ beforeAll(() => {
 	}
 });
 
-async function settled(): Promise<void> {
-	for (let i = 0; i < 12; i++) await Promise.resolve();
-}
-
 /** antd inserts a space between two-CJK-character button labels ("保 存"). */
 function findSaveButton(): HTMLButtonElement {
 	const button = screen
@@ -108,6 +104,8 @@ beforeEach(() => {
 	setLocale('zh-CN');
 });
 
+afterEach(cleanup);
+
 describe('SettingsPage reactive derivations', () => {
 	it('disables the save button while clean and enables it on edits', async () => {
 		vi.mocked(getSite).mockResolvedValue(baseSite);
@@ -115,7 +113,6 @@ describe('SettingsPage reactive derivations', () => {
 		mountView();
 		// Wait for the form to load before deriving button state.
 		const input = await screen.findByDisplayValue('Baseline Name');
-		await settled();
 
 		await waitFor(() => {
 			const button = findSaveButton();
@@ -126,7 +123,6 @@ describe('SettingsPage reactive derivations', () => {
 		await act(async () => {
 			fireEvent.change(input, { target: { value: 'Edited Name' } });
 		});
-		await settled();
 		await waitFor(() => {
 			const button = findSaveButton();
 			expect((button as HTMLButtonElement).disabled).toBe(false);
@@ -145,7 +141,6 @@ describe('SettingsPage reactive derivations', () => {
 		await act(async () => {
 			fireEvent.change(input, { target: { value: 'Edited Name' } });
 		});
-		await settled();
 
 		await waitFor(() => {
 			const button = findSaveButton();
@@ -154,7 +149,6 @@ describe('SettingsPage reactive derivations', () => {
 		await act(async () => {
 			fireEvent.click(findSaveButton());
 		});
-		await settled();
 
 		expect(updateSettings).toHaveBeenCalledWith(baseSite.siteId, { name: 'Edited Name' }, '"e-r3"');
 		const savedNotice = (zh['settings.savedAt'] as string).replace('{revision}', '4');
@@ -175,5 +169,8 @@ describe('SettingsPage reactive derivations', () => {
 		await waitFor(() => {
 			expect(screen.getByText(notice)).toBeDefined();
 		});
+		expect(((await screen.findByDisplayValue('Baseline Name')) as HTMLInputElement).disabled).toBe(
+			true
+		);
 	});
 });

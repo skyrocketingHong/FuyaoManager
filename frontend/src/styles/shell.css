@@ -1,128 +1,54 @@
-/* App shell: the top bar (page slots + session controls on one line,
-   horizontal scroll when tight) and the workspace as the single vertical
-   scroll region. Sidebar layout lives in styles/sidebar/sidebar.css. */
-
+/* Responsive host for the robot-platform workspace shell, without its
+   device-specific fixed-ratio stage. */
 .app-shell {
-	height: 100vh;
+	height: 100%;
+	min-height: 0;
 	overflow: hidden;
 }
-
 .shell-main {
-	height: 100vh;
+	height: 100%;
+	min-height: 0;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	min-width: 0;
+	container-type: inline-size;
 }
-
-.shell-header {
-	height: var(--topbar-height);
-	line-height: normal;
-	padding: 0 var(--space-4);
-	background: var(--card);
-	border-bottom: 1px solid var(--border);
-	display: flex;
-	align-items: center;
-	gap: var(--space-4);
-	position: sticky;
-	top: 0;
-	z-index: 30;
-}
-
-.topbar-main {
-	flex: 1;
-	min-width: 0;
-	display: flex;
-	align-items: center;
-	gap: var(--space-4);
-	overflow-x: auto;
-	scrollbar-width: none;
-	white-space: nowrap;
-}
-
-.topbar-main::-webkit-scrollbar {
-	display: none;
-}
-
-.topbar-main .page-title {
-	font-size: var(--text-title);
-	font-weight: 600;
-}
-
-.topbar-content,
-.topbar-actions {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-}
-
-.topbar-session {
-	display: flex;
-	align-items: center;
-	gap: var(--space-1);
-	white-space: nowrap;
-}
-
-/* Top-bar controls keep the 32px control height: the global 44px input
-   density would overflow the 44px top bar. Affix inner inputs carry no
-   min-height of their own so the wrapper alone sets the size. */
-.shell-header .ant-input,
-.shell-header .ant-select-selector,
-.shell-header .ant-input-affix-wrapper {
-	min-height: var(--topbar-control-height);
-	height: var(--topbar-control-height);
-	line-height: calc(var(--topbar-control-height) - 2px);
-	font-size: var(--text-secondary);
-	padding-block: 0;
-}
-
-.shell-header .ant-input-affix-wrapper .ant-input {
-	min-height: 0;
-	height: 100%;
-	line-height: inherit;
-}
-
-.account-avatar {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	margin-inline-end: 6px;
-	background: var(--muted);
-	color: var(--muted-foreground);
-	font-size: var(--text-caption);
-	font-weight: 600;
-}
-
-.account-meta {
-	color: var(--muted-foreground);
-	margin-inline-start: 4px;
-}
-
 .shell-content {
 	flex: 1;
 	min-height: 0;
+	min-width: 0;
 	overflow-y: auto;
 	scrollbar-gutter: stable;
 	padding: var(--space-4);
-	box-sizing: border-box;
 }
-
-/* Narrow screens: the sidebar (see sidebar.css) becomes a full-width block
-   above the workspace, which flows normally instead of scrolling inside. */
+.shell-content:focus {
+	outline: none;
+}
+.skip-workspace {
+	position: fixed;
+	top: 8px;
+	left: 8px;
+	z-index: 100;
+	padding: 12px 16px;
+	background: var(--primary);
+	color: var(--primary-foreground);
+	border-radius: 8px;
+	transform: translateY(-160%);
+}
+.skip-workspace:focus-visible {
+	transform: translateY(0);
+}
 @media (max-width: 991px) {
 	.app-shell {
 		height: auto;
-		min-height: 100vh;
+		min-height: 100%;
 		overflow: visible;
+		flex-direction: column;
 	}
-
 	.shell-main {
 		height: auto;
 		min-height: 0;
 	}
-
 	.shell-content {
 		overflow: visible;
 	}

@@ -51,7 +51,8 @@
 
 html,
 body,
-#root {
+#root,
+#root > .ant-app {
 	height: 100%;
 }
 
@@ -62,6 +63,17 @@ body {
 	font-family: var(--font-sans);
 	font-size: var(--text-body);
 	-webkit-font-smoothing: antialiased;
+}
+
+::selection {
+	background: var(--accent);
+}
+input,
+textarea {
+	caret-color: var(--primary);
+}
+svg {
+	flex-shrink: 0;
 }
 
 *:focus-visible {

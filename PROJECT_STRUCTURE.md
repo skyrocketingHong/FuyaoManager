@@ -40,7 +40,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0012)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0013)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries
@@ -72,9 +72,10 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/lib/theme/         # day/night state + semantic token assembly
 │   ├── src/lib/session/       # session state: anonymous/restricted/full/error
 │   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
-│   │                          # TablePanel, PageLoading, StatusTag, layout/
-│   │                          # (AppShell, SidebarNav/SidebarActions)
-│   ├── src/styles/            # base / shell / sidebar / pages CSS (semantic
+│   │                          # TablePanel, DataTable, PageLoading, StatusTag,
+│   │                          # RouteErrorPage, layout/ (AppShell, TopBar,
+│   │                          # SidebarInfo/Actions/Nav/Foot)
+│   ├── src/styles/            # base / shell / sidebar / statusbar / pages CSS (semantic
 │   │                          # variables)
 │   ├── src/pages/             # login, passkey binding, account settings,
 │   │                          # themes catalog, sites, per-site surfaces
@@ -93,6 +94,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer
+    ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # reused console modules and boundaries
     └── source-mapping/commit-map-from-fuyaohomepage.txt
 ```
 

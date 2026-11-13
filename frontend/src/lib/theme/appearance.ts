@@ -74,7 +74,10 @@ function channels(hex: string): [number, number, number] {
 }
 
 function toHex([r, g, b]: [number, number, number]): string {
-	const channel = (n: number) => Math.round(Math.min(255, Math.max(0, n))).toString(16).padStart(2, '0');
+	const channel = (n: number) =>
+		Math.round(Math.min(255, Math.max(0, n)))
+			.toString(16)
+			.padStart(2, '0');
 	return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
@@ -142,6 +145,7 @@ export function appearanceTheme(mode: AppearanceMode): Appearance {
 		'--foreground': p.foreground,
 		'--card': p.card,
 		'--surface': p.surface,
+		'--surface-high': p.surface,
 		'--elevated': p.elevated,
 		'--muted': p.muted,
 		'--muted-foreground': p.secondary,
@@ -150,7 +154,7 @@ export function appearanceTheme(mode: AppearanceMode): Appearance {
 		'--sidebar-bg': p.sidebar,
 		'--primary': primaryText,
 		'--primary-fill': primary,
-		'--primary-foreground': '#ffffff',
+		'--primary-foreground': mode === 'dark' ? '#10151d' : '#ffffff',
 		'--accent': selected,
 		'--good': p.good,
 		'--warning': p.warning,

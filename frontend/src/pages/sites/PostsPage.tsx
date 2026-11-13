@@ -16,12 +16,12 @@ import {
 	Popconfirm,
 	Space,
 	Switch,
-	Table,
 	Typography,
 	message
 } from 'antd';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
+import DataTable from '../../components/DataTable';
 import StatusTag from '../../components/StatusTag';
 import { TablePanel } from '../../components/Panel';
 import {
@@ -332,79 +332,79 @@ export default function PostsPage() {
 			) : null}
 			{errorKey !== null ? <Alert type="error" showIcon title={t(errorKey)} /> : null}
 			<TablePanel>
-			<Table<Post>
-				rowKey="path"
-				dataSource={posts ?? []}
-				loading={posts === null}
-				pagination={{
-					current: page,
-					pageSize: 10,
-					total,
-					showSizeChanger: false,
-					onChange: (p) => {
-						setPage(p);
-						void refresh(p);
-					}
-				}}
-				columns={[
-					{
-						title: t('posts.titleColumn'),
-						render: (_, post) => (
-							<>
-								<div>{post.title}</div>
-								<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-									{post.path}
-								</Typography.Text>
-							</>
-						)
-					},
-					{
-						title: t('posts.draftColumn'),
-						dataIndex: 'draft',
-						width: 90,
-						render: (draft: boolean) =>
-							draft ? (
-								<StatusTag kind="warning">{t('posts.draft')}</StatusTag>
-							) : (
-								<StatusTag kind="success">{t('posts.published')}</StatusTag>
+				<DataTable<Post>
+					rowKey="path"
+					dataSource={posts ?? []}
+					loading={posts === null}
+					pagination={{
+						current: page,
+						pageSize: 10,
+						total,
+						showSizeChanger: false,
+						onChange: (p) => {
+							setPage(p);
+							void refresh(p);
+						}
+					}}
+					columns={[
+						{
+							title: t('posts.titleColumn'),
+							render: (_, post) => (
+								<>
+									<div>{post.title}</div>
+									<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+										{post.path}
+									</Typography.Text>
+								</>
 							)
-					},
-					{ title: t('posts.dateColumn'), dataIndex: 'date', width: 170 },
-					{
-						title: t('posts.tagsColumn'),
-						dataIndex: 'tags',
-						render: (tags: string[]) => (
-							<span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
-								{(tags ?? []).map((tag) => (
-									<StatusTag key={tag} kind="neutral">
-										{tag}
-									</StatusTag>
-								))}
-							</span>
-						)
-					},
-					{
-						width: 170,
-						render: (_, post) => (
-							<Space>
-								<Button size="small" onClick={() => void openEditor(post.path)}>
-									{t('posts.edit')}
-								</Button>
-								{editable ? (
-									<Popconfirm
-										title={t('posts.deleteConfirm')}
-										onConfirm={() => void handleDelete(post)}
-									>
-										<Button size="small" danger>
-											{t('posts.delete')}
-										</Button>
-									</Popconfirm>
-								) : null}
-							</Space>
-						)
-					}
-				]}
-			/>
+						},
+						{
+							title: t('posts.draftColumn'),
+							dataIndex: 'draft',
+							width: 90,
+							render: (draft: boolean) =>
+								draft ? (
+									<StatusTag kind="warning">{t('posts.draft')}</StatusTag>
+								) : (
+									<StatusTag kind="success">{t('posts.published')}</StatusTag>
+								)
+						},
+						{ title: t('posts.dateColumn'), dataIndex: 'date', width: 170 },
+						{
+							title: t('posts.tagsColumn'),
+							dataIndex: 'tags',
+							render: (tags: string[]) => (
+								<span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
+									{(tags ?? []).map((tag) => (
+										<StatusTag key={tag} kind="neutral">
+											{tag}
+										</StatusTag>
+									))}
+								</span>
+							)
+						},
+						{
+							width: 170,
+							render: (_, post) => (
+								<Space>
+									<Button size="small" onClick={() => void openEditor(post.path)}>
+										{t('posts.edit')}
+									</Button>
+									{editable ? (
+										<Popconfirm
+											title={t('posts.deleteConfirm')}
+											onConfirm={() => void handleDelete(post)}
+										>
+											<Button size="small" danger>
+												{t('posts.delete')}
+											</Button>
+										</Popconfirm>
+									) : null}
+								</Space>
+							)
+						}
+					]}
+				/>
 			</TablePanel>
 			<Modal
 				title={editing ? t('posts.editTitle') : t('posts.newTitle')}

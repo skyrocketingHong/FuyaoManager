@@ -1,271 +1,144 @@
-/**
- * AppShell: grouped sidebar (brand with the product favicon, current-site
- * scope, an independently scrolling grouped menu, and a fixed action region
- * outside the menu), the 44px top bar (page slots published via PageHeader
- * plus the session controls on one line), and the workspace as the single
- * vertical scroll region. All navigation facts — routes, menu entries,
- * selection — come from lib/navigation; the fixed action region carries
- * "Platform home" and, inside a site scope, "Site overview", so the menu
- * never mixes platform entries into a site's workspace and the old hidden
- * back link is gone.
- */
-import { useEffect } from 'react';
-import type { ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useSyncExternalStore } from 'react';
-import { Button, Dropdown, Layout } from 'antd';
-import type { MenuProps } from 'antd';
+// SideMenu's brand → information → actions → scrolling menu → footer skeleton
+// from robot-platform; modules here consume the manager's own site metadata.
+import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Layout, type MenuProps } from 'antd';
 import {
-	AppstoreOutlined,
-	BgColorsOutlined,
-	BuildOutlined,
-	EnvironmentOutlined,
-	FileTextOutlined,
-	GlobalOutlined,
-	HomeOutlined,
-	IdcardOutlined,
-	PictureOutlined,
-	RocketOutlined,
-	SettingOutlined,
-	TeamOutlined
-} from '@ant-design/icons';
-import { siGithub } from 'simple-icons';
-import SidebarActions, { type SidebarAction } from './SidebarActions';
-import SidebarNav from './SidebarNav';
-import Trans from '../i18n/Trans';
-import {
-	i18nSnapshot,
-	setLocale,
-	subscribeI18n,
-	t,
-	type Locale,
-	type MessageKey
-} from '../../lib/i18n';
-import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
-import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
+	ArrowLeft,
+	ChevronRight,
+	FileText,
+	Globe,
+	Hammer,
+	Images,
+	LayoutDashboard,
+	Link2,
+	MapPin,
+	Palette,
+	Rocket,
+	Settings,
+	UserRound,
+	type LucideIcon
+} from 'lucide-react';
+import { i18nSnapshot, subscribeI18n, t, type MessageKey } from '../../lib/i18n';
+import { sessionSnapshot, subscribeSession } from '../../lib/session';
+import { currentAuthGeneration } from '../../lib/api/client';
 import { loadSiteList, siteListSnapshot, subscribeSiteList } from '../../lib/sites/site-list';
 import { itemPath, matchRoute, navItems, selectedPath, siteNavGroups } from '../../lib/navigation';
-import { PageHeaderProvider, usePageHeaderContent } from '../PageHeader';
+import { PageHeaderProvider } from '../PageHeader';
+import SidebarActions, { type SidebarAction } from './SidebarActions';
+import SidebarNav from './SidebarNav';
+import SidebarInfo from './SidebarInfo';
+import SidebarFoot from './SidebarFoot';
+import TopBar from './TopBar';
 
-function GitHubMark() {
-	return (
-		<a
-			href="https://github.com/skyrocketingHong/FuyaoManager"
-			target="_blank"
-			rel="noreferrer"
-			aria-label="FuyaoManager on GitHub"
-			style={{ color: 'inherit', display: 'inline-flex', alignItems: 'center' }}
-		>
-			<svg
-				width="18"
-				height="18"
-				viewBox="0 0 24 24"
-				role="img"
-				aria-hidden="true"
-				fill="currentColor"
-			>
-				<path d={siGithub.path} />
-			</svg>
-		</a>
-	);
-}
-
-type AntdMenuItem = Required<MenuProps>['items'][number];
-
-/** Generic menu icons keyed by the stable navigation id. */
-const navIcons: Record<string, ReactNode> = {
-	sites: <GlobalOutlined />,
-	themes: <AppstoreOutlined />,
-	'site.posts': <FileTextOutlined />,
-	'site.friends': <TeamOutlined />,
-	'site.albums': <PictureOutlined />,
-	'site.footprints': <EnvironmentOutlined />,
-	'site.settings': <SettingOutlined />,
-	'site.config': <IdcardOutlined />,
-	'site.theme': <BgColorsOutlined />,
-	'site.builds': <BuildOutlined />,
-	'site.releases': <RocketOutlined />
+type MenuItem = Required<MenuProps>['items'][number];
+const navIcons: Record<string, LucideIcon> = {
+	themes: Palette,
+	'site.posts': FileText,
+	'site.friends': Link2,
+	'site.albums': Images,
+	'site.footprints': MapPin,
+	'site.settings': Settings,
+	'site.config': UserRound,
+	'site.theme': Palette,
+	'site.builds': Hammer,
+	'site.releases': Rocket
 };
 
-function menuEntry(itemId: string, siteId: string | null): AntdMenuItem {
+function menuEntry(itemId: string, siteId: string | null): MenuItem {
 	const item = navItems.find((entry) => entry.id === itemId);
-	if (!item) throw new Error(`unknown nav item ${itemId}`);
+	if (!item) throw new Error(`unknown navigation item ${itemId}`);
+	const Icon = navIcons[item.id];
 	return {
 		key: itemPath(item, siteId),
-		icon: navIcons[item.id],
-		label: <Trans text={t(item.titleKey)} />
+		label: t(item.titleKey),
+		icon: Icon ? <Icon size={15} strokeWidth={1.8} /> : undefined
 	};
-}
-
-function menuGroup(groupKey: string, titleKey: MessageKey, children: AntdMenuItem[]): AntdMenuItem {
-	return {
-		key: groupKey,
-		type: 'group',
-		label: <Trans text={t(titleKey)} />,
-		children
-	};
-}
-
-function TopBar() {
-	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
-	const { dark } = useSyncExternalStore(subscribeTheme, themeSnapshot);
-	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
-	const navigate = useNavigate();
-	const header = usePageHeaderContent();
-
-	const other: Locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN';
-
-	return (
-		<Layout.Header className="shell-header">
-			<div className="topbar-main">
-				{header?.content ? <div className="topbar-content">{header.content}</div> : null}
-				{header?.actions ? <div className="topbar-actions">{header.actions}</div> : null}
-			</div>
-			<div className="topbar-session">
-				<Button type="text" onClick={() => setLocale(other)} aria-label={other}>
-					<Trans text={t('app.localeSwitch')} />
-				</Button>
-				<Button type="text" onClick={toggleTheme}>
-					<Trans
-						key={dark ? 'd' : 'l'}
-						text={dark ? t('app.theme.light') : t('app.theme.dark')}
-					/>
-				</Button>
-				{session.status === 'authenticated' && session.user ? (
-					<Dropdown
-						menu={{
-							items: [
-								{
-									key: 'identity',
-									label: (
-										<span>
-											{session.user.displayName || session.user.username}
-											<span className="account-meta"> @{session.user.username}</span>
-										</span>
-									),
-									disabled: true
-								},
-								{
-									key: 'binding',
-									label: (
-										<Trans
-											text={t(
-												session.passkeyBound
-													? 'account.passkeyBound'
-													: 'account.passkeyUnbound'
-											)}
-										/>
-									),
-									disabled: true
-								},
-								{ type: 'divider' },
-								{
-									key: 'account-settings',
-									label: <Trans text={t('nav.account')} />,
-									onClick: () => navigate('/account')
-								},
-								{ type: 'divider' },
-								{
-									key: 'signout',
-									label: <Trans text={t('app.signOut')} />,
-									onClick: () => {
-										void signOut().then(() => navigate('/login', { replace: true }));
-									}
-								}
-							]
-						}}
-						trigger={['click']}
-					>
-						<Button type="text" aria-label={session.user.username}>
-							<span className="account-avatar" aria-hidden>
-								{(session.user.displayName || session.user.username).slice(0, 1).toUpperCase()}
-							</span>
-							{session.user.username}
-						</Button>
-					</Dropdown>
-				) : null}
-			</div>
-		</Layout.Header>
-	);
 }
 
 export default function AppShell({ children }: { children: ReactNode }) {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const siteList = useSyncExternalStore(subscribeSiteList, siteListSnapshot);
+	useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const navigate = useNavigate();
 	const { pathname } = useLocation();
-
+	const authGeneration = currentAuthGeneration();
 	useEffect(() => {
 		if (session.status === 'authenticated') void loadSiteList();
-	}, [session.status]);
+	}, [session.status, session.user?.id, authGeneration]);
 
-	// The URL is the authoritative site identity: the site-scope menu renders
-	// for any /sites/:siteId/* path even while the site list is still loading.
 	const match = matchRoute(pathname);
-	const siteId = match && match.item.scope === 'site' ? match.siteId : null;
-	const currentSite = siteId
-		? (siteList.sites.find((site) => site.siteId === siteId) ?? null)
-		: null;
-
-	// Site scope: grouped workspace entries only — overview lives in the
-	// fixed action region and platform entries never mix in. Platform scope:
-	// the two catalog entries, flat.
-	const menuItems: AntdMenuItem[] = siteId
-		? siteNavGroups.map((group) =>
-				menuGroup(
-					`site-${group.id}`,
-					group.titleKey,
-					navItems
-						.filter((item) => item.scope === 'site' && item.group === group.id)
-						.map((item) => menuEntry(item.id, siteId))
-				)
-			)
-		: [menuEntry('sites', null), menuEntry('themes', null)];
-
+	const siteId = match?.item.scope === 'site' ? match.siteId : null;
+	const currentSite = siteId ? siteList.sites.find((site) => site.siteId === siteId) : null;
+	const menuItems: MenuItem[] = siteId
+		? siteNavGroups.map((group) => ({
+				key: group.id,
+				type: 'group',
+				label: t(group.titleKey),
+				children: navItems
+					.filter((item) => item.scope === 'site' && item.group === group.id)
+					.map((item) => menuEntry(item.id, siteId))
+			}))
+		: [menuEntry('themes', null)];
 	const actions: SidebarAction[] = [
 		{
 			key: 'platform-home',
 			label: t('nav.platformHome'),
-			icon: <HomeOutlined />,
+			icon: siteId ? <ArrowLeft size={16} /> : <LayoutDashboard size={16} strokeWidth={1.8} />,
+			trailing: siteId ? undefined : <ChevronRight size={14} />,
 			active: pathname === '/sites',
 			onClick: () => navigate('/sites')
 		}
 	];
-	if (siteId) {
+	if (siteId)
 		actions.push({
 			key: 'site-overview',
 			label: t('nav.overview'),
-			icon: <GlobalOutlined />,
+			icon: <Globe size={16} strokeWidth={1.8} />,
 			active: match?.item.id === 'site.overview',
 			onClick: () => navigate(`/sites/${siteId}`)
 		});
-	}
-
+	const stats = siteId
+		? [
+				{ label: t('site.slug'), value: currentSite?.slug ?? siteId, machine: true },
+				{
+					label: t('sidebar.role'),
+					value: currentSite ? t(`role.${currentSite.role}` as MessageKey) : '—'
+				}
+			]
+		: [
+				{
+					label: t('sidebar.sites'),
+					value: siteList.status === 'ready' ? String(siteList.sites.length) : '—'
+				},
+				{
+					label: t('sidebar.editableSites'),
+					value:
+						siteList.status === 'ready'
+							? String(siteList.sites.filter((site) => site.role !== 'viewer').length)
+							: '—'
+				}
+			];
 	const selected = selectedPath(pathname);
-	const accountGen = session.user?.id ?? 'anon';
-	const headerScope = `${accountGen}:${pathname}`;
 
 	return (
-		<PageHeaderProvider scope={headerScope}>
+		<PageHeaderProvider scope={`${session.user?.id ?? 'anon'}:${pathname}`}>
+			<a className="skip-workspace" href="#workspace">
+				{t('app.skipWorkspace')}
+			</a>
 			<Layout className="app-shell">
 				<Layout.Sider width={208} theme="light" className="app-sider" trigger={null}>
 					<div className="sidebar-brand">
-						<img src="/favicon.svg" alt="" width={22} height={22} />
-						<span className="brand">
-							<Trans text={t('app.title')} />
-						</span>
+						<Link to="/sites">
+							<img src="/favicon.svg" alt="" width={24} height={24} />
+							<span>{t('app.title')}</span>
+						</Link>
 					</div>
-					{siteId ? (
-						<div className="site-context">
-							<div className="site-name">{currentSite?.name ?? siteId}</div>
-							{currentSite ? (
-								<div className="site-meta">
-									<span>{currentSite.slug}</span>
-									<span>{t(`role.${currentSite.role}` as MessageKey)}</span>
-								</div>
-							) : null}
-						</div>
-					) : null}
+					<SidebarInfo
+						title={currentSite?.name ?? (siteId ? t('nav.overview') : t('nav.platformGroup'))}
+						stats={stats}
+					/>
+					<SidebarActions items={actions} ariaLabel={t('nav.actions')} />
 					<SidebarNav
 						module={{
 							items: menuItems,
@@ -274,14 +147,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
 							ariaLabel: t('app.title')
 						}}
 					/>
-					<SidebarActions items={actions} ariaLabel={t('nav.actions')} />
-					<div className="sidebar-foot">
-						<GitHubMark />
-					</div>
+					<SidebarFoot />
 				</Layout.Sider>
 				<Layout className="shell-main">
 					<TopBar />
-					<Layout.Content className="shell-content">{children}</Layout.Content>
+					<Layout.Content id="workspace" tabIndex={-1} className="shell-content">
+						{children}
+					</Layout.Content>
 				</Layout>
 			</Layout>
 		</PageHeaderProvider>

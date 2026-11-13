@@ -14,7 +14,11 @@ import en from '../src/lib/i18n/locales/en-US.json';
 import indexHtml from '../index.html?raw';
 import faviconSvg from '../public/favicon.svg?raw';
 
-const alice = { id: '11111111-1111-1111-1111-111111111111', username: 'alice', displayName: 'Alice' };
+const alice = {
+	id: '11111111-1111-1111-1111-111111111111',
+	username: 'alice',
+	displayName: 'Alice'
+};
 const siteAbc = {
 	siteId: 'abc',
 	slug: 'abc',
@@ -60,6 +64,7 @@ vi.mock('../src/lib/api/management', () => ({
 	getSite: (...args: unknown[]) => getSite(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
+	currentAuthGeneration: () => 0,
 	ApiError: class ApiError extends Error {
 		constructor(
 			public status: number,
@@ -170,12 +175,8 @@ describe('route titles', () => {
 	it('titles the session error screen while no route renders', async () => {
 		sessionWith('error');
 		renderAt('/sites');
-		await waitFor(() =>
-			expect(screen.getByText(zh['session.errorTitle'])).toBeDefined()
-		);
-		await waitFor(() =>
-			expect(document.title).toBe(`Fuyao Manager - ${zh['session.errorTitle']}`)
-		);
+		await waitFor(() => expect(screen.getByText(zh['session.errorTitle'])).toBeDefined());
+		await waitFor(() => expect(document.title).toBe(`Fuyao Manager - ${zh['session.errorTitle']}`));
 	});
 });
 

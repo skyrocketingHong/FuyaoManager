@@ -7,7 +7,8 @@
  * is never disguised as an empty catalog.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Empty, Table, Tooltip, Typography } from 'antd';
+import { Alert, Button, Empty, Tooltip, Typography } from 'antd';
+import DataTable from '../components/DataTable';
 import type { ColumnsType } from 'antd/es/table';
 import { listThemes, type Theme } from '../lib/api/management';
 import { apiErrorKey } from '../lib/i18n/errors';
@@ -125,7 +126,7 @@ export default function ThemesCatalogPage() {
 						</Tooltip>
 					}
 				>
-					<Table<Theme>
+					<DataTable<Theme>
 						rowKey="id"
 						columns={columns}
 						dataSource={themes ?? []}

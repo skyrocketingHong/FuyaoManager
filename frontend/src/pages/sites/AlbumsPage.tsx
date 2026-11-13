@@ -6,22 +6,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import {
-	Alert,
-	Button,
-	Input,
-	Modal,
-	Popconfirm,
-	Select,
-	Space,
-	Table,
-	Tag,
-	Upload,
-	message
-} from 'antd';
+import { Alert, Button, Input, Modal, Popconfirm, Select, Space, Tag, Upload, message } from 'antd';
 import type { UploadFile } from 'antd';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader, PageTabs } from '../../components/PageHeader';
+import DataTable from '../../components/DataTable';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import PageLoading from '../../components/PageLoading';
 import { TablePanel } from '../../components/Panel';
@@ -322,7 +311,11 @@ export default function AlbumsPage() {
 		index !== null && (index.years ?? []).length > 0 ? (
 			<PageTabs
 				value={year}
-				options={(index.years ?? []).map((y) => ({ key: String(y), label: String(y), value: String(y) }))}
+				options={(index.years ?? []).map((y) => ({
+					key: String(y),
+					label: String(y),
+					value: String(y)
+				}))}
 				onChange={(key) => {
 					setYear(key);
 					void loadYear(key);
@@ -433,7 +426,7 @@ export default function AlbumsPage() {
 					) : doc.photos.length === 0 ? (
 						<p>{t('albums.empty')}</p>
 					) : (
-						<Table<AlbumPhotoEntry>
+						<DataTable<AlbumPhotoEntry>
 							rowKey="filename"
 							size="small"
 							dataSource={doc.photos}

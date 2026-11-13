@@ -35,15 +35,13 @@
 	padding-block: var(--space-2);
 }
 
-	/* The vertical rhythm lives on .ant-card-head-wrapper (padding-block
-	   var(--space-2)); the title carries no extra padding, or the two
-	   stack into a double-height header. */
-	.panel > .ant-card-head .ant-card-head-title {
-		white-space: normal;
-		overflow-wrap: anywhere;
-		font-size: var(--text-title);
-		font-weight: 600;
-	}
+.panel > .ant-card-head .ant-card-head-title {
+	white-space: normal;
+	overflow-wrap: anywhere;
+	font-size: var(--text-title);
+	font-weight: 600;
+	padding-block: 0;
+}
 
 .panel .ant-card-extra {
 	max-width: 100%;
@@ -185,6 +183,56 @@
 .ant-input::placeholder {
 	color: var(--muted-foreground);
 	opacity: 0.8;
+}
+
+.ant-input:disabled,
+.ant-input-affix-wrapper-disabled,
+.ant-select-disabled .ant-select-selector {
+	background: var(--muted);
+	color: var(--muted-foreground);
+	cursor: not-allowed;
+}
+
+/* The reference form rows use shared grid rhythm rather than inline widths. */
+.form-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+	gap: var(--space-4);
+}
+.form-grid + .form-grid {
+	margin-top: var(--space-4);
+}
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+	min-width: 0;
+	margin-bottom: var(--space-3);
+}
+.field-label {
+	font-size: var(--text-body);
+	color: var(--muted-foreground);
+}
+.social-link-row {
+	display: grid;
+	grid-template-columns: minmax(120px, 1fr) minmax(180px, 2fr) minmax(100px, 1fr) auto;
+	gap: var(--space-2);
+	align-items: center;
+	margin-bottom: var(--space-2);
+}
+@media (max-width: 767px) {
+	.social-link-row {
+		grid-template-columns: minmax(0, 1fr) auto;
+		padding-block: var(--space-2);
+		border-bottom: 1px solid var(--border);
+	}
+	.social-link-row > .ant-input {
+		grid-column: 1;
+	}
+	.social-link-row > .ant-btn {
+		grid-column: 2;
+		grid-row: 1 / 4;
+	}
 }
 
 /* Button reset: drop the fake 3D shadow and keep icon glyphs at 16px. */

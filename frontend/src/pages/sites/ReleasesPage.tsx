@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Modal, Select, Space, Table, Typography, message } from 'antd';
+import { Alert, Button, Modal, Select, Space, Typography, message } from 'antd';
+import DataTable from '../../components/DataTable';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -32,10 +33,7 @@ interface CurrentView {
 
 /** Edge facts are explicit per-site state: loading and error never carry
  * facts, so the UI cannot borrow the previous site's deployable answer. */
-type EdgeFacts =
-	| { kind: 'loading' }
-	| { kind: 'error' }
-	| { kind: 'ready'; state: SiteEdgeState };
+type EdgeFacts = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; state: SiteEdgeState };
 
 /** A publish 422 answering application/json carries a failed release record. */
 function failedReleaseOf(err: unknown): Release | null {
@@ -362,56 +360,60 @@ export default function ReleasesPage() {
 							</Space>
 						) : null}
 						<TablePanel>
-						<Table<Release>
-							rowKey="id"
-							dataSource={releases}
-							pagination={false}
-							columns={[
-								{
-									title: t('releases.buildColumn'),
-									render: (_, record) => (
-										<Typography.Text className="version-text">{record.buildId.slice(0, 8)}</Typography.Text>
-									)
-								},
-								{
-									title: t('releases.themeColumn'),
-									render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
-								},
-								{
-									title: t('builds.status'),
-									dataIndex: 'status',
-									render: (status: string) => (
-										<StatusTag
-											kind={status === 'live' ? 'success' : status === 'failed' ? 'danger' : 'neutral'}
-										>
-											{t(`releases.status.${status}` as never)}
-										</StatusTag>
-									)
-								},
-								{
-									title: t('releases.reasons'),
-									render: (_, record) => record.reasons.join(', ')
-								},
-								{
-									render: (_, record) => (
-										<Space>
-											{record.failure ? (
-												<Typography.Text type="danger">{record.failure.stage}</Typography.Text>
-											) : null}
-											{editable && record.status !== 'live' && record.status !== 'failed' ? (
-												<Button
-													size="small"
-													disabled={isolated}
-													onClick={() => setRollbackTarget(record)}
-												>
-													{t('releases.rollback')}
-												</Button>
-											) : null}
-										</Space>
-									)
-								}
-							]}
-						/>
+							<DataTable<Release>
+								rowKey="id"
+								dataSource={releases}
+								pagination={false}
+								columns={[
+									{
+										title: t('releases.buildColumn'),
+										render: (_, record) => (
+											<Typography.Text className="version-text">
+												{record.buildId.slice(0, 8)}
+											</Typography.Text>
+										)
+									},
+									{
+										title: t('releases.themeColumn'),
+										render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
+									},
+									{
+										title: t('builds.status'),
+										dataIndex: 'status',
+										render: (status: string) => (
+											<StatusTag
+												kind={
+													status === 'live' ? 'success' : status === 'failed' ? 'danger' : 'neutral'
+												}
+											>
+												{t(`releases.status.${status}` as never)}
+											</StatusTag>
+										)
+									},
+									{
+										title: t('releases.reasons'),
+										render: (_, record) => record.reasons.join(', ')
+									},
+									{
+										render: (_, record) => (
+											<Space>
+												{record.failure ? (
+													<Typography.Text type="danger">{record.failure.stage}</Typography.Text>
+												) : null}
+												{editable && record.status !== 'live' && record.status !== 'failed' ? (
+													<Button
+														size="small"
+														disabled={isolated}
+														onClick={() => setRollbackTarget(record)}
+													>
+														{t('releases.rollback')}
+													</Button>
+												) : null}
+											</Space>
+										)
+									}
+								]}
+							/>
 						</TablePanel>
 					</>
 				)}

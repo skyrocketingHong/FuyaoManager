@@ -34,7 +34,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
 │   │   ├── config/            # 环境变量加载与校验
-│   │   ├── db/                # 连接池 + SQL 迁移（0001-0012）
+│   │   ├── db/                # 连接池 + SQL 迁移（0001-0013）
 │   │   ├── model/             # 共享记录
 │   │   ├── store/             # 用户、会话、通行密钥、一次性码、站点、
 │   │   │                      # 主题、构建、发布、媒体任务、网络入口
@@ -65,9 +65,10 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── src/lib/theme/         # 日夜状态 + 语义令牌装配
 │   ├── src/lib/session/       # 会话状态：匿名/受限/完整/错误
 │   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
-│   │                          # TablePanel、PageLoading、StatusTag、layout/
-│   │                          # （AppShell、SidebarNav/SidebarActions）
-│   ├── src/styles/            # base / shell / sidebar / pages 样式（语义变量）
+│   │                          # TablePanel、DataTable、PageLoading、StatusTag、
+│   │                          # RouteErrorPage、layout/（AppShell、TopBar、
+│   │                          # SidebarInfo/Actions/Nav/Foot）
+│   ├── src/styles/            # base / shell / sidebar / statusbar / pages 样式（语义变量）
 │   ├── src/pages/             # 登录、通行密钥绑定、账号设置、主题目录、站点
 │   │                          # 与各业务页
 │   └── tests/                 # vitest 测试（jsdom）
@@ -84,6 +85,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针
+    ├── UI_REFERENCE.md / UI_REFERENCE_ZH.md # 控制台复用来源及适配边界
     └── source-mapping/commit-map-from-fuyaohomepage.txt
 ```
 

@@ -6,18 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
-import {
-	Alert,
-	Button,
-	Col,
-	Empty,
-	Form,
-	Input,
-	Modal,
-	Row,
-	Select,
-	Table
-} from 'antd';
+import { Alert, Button, Col, Empty, Form, Input, Modal, Row, Select } from 'antd';
 import {
 	createSite,
 	listThemes,
@@ -26,6 +15,7 @@ import {
 	type Theme
 } from '../lib/api/management';
 import { apiErrorKey } from '../lib/i18n/errors';
+import { currentAuthGeneration } from '../lib/api/client';
 import { t, type MessageKey } from '../lib/i18n';
 import { sessionSnapshot, subscribeSession } from '../lib/session';
 import {
@@ -36,6 +26,7 @@ import {
 } from '../lib/sites/site-list';
 import { usePageHeader } from '../components/PageHeader';
 import PageLoading from '../components/PageLoading';
+import DataTable from '../components/DataTable';
 import StatusTag, { type StatusKind } from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
 
@@ -64,13 +55,19 @@ export default function SitesPage() {
 	const [themes, setThemes] = useState<Theme[] | null>(null);
 	const [retrying, setRetrying] = useState<string | null>(null);
 	const [form] = Form.useForm<CreateForm>();
+	const authGeneration = currentAuthGeneration();
+	async function reloadSites() {
+		const ownGeneration = currentAuthGeneration();
+		setErrorKey(null);
+		await loadSiteList(true);
+		if (ownGeneration !== currentAuthGeneration()) return;
+		setErrorKey(siteListSnapshot().status === 'error' ? 'error.generic' : null);
+	}
 
 	useEffect(() => {
 		if (session.status !== 'authenticated') return;
-		void loadSiteList(true).then(() => {
-			if (siteListSnapshot().status === 'error') setErrorKey('error.generic');
-		});
-	}, [session.status]);
+		void reloadSites();
+	}, [session.status, session.user?.id, authGeneration]);
 
 	useEffect(() => {
 		if (!createOpen || themes !== null) return;
@@ -96,7 +93,10 @@ export default function SitesPage() {
 	// present; standalone rendering (tests) keeps it local.
 	const headerActive = usePageHeader({ actions: createButton });
 
-	if (session.status === 'loading' || (siteList.status === 'loading' && siteList.sites.length === 0)) {
+	if (
+		session.status === 'loading' ||
+		(siteList.status === 'loading' && siteList.sites.length === 0)
+	) {
 		return <PageLoading spec="page" label={t('common.loading')} />;
 	}
 	if (errorKey !== null) {
@@ -106,7 +106,7 @@ export default function SitesPage() {
 				showIcon
 				title={t(errorKey)}
 				action={
-					<Button size="small" onClick={() => void loadSiteList(true)}>
+					<Button size="small" onClick={() => void reloadSites()}>
 						{t('common.retry')}
 					</Button>
 				}
@@ -115,6 +115,7 @@ export default function SitesPage() {
 	}
 
 	async function handleCreate(values: CreateForm) {
+		const ownGeneration = currentAuthGeneration();
 		setCreating(true);
 		setCreateError(null);
 		try {
@@ -132,28 +133,31 @@ export default function SitesPage() {
 				body.themeConfig = {};
 			}
 			const site = await createSite(body as never);
-			upsertSite(site);
+			if (ownGeneration !== currentAuthGeneration()) return;
+			upsertSite(site, ownGeneration);
 			setCreateOpen(false);
 			form.resetFields();
 			if (site.provisionState === 'failed') {
 				setErrorKey(null);
 			}
 		} catch (err) {
+			if (ownGeneration !== currentAuthGeneration()) return;
 			setCreateError(apiErrorKey(err));
 		} finally {
-			setCreating(false);
+			if (ownGeneration === currentAuthGeneration()) setCreating(false);
 		}
 	}
 
 	async function handleRetry(site: Site) {
+		const ownGeneration = currentAuthGeneration();
 		setRetrying(site.siteId);
 		try {
 			const refreshed = await provisionSite(site.siteId);
-			upsertSite(refreshed);
+			upsertSite(refreshed, ownGeneration);
 		} catch {
 			// Keep the row as-is; the failure record stays visible.
 		} finally {
-			setRetrying(null);
+			if (ownGeneration === currentAuthGeneration()) setRetrying(null);
 		}
 	}
 
@@ -161,14 +165,16 @@ export default function SitesPage() {
 
 	return (
 		<div className="page-stack">
-			{!headerActive ? <div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div> : null}
+			{!headerActive ? (
+				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
+			) : null}
 			{sites.length === 0 ? (
 				<TablePanel>
 					<Empty description={t('sites.empty')} />
 				</TablePanel>
 			) : (
 				<TablePanel>
-					<Table<Site>
+					<DataTable<Site>
 						rowKey="siteId"
 						pagination={false}
 						dataSource={sites}

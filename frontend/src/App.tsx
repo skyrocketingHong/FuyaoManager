@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Button, Card, Result, Spin } from 'antd';
@@ -28,20 +28,20 @@ import ReleasesPage from './pages/sites/ReleasesPage';
 
 /** Page components keyed by navigation item id; the route table consumes
  * the same metadata as the sidebar menu, so they cannot drift apart. */
-const pageByNavId: Record<string, ReactNode> = {
-	sites: <SitesPage />,
-	themes: <ThemesCatalogPage />,
-	'site.overview': <SiteDetailPage />,
-	'site.settings': <SettingsPage />,
-	'site.config': <SiteConfigPage />,
-	'site.posts': <PostsPage />,
-	'site.friends': <FriendsPage />,
-	'site.albums': <AlbumsPage />,
-	'site.footprints': <FootprintsPage />,
-	'site.theme': <ThemePage />,
-	'site.builds': <BuildsPage />,
-	'site.releases': <ReleasesPage />,
-	'account': <AccountSettingsPage />
+const pageByNavId: Record<string, ComponentType> = {
+	sites: SitesPage,
+	themes: ThemesCatalogPage,
+	'site.overview': SiteDetailPage,
+	'site.settings': SettingsPage,
+	'site.config': SiteConfigPage,
+	'site.posts': PostsPage,
+	'site.friends': FriendsPage,
+	'site.albums': AlbumsPage,
+	'site.footprints': FootprintsPage,
+	'site.theme': ThemePage,
+	'site.builds': BuildsPage,
+	'site.releases': ReleasesPage,
+	account: AccountSettingsPage
 };
 
 type Status = ReturnType<typeof sessionSnapshot>['status'];
@@ -136,16 +136,18 @@ export default function App() {
 						<AppShell>
 							<Routes>
 								{navItems.map((item) => {
-									const page = pageByNavId[item.id];
+									const Page = pageByNavId[item.id];
 									return (
 										<Route
 											key={item.id}
 											path={item.path}
 											element={
 												item.scope === 'site' ? (
-													<SiteBoundary>{page}</SiteBoundary>
+													<SiteBoundary>
+														<Page />
+													</SiteBoundary>
 												) : (
-													page
+													<Page />
 												)
 											}
 										/>

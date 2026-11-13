@@ -14,6 +14,7 @@ export interface SidebarAction {
 	key: string;
 	label: string;
 	icon?: ReactNode;
+	trailing?: ReactNode;
 	active?: boolean;
 	onClick: () => void;
 }
@@ -37,6 +38,7 @@ export default function SidebarActions({
 					onClick={item.onClick}
 				>
 					<Trans text={item.label} />
+					{item.trailing}
 				</Button>
 			))}
 		</div>

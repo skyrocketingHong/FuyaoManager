@@ -10,7 +10,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 
-const alice = { id: '11111111-1111-1111-1111-111111111111', username: 'alice', displayName: 'Alice' };
+const alice = {
+	id: '11111111-1111-1111-1111-111111111111',
+	username: 'alice',
+	displayName: 'Alice'
+};
 const siteAbc = {
 	siteId: 'abc',
 	slug: 'abc',
@@ -56,6 +60,7 @@ vi.mock('../src/lib/api/management', () => ({
 	getSite: (...args: unknown[]) => getSite(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
+	currentAuthGeneration: () => 0,
 	ApiError: class ApiError extends Error {
 		constructor(
 			public status: number,
@@ -72,7 +77,28 @@ vi.mock('../src/pages/AccountSettingsPage', () => ({
 	default: () => <div>page-account</div>
 }));
 vi.mock('../src/pages/BindPasskeyPage', () => ({ default: () => <div>page-bind</div> }));
-vi.mock('../src/pages/SitesPage', () => ({ default: () => <div>page-sites</div> }));
+vi.mock('../src/pages/SitesPage', async () => {
+	const { useState } = await import('react');
+	const { t } = await import('../src/lib/i18n');
+	return {
+		default: function SitesMarker() {
+			const [draft, setDraft] = useState('initial');
+			return (
+				<div>
+					<span>page-sites</span>
+					<label>
+						{t('common.save')}
+						<input
+							aria-label="draft-value"
+							value={draft}
+							onChange={(event) => setDraft(event.target.value)}
+						/>
+					</label>
+				</div>
+			);
+		}
+	};
+});
 vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-themes</div> }));
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
@@ -226,9 +252,7 @@ describe('deep links and menu selection', () => {
 		);
 		getSite.mockRejectedValue(notFound);
 		renderAt('/sites/ghost/posts');
-		await waitFor(() =>
-			expect(screen.getByText(zh['site.boundary.notFoundTitle'])).toBeDefined()
-		);
+		await waitFor(() => expect(screen.getByText(zh['site.boundary.notFoundTitle'])).toBeDefined());
 		expect(screen.queryByText('page-sites')).toBeNull();
 	});
 });
@@ -240,11 +264,18 @@ describe('sidebar shell', () => {
 		renderAt('/sites');
 		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
 		expect(document.querySelector('.sidebar-brand img[src="/favicon.svg"]')).not.toBeNull();
-		expect(screen.getByText(zh['nav.sites'])).toBeDefined();
+		expect(screen.queryByText(zh['nav.sites'])).toBeNull();
 		expect(screen.getByText(zh['nav.themesCatalog'])).toBeDefined();
 		const home = screen.getByText(zh['nav.platformHome']).closest('button');
 		expect(home).not.toBeNull();
 		expect(home?.getAttribute('aria-current')).toBe('page');
+		const sidebar = document.querySelector('.app-sider')!;
+		const actions = sidebar.querySelector('.sidebar-actions')!;
+		expect(
+			actions.compareDocumentPosition(sidebar.querySelector('nav')!) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).not.toBe(0);
+		expect(sidebar.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
 		expect(screen.queryByText(zh['nav.overview'])).toBeNull();
 	});
 
@@ -277,5 +308,17 @@ describe('sidebar shell', () => {
 			fireEvent.click(screen.getByText(zh['nav.platformHome']).closest('button')!);
 		});
 		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
+	});
+
+	it('updates the page locale without remounting its draft', async () => {
+		renderAt('/sites');
+		const input = (await screen.findByRole('textbox', { name: 'draft-value' })) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: 'unsaved' } });
+		fireEvent.click(screen.getByRole('button', { name: 'en-US' }));
+		await waitFor(() => expect(screen.getByText('Save')).toBeDefined());
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+		expect(document.title).toBe('Fuyao Manager - Sites');
 	});
 });
