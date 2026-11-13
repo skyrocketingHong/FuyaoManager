@@ -54,3 +54,15 @@ export const auditLabels: Record<string, MessageKey> = {
 export function operationText(operation: string): string {
 	return auditLabels[operation] ? t(auditLabels[operation]) : operation;
 }
+
+export function changeValueText(field: string | undefined, value: string | undefined): string {
+	if (value === undefined) return t('admin.never');
+	if (field === 'siteRole' && value === '') return t('admin.noAccess');
+	if (field === 'siteRole' && ['owner', 'editor', 'viewer'].includes(value))
+		return t(`role.${value}` as MessageKey);
+	if (field === 'platformRole' && ['admin', 'member'].includes(value))
+		return t(`admin.role.${value}` as MessageKey);
+	if (field === 'status' && ['pending', 'active', 'disabled', 'deleted'].includes(value))
+		return t(`admin.status.${value}` as MessageKey);
+	return value;
+}

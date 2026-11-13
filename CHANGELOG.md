@@ -12,7 +12,7 @@ are maintained separately.
 ### Added
 
 - Full administrator user management: account creation and once-returned registration/recovery codes, profile and platform roles, lifecycle controls, per-site access, active-session management and passkey revocation.
-- Persistent operation/authentication audit (migration 0014), with operator, operation, outcome, keyword and time-range filters, pagination and metadata detail. Account changes and their success event commit atomically; secrets and request bodies are excluded.
+- Persistent operation/authentication audit (migrations 0014 and 0015), with operator, operation, outcome, keyword and time-range filters, pagination and canonical account/change/credential detail. Account changes and their success event commit atomically; secrets and request bodies are excluded.
 - Console appearance settings adapted from the reference platform: light/dark/system modes, twelve accent presets, custom colors, reset, legacy-preference migration and synchronized tabs.
 
 ### Fixed

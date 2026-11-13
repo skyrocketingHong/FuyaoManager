@@ -44,6 +44,12 @@ func (a *API) auditRoute(route routeSpec) http.HandlerFunc {
 			}
 		}
 		request := &store.AuditRequest{Event: event}
+		if id, err := uuid.Parse(r.PathValue("sessionId")); err == nil {
+			request.Event.Details.SessionID = &id
+		}
+		if id, err := uuid.Parse(r.PathValue("passkeyId")); err == nil {
+			request.Event.Details.PasskeyID = &id
+		}
 		r = r.WithContext(store.WithAuditRequest(r.Context(), request))
 		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		completed := false

@@ -22,6 +22,8 @@ Lifecycle and membership writes share the same transaction lock. Passkey sign-in
 
 ## Operation logs
 
+Detail includes the target username, before/after platform role, account status or site role, and the exact revoked session/passkey ID. Canonical values come from the write transaction; absent historical detail is not fabricated (migration 0015).
+
 Records start accumulating after migration 0014 is deployed; historical events are not fabricated. Filter and page by operator, operation, outcome, time range or keyword. Expanded rows show event/account/site IDs, the API template and transport peer. Forwarded headers are not trusted, so the peer may be the reverse proxy.
 
 The log covers authentication, administrative/business mutations and denied requests. Superseded reads canceled by filter changes are not recorded as failed operations. Administrative changes and their success event commit together; other requests are recorded by HTTP outcome, with persistence failures written to the service log. Allowlisted fields exclude codes, cookies, CSRF tokens, request bodies, raw query strings and credential bytes (ASVS 16.2.1, 16.2.5, 16.3.1, 16.3.2). Account details likewise expose only key/session metadata.

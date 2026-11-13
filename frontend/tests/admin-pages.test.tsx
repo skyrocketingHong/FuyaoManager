@@ -318,30 +318,47 @@ it('filters logs by outcome and expands metadata without inventing record detail
 		createdAt: member.createdAt,
 		actorId: member.id,
 		actorName: member.username,
-		operation: 'createUser',
+		operation: 'setUserRole',
 		resourceId: member.id,
 		siteId: null,
-		method: 'POST',
-		route: '/api/v1/admin/users',
+		method: 'PUT',
+		route: '/api/v1/admin/users/{userId}/role',
 		peerIp: '127.0.0.1',
-		status: 403,
-		outcome: 'failure'
+		status: 200,
+		outcome: 'success',
+		details: {
+			targetUsername: 'target.member',
+			field: 'platformRole',
+			before: 'member',
+			after: 'admin'
+		}
 	};
 	vi.mocked(service.listAudit).mockResolvedValue({
 		entries: [event],
 		total: 1,
 		page: 1,
 		pageSize: 50,
-		operations: ['createUser']
+		operations: ['setUserRole']
 	});
 	mount(LogsPage);
-	expect(await screen.findByText('Create user')).toBeDefined();
+	expect(await screen.findByText('Change platform role')).toBeDefined();
+	fireEvent.click(await screen.findByRole('button', { name: 'Expand row' }));
+	expect(await screen.findByText('/api/v1/admin/users/', { exact: false })).toBeDefined();
+	expect(screen.getByText('Before')).toBeDefined();
+	expect(screen.getByText('After')).toBeDefined();
+	expect(screen.getByText('Administrator')).toBeDefined();
+	vi.mocked(service.listAudit).mockResolvedValue({
+		entries: [],
+		total: 0,
+		page: 1,
+		pageSize: 50,
+		operations: ['setUserRole']
+	});
 	await choose(screen.getByRole('combobox', { name: 'Result' }), 'Failed');
 	await waitFor(() =>
 		expect(
 			new URLSearchParams(vi.mocked(service.listAudit).mock.calls.at(-1)?.[0]).get('outcome')
 		).toBe('failure')
 	);
-	fireEvent.click(await screen.findByRole('button', { name: 'Expand row' }));
-	expect(await screen.findByText('/api/v1/admin/users', { exact: false })).toBeDefined();
+	expect(await screen.findByText('No matching events')).toBeDefined();
 });

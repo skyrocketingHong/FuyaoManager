@@ -33,6 +33,11 @@ export default function UsersPage() {
 		[queryString]
 	);
 	const query = useAdminQuery(load);
+	useEffect(() => {
+		if (!query.data) return;
+		const lastPage = Math.max(1, Math.ceil(query.data.total / pageSize));
+		if (page > lastPage) setPage(lastPage);
+	}, [query.data?.total, page, pageSize]);
 	const mutation = useAdminMutation();
 	const [selected, setSelected] = useState<string | null>(null);
 	const [drawerDirty, setDrawerDirty] = useState(false);

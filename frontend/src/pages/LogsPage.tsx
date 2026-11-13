@@ -8,7 +8,7 @@ import StatusTag from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
 import { usePageHeader } from '../components/PageHeader';
 import { useAdminQuery } from '../lib/admin/requests';
-import { auditLabels, operationText, timeText } from '../lib/admin/presentation';
+import { auditLabels, changeValueText, operationText, timeText } from '../lib/admin/presentation';
 import { t } from '../lib/i18n';
 import { listAudit, queryString, type AuditEvent } from '../lib/api/admin';
 
@@ -154,6 +154,47 @@ export default function LogsPage() {
 										size="small"
 										column={1}
 										items={[
+											...(event.details?.targetUsername
+												? [
+														{
+															key: 'target-name',
+															label: t('admin.username'),
+															children: event.details.targetUsername
+														}
+													]
+												: []),
+											...(event.details?.field
+												? [
+														{
+															key: 'before',
+															label: t('audit.before'),
+															children: changeValueText(event.details.field, event.details.before)
+														},
+														{
+															key: 'after',
+															label: t('audit.after'),
+															children: changeValueText(event.details.field, event.details.after)
+														}
+													]
+												: []),
+											...(event.details?.sessionId
+												? [
+														{
+															key: 'session',
+															label: t('audit.sessionId'),
+															children: <code>{event.details.sessionId}</code>
+														}
+													]
+												: []),
+											...(event.details?.passkeyId
+												? [
+														{
+															key: 'passkey',
+															label: t('admin.passkeyId'),
+															children: <code>{event.details.passkeyId}</code>
+														}
+													]
+												: []),
 											{ key: 'id', label: t('audit.eventId'), children: <code>{event.id}</code> },
 											{
 												key: 'operation',
@@ -199,7 +240,12 @@ export default function LogsPage() {
 								{
 									title: t('audit.target'),
 									dataIndex: 'resourceId',
-									render: (value: string) => <code>{value}</code>
+									render: (value: string, event: AuditEvent) => (
+										<Space orientation="vertical" size={2}>
+											{event.details?.targetUsername && <span>{event.details.targetUsername}</span>}
+											<code>{value}</code>
+										</Space>
+									)
 								},
 								{
 									title: t('audit.outcome'),

@@ -150,7 +150,7 @@ func (s *Store) SetAccountSiteAccess(ctx context.Context, operatorID, userID, si
 	if err != nil {
 		return err
 	}
-	return commitAudited(ctx, tx, operatorID, userID, "setUserSiteAccess")
+	return commitAudited(ctx, tx, operatorID, userID, "setUserSiteAccess", AuditDetails{Field: "siteRole", Before: &oldRole, After: &role})
 }
 
 func (s *Store) AdminRevokeSessions(ctx context.Context, operatorID, userID uuid.UUID, sessionID *uuid.UUID) error {
@@ -183,7 +183,7 @@ func (s *Store) AdminRevokeSessions(ctx context.Context, operatorID, userID uuid
 	if sessionID != nil {
 		operation = "revokeUserSession"
 	}
-	return commitAudited(ctx, tx, operatorID, userID, operation)
+	return commitAudited(ctx, tx, operatorID, userID, operation, AuditDetails{SessionID: sessionID})
 }
 
 var ErrLastPasskey = errors.New("cannot remove your last passkey for the current relying party")
@@ -219,5 +219,5 @@ func (s *Store) AdminRevokePasskey(ctx context.Context, operatorID, userID, keyI
 	if err := revokeAccountArtifacts(ctx, tx, userID); err != nil {
 		return err
 	}
-	return commitAudited(ctx, tx, operatorID, userID, "revokeUserPasskey")
+	return commitAudited(ctx, tx, operatorID, userID, "revokeUserPasskey", AuditDetails{PasskeyID: &keyID})
 }

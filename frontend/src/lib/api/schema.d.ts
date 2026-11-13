@@ -1339,6 +1339,7 @@ export interface components {
             operations: string[];
         };
         AuditEvent: {
+            details?: components["schemas"]["AuditDetails"];
             /** Format: uuid */
             id: string;
             /** Format: date-time */
@@ -1356,6 +1357,18 @@ export interface components {
             status: number;
             /** @enum {string} */
             outcome: "success" | "failure";
+        };
+        /** @description Canonical administrative change metadata. Older records have no details; secret values and request bodies are never accepted here. */
+        AuditDetails: {
+            targetUsername?: string;
+            /** @enum {string} */
+            field?: "platformRole" | "status" | "siteRole";
+            before?: string;
+            after?: string;
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            passkeyId?: string;
         };
         /** @description Persisted failure record of a build task. */
         BuildFailure: {

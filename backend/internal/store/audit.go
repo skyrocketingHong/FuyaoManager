@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -14,18 +15,30 @@ import (
 // cookies, codes, credential material and headers never enter this record.
 // ASVS 16.2.1/16.2.5: correlate events without retaining authentication secrets.
 type AuditEvent struct {
-	ID         uuid.UUID  `json:"id"`
-	CreatedAt  time.Time  `json:"createdAt"`
-	ActorID    *uuid.UUID `json:"actorId"`
-	ActorName  string     `json:"actorName"`
-	Operation  string     `json:"operation"`
-	ResourceID string     `json:"resourceId"`
-	SiteID     *uuid.UUID `json:"siteId"`
-	Method     string     `json:"method"`
-	Route      string     `json:"route"`
-	PeerIP     string     `json:"peerIp"`
-	Status     int        `json:"status"`
-	Outcome    string     `json:"outcome"`
+	ID         uuid.UUID    `json:"id"`
+	CreatedAt  time.Time    `json:"createdAt"`
+	ActorID    *uuid.UUID   `json:"actorId"`
+	ActorName  string       `json:"actorName"`
+	Operation  string       `json:"operation"`
+	ResourceID string       `json:"resourceId"`
+	SiteID     *uuid.UUID   `json:"siteId"`
+	Method     string       `json:"method"`
+	Route      string       `json:"route"`
+	PeerIP     string       `json:"peerIp"`
+	Status     int          `json:"status"`
+	Outcome    string       `json:"outcome"`
+	Details    AuditDetails `json:"details"`
+}
+
+// Only canonical, non-secret values can enter audit details. This type must
+// never be replaced by a request-body map.
+type AuditDetails struct {
+	TargetUsername string     `json:"targetUsername,omitempty"`
+	Field          string     `json:"field,omitempty"`
+	Before         *string    `json:"before,omitempty"`
+	After          *string    `json:"after,omitempty"`
+	SessionID      *uuid.UUID `json:"sessionId,omitempty"`
+	PasskeyID      *uuid.UUID `json:"passkeyId,omitempty"`
 }
 
 type AuditRequest struct {
@@ -47,6 +60,10 @@ type auditExecutor interface {
 }
 
 func appendAudit(ctx context.Context, executor auditExecutor, event AuditEvent) error {
+	details, err := json.Marshal(event.Details)
+	if err != nil {
+		return err
+	}
 	if event.Status == 0 {
 		event.Status = 200
 	}
@@ -54,10 +71,10 @@ func appendAudit(ctx context.Context, executor auditExecutor, event AuditEvent) 
 	if event.Status >= 400 {
 		outcome = "failure"
 	}
-	_, err := executor.Exec(ctx, `INSERT INTO audit_events
-	 (id,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, newUUID(), event.ActorID, event.ActorName,
-		event.Operation, event.ResourceID, event.SiteID, event.Method, event.Route, event.PeerIP, event.Status, outcome)
+	_, err = executor.Exec(ctx, `INSERT INTO audit_events
+	 (id,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome,details)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`, newUUID(), event.ActorID, event.ActorName,
+		event.Operation, event.ResourceID, event.SiteID, event.Method, event.Route, event.PeerIP, event.Status, outcome, details)
 	return err
 }
 func (s *Store) AppendAudit(ctx context.Context, event AuditEvent) error {
@@ -66,7 +83,7 @@ func (s *Store) AppendAudit(ctx context.Context, event AuditEvent) error {
 
 // Administrative changes and their success event commit together. Failures
 // leave neither a partial change nor a misleading successful audit event.
-func commitAudited(ctx context.Context, tx pgx.Tx, actorID, targetID uuid.UUID, operation string) error {
+func commitAudited(ctx context.Context, tx pgx.Tx, actorID, targetID uuid.UUID, operation string, details ...AuditDetails) error {
 	event := AuditEvent{ActorID: &actorID, Operation: operation, ResourceID: targetID.String(), Status: 200}
 	request := AuditRequestFrom(ctx)
 	if request != nil {
@@ -79,6 +96,12 @@ func commitAudited(ctx context.Context, tx pgx.Tx, actorID, targetID uuid.UUID, 
 		if err := tx.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, actorID).Scan(&event.ActorName); err != nil {
 			return err
 		}
+	}
+	if len(details) > 0 {
+		event.Details = details[0]
+	}
+	if err := tx.QueryRow(ctx, `SELECT username FROM users WHERE id=$1`, targetID).Scan(&event.Details.TargetUsername); err != nil {
+		return err
 	}
 	if err := appendAudit(ctx, tx, event); err != nil {
 		return err
@@ -115,7 +138,7 @@ func literalPattern(value string) any {
 const auditFilter = ` WHERE ($1::text IS NULL OR operation=$1)
  AND ($2::text IS NULL OR outcome=$2)
  AND ($3::text IS NULL OR actor_name ILIKE $3)
- AND ($4::text IS NULL OR actor_name ILIKE $4 OR operation ILIKE $4 OR resource_id ILIKE $4)
+ AND ($4::text IS NULL OR actor_name ILIKE $4 OR operation ILIKE $4 OR resource_id ILIKE $4 OR details->>'targetUsername' ILIKE $4)
  AND ($5::timestamptz IS NULL OR created_at >= $5)
  AND ($6::timestamptz IS NULL OR created_at <= $6)`
 
@@ -125,13 +148,13 @@ func (s *Store) ListAudit(ctx context.Context, query AuditQuery) (AuditPage, err
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_events`+auditFilter, args...).Scan(&out.Total); err != nil {
 		return out, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT id,created_at,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome FROM audit_events`+auditFilter+` ORDER BY created_at DESC,id DESC LIMIT $7 OFFSET $8`, append(args, query.PageSize, (query.Page-1)*query.PageSize)...)
+	rows, err := s.Pool.Query(ctx, `SELECT id,created_at,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome,details FROM audit_events`+auditFilter+` ORDER BY created_at DESC,id DESC LIMIT $7 OFFSET $8`, append(args, query.PageSize, (query.Page-1)*query.PageSize)...)
 	if err != nil {
 		return out, err
 	}
 	for rows.Next() {
 		var event AuditEvent
-		if err := rows.Scan(&event.ID, &event.CreatedAt, &event.ActorID, &event.ActorName, &event.Operation, &event.ResourceID, &event.SiteID, &event.Method, &event.Route, &event.PeerIP, &event.Status, &event.Outcome); err != nil {
+		if err := rows.Scan(&event.ID, &event.CreatedAt, &event.ActorID, &event.ActorName, &event.Operation, &event.ResourceID, &event.SiteID, &event.Method, &event.Route, &event.PeerIP, &event.Status, &event.Outcome, &event.Details); err != nil {
 			rows.Close()
 			return out, err
 		}

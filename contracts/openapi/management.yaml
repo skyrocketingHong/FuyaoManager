@@ -3371,6 +3371,8 @@ components:
           outcome
         ]
       properties:
+        details:
+          $ref: '#/components/schemas/AuditDetails'
         id: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         actorId: { type: string, format: uuid, nullable: true }
@@ -3383,6 +3385,17 @@ components:
         peerIp: { type: string }
         status: { type: integer, minimum: 100, maximum: 599 }
         outcome: { type: string, enum: [success, failure] }
+    AuditDetails:
+      type: object
+      additionalProperties: false
+      description: Canonical administrative change metadata. Older records have no details; secret values and request bodies are never accepted here.
+      properties:
+        targetUsername: { type: string, maxLength: 64 }
+        field: { type: string, enum: [platformRole, status, siteRole] }
+        before: { type: string }
+        after: { type: string }
+        sessionId: { type: string, format: uuid }
+        passkeyId: { type: string, format: uuid }
     BuildFailure:
       type: object
       description: Persisted failure record of a build task.

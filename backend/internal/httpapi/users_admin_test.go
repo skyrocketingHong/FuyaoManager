@@ -338,3 +338,41 @@ func TestAdminAuditIgnoresCancelledRead(t *testing.T) {
 		t.Fatalf("cancelled read entered audit history: %d %v", count, err)
 	}
 }
+
+func TestAdminAuditCapturesCanonicalChangesAndCredentialTargets(t *testing.T) {
+	env := setup(t)
+	_, admin := adminClient(env)
+	user, token, _ := env.createUserSession("detail-target")
+	path := "/api/v1/admin/users/" + user.ID.String()
+	adminRequest(t, admin, "PUT", path+"/role", map[string]string{"platformRole": "admin"}, 200)
+	_, raw := adminRequest(t, admin, "GET", "/api/v1/admin/audit?operation=setUserRole&q="+user.ID.String(), nil, 200)
+	var page store.AuditPage
+	decodeJSONBody(t, raw, &page)
+	if page.Total != 1 {
+		t.Fatal("role event missing")
+	}
+	details := page.Entries[0].Details
+	if details.TargetUsername != "detail-target" || details.Field != "platformRole" || details.Before == nil || *details.Before != "member" || details.After == nil || *details.After != "admin" {
+		t.Fatalf("wrong change details: %+v", details)
+	}
+	auth, err := env.store.Sessions.GetAndTouch(t.Context(), sha256Sum64(token))
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminRequest(t, admin, "DELETE", path+"/sessions/"+auth.Session.ID.String(), nil, 204)
+	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/audit?operation=revokeUserSession", nil, 200)
+	decodeJSONBody(t, raw, &page)
+	if page.Total != 1 || page.Entries[0].Details.SessionID == nil || *page.Entries[0].Details.SessionID != auth.Session.ID {
+		t.Fatal("session target missing from audit")
+	}
+	keys, err := env.store.Passkeys.ListByUser(t.Context(), user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminRequest(t, admin, "DELETE", path+"/passkeys/"+keys[0].ID.String(), nil, 204)
+	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/audit?operation=revokeUserPasskey&q=detail-target", nil, 200)
+	decodeJSONBody(t, raw, &page)
+	if page.Total != 1 || page.Entries[0].Details.PasskeyID == nil || *page.Entries[0].Details.PasskeyID != keys[0].ID {
+		t.Fatal("passkey target or canonical name filter missing")
+	}
+}

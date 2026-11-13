@@ -338,7 +338,7 @@ func (s *Store) AdminSetPlatformRole(ctx context.Context, operatorID, targetID u
 	if err != nil {
 		return model.User{}, err
 	}
-	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserRole"); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserRole", AuditDetails{Field: "platformRole", Before: &target.PlatformRole, After: &role}); err != nil {
 		return model.User{}, err
 	}
 	return u, nil
@@ -436,7 +436,7 @@ func (s *Store) deactivateAccount(ctx context.Context, operatorID, targetID uuid
 	if targetStatus == model.UserStatusDeleted {
 		operation = "deleteUser"
 	}
-	if err := commitAudited(ctx, tx, operatorID, targetID, operation); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, operation, AuditDetails{Field: "status", Before: &target.Status, After: &targetStatus}); err != nil {
 		return model.User{}, err
 	}
 	return u, nil
@@ -484,7 +484,7 @@ func (s *Store) EnableAccount(ctx context.Context, operatorID, targetID uuid.UUI
 	if err != nil {
 		return model.User{}, err
 	}
-	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserStatus"); err != nil {
+	if err := commitAudited(ctx, tx, operatorID, targetID, "setUserStatus", AuditDetails{Field: "status", Before: &status, After: &u.Status}); err != nil {
 		return model.User{}, err
 	}
 	return u, nil

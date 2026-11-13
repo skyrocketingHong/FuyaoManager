@@ -45,5 +45,9 @@ func (a *API) handleUpdateAccountProfile(w http.ResponseWriter, r *http.Request,
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to update the account.")
 		return
 	}
+	if request := store.AuditRequestFrom(r.Context()); request != nil {
+		request.Event.ResourceID = updated.ID.String()
+		request.Event.Details.TargetUsername = updated.Username
+	}
 	writeJSON(w, http.StatusOK, toUserDTO(updated))
 }

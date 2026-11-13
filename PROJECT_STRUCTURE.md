@@ -40,7 +40,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
 │   │   ├── config/            # environment loading and validation
-│   │   ├── db/                # pool setup + SQL migrations (0001-0014)
+│   │   ├── db/                # pool setup + SQL migrations (0001-0015)
 │   │   ├── model/             # shared records
 │   │   ├── store/             # users, sessions, passkeys, auth codes, sites,
 │   │   │                      # themes, builds, releases, media tasks, network entries, audit
