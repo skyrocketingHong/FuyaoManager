@@ -71,6 +71,6 @@ superseded where they conflict with this section.
   build, API-contract, formatting, and vet checks passed. The 0.1.0 to 0.2.0
   product-version change and management-platform deployment were explicitly
   approved. Business publishing stays isolated; existing websites and data
-  are retained. Deployment and network results are recorded at cutover.
+  are retained. Deployment 0.2.0 (`c48c73c`) passed: the manager is active, the schema is 13, existing data and published-site pointers are unchanged, public API/assets return 404, and the Tailscale manager/API/assets return 200. Client-served artifacts match the build; existing websites remain 200 and the managed Caddy snippet is unchanged. The prior program and database backup are retained.
 
 - **Manual acceptance**: complete the real authenticator binding/sign-in and visual review, and confirm browser behavior after disconnecting and reconnecting Tailscale. Production deployment and program cleanup are recorded in M5 above.
