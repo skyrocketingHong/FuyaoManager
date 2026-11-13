@@ -125,13 +125,13 @@
 	align-items: stretch;
 	gap: var(--space-1);
 	min-height: 48px;
-	padding: var(--space-2) var(--space-1);
+	padding: 0 var(--space-1) var(--space-2);
 }
 .sidebar-actions .ant-btn {
 	width: 100%;
 	min-width: 0;
 	height: 40px;
-	padding-inline: var(--sidebar-gutter);
+	padding-inline: var(--space-2);
 	gap: var(--space-2);
 	justify-content: flex-start;
 	font-size: var(--text-body);
@@ -169,6 +169,18 @@
 	font-size: var(--text-caption);
 	font-weight: 600;
 	color: var(--muted-foreground);
+	padding-inline: 32px;
+}
+.app-sider .ant-menu-item {
+	margin-inline: 0;
+	width: 100%;
+}
+.app-sider .ant-menu-item .ant-menu-item-icon {
+	width: 16px;
+	height: 16px;
+}
+.app-sider .ant-menu-item-icon + .ant-menu-title-content {
+	margin-inline-start: var(--space-2);
 }
 .sidebar-foot {
 	display: flex;

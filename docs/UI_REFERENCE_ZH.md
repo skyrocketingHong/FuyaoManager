@@ -2,6 +2,8 @@
 
 # 管理台界面复用记录
 
+管理台自身的外观设置继续复用 `components/platform/features/settings/AppearancePage.tsx`、`styles/features/settings/appearance.css` 和 `lib/appearance.ts`：日间、夜间、跟随系统、12 种预设强调色、自定义取色及恢复默认。偏好按浏览器保存，兼容旧日夜设置并响应系统模式变化；管理台默认跟随系统，状态颜色独立于强调色。侧栏固定操作和菜单使用相同的 8px 内缩进与 16px 图标列，统一文字对齐。
+
 管理台按用户指定的 `robot-platform/frontend` 复用通用界面代码。本轮只读参考版本为 `8644ba55c7c1963892518ee77cc6bd18146144e9`；参考仓库未修改。
 
 | 参考模块（相对参考项目的 frontend）                                                  | 本仓实现                                                   | 复用内容                                                                   |

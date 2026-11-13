@@ -69,15 +69,15 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/lib/navigation/    # single navigation metadata (routes, menu, scope)
 │   ├── src/lib/webauthn/      # passkey ceremonies, JSON conversion, error mapping
 │   ├── src/lib/i18n/          # zh-CN / en-US dictionaries
-│   ├── src/lib/theme/         # day/night state + semantic token assembly
+│   ├── src/lib/theme/         # persisted light/dark/system mode, accent + semantic tokens
 │   ├── src/lib/session/       # session state: anonymous/restricted/full/error
 │   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
 │   │                          # TablePanel, DataTable, PageLoading, StatusTag,
 │   │                          # RouteErrorPage, layout/ (AppShell, TopBar,
 │   │                          # SidebarInfo/Actions/Nav/Foot)
-│   ├── src/styles/            # base / shell / sidebar / statusbar / pages CSS (semantic
+│   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance CSS (semantic
 │   │                          # variables)
-│   ├── src/pages/             # login, passkey binding, account settings,
+│   ├── src/pages/             # login, passkey binding, account and console appearance settings,
 │   │                          # themes catalog, sites, per-site surfaces
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/

@@ -1,0 +1,101 @@
+/* Generic controls from robot-platform/styles/features/settings/appearance.css. */
+.appearance-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-5);
+}
+.appearance-section {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-3);
+}
+.appearance-section + .appearance-section {
+	padding-top: var(--space-5);
+	border-top: 1px solid var(--border);
+}
+.appearance-section h2 {
+	margin: 0;
+	font-size: var(--text-title);
+	font-weight: 600;
+}
+.appearance-modes {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-2);
+}
+.appearance-modes .ant-radio-button-wrapper {
+	display: inline-flex;
+	align-items: center;
+	min-height: 44px;
+	height: auto;
+	border: 1px solid var(--control-border);
+	border-radius: var(--radius);
+	padding-inline: var(--space-5);
+}
+.appearance-modes .ant-radio-button-wrapper::before {
+	display: none;
+}
+.appearance-modes .ant-radio-button-wrapper > span:last-child {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+.appearance-modes .ant-radio-button-wrapper-checked {
+	border-color: var(--primary);
+	background: var(--accent);
+}
+.appearance-palette {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+	gap: var(--space-2);
+	width: 100%;
+}
+.appearance-color.ant-btn {
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: var(--space-2);
+	min-height: 44px;
+	height: auto;
+	padding: var(--space-2) var(--space-3);
+}
+.appearance-color.is-selected {
+	border-color: var(--primary);
+	color: var(--primary);
+	background: var(--accent);
+}
+.appearance-color > svg {
+	margin-left: auto;
+}
+.appearance-swatch {
+	display: inline-block;
+	flex: 0 0 auto;
+	width: 18px;
+	height: 18px;
+	border: 1px solid var(--control-border);
+	border-radius: 4px;
+}
+.appearance-custom,
+.topbar-appearance-content {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-3);
+}
+.appearance-custom {
+	margin-top: var(--space-2);
+}
+.appearance-custom .ant-btn {
+	min-height: 44px;
+	height: auto;
+}
+@media (max-width: 639.98px) {
+	.appearance-modes {
+		width: 100%;
+	}
+	.appearance-modes .ant-radio-button-wrapper {
+		flex: 1 1 auto;
+		justify-content: center;
+	}
+}

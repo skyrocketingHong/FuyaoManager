@@ -34,6 +34,7 @@ import TopBar from './TopBar';
 type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
 	themes: Palette,
+	appearance: Palette,
 	'site.posts': FileText,
 	'site.friends': Link2,
 	'site.albums': Images,
@@ -79,7 +80,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					.filter((item) => item.scope === 'site' && item.group === group.id)
 					.map((item) => menuEntry(item.id, siteId))
 			}))
-		: [menuEntry('themes', null)];
+		: [menuEntry('themes', null), menuEntry('appearance', null)];
 	const actions: SidebarAction[] = [
 		{
 			key: 'platform-home',

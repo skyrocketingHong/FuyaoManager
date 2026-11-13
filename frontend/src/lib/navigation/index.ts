@@ -20,20 +20,99 @@ export interface NavItem {
 
 export const navItems: readonly NavItem[] = [
 	{ id: 'sites', path: '/sites', scope: 'platform', group: 'platform', titleKey: 'nav.sites' },
-	{ id: 'themes', path: '/themes', scope: 'platform', group: 'platform', titleKey: 'nav.themesCatalog' },
+	{
+		id: 'themes',
+		path: '/themes',
+		scope: 'platform',
+		group: 'platform',
+		titleKey: 'nav.themesCatalog'
+	},
+	{
+		id: 'appearance',
+		path: '/appearance',
+		scope: 'platform',
+		group: 'platform',
+		titleKey: 'nav.appearance'
+	},
 	// The account settings page lives outside the sidebar menus: it is
 	// reached from the account dropdown in the top bar only.
-	{ id: 'account', path: '/account', scope: 'platform', group: 'platform', titleKey: 'nav.account' },
-	{ id: 'site.overview', path: '/sites/:siteId', scope: 'site', group: 'overview', titleKey: 'nav.overview' },
-	{ id: 'site.posts', path: '/sites/:siteId/posts', scope: 'site', group: 'content', titleKey: 'nav.posts' },
-	{ id: 'site.friends', path: '/sites/:siteId/friends', scope: 'site', group: 'content', titleKey: 'nav.friends' },
-	{ id: 'site.albums', path: '/sites/:siteId/albums', scope: 'site', group: 'content', titleKey: 'nav.albums' },
-	{ id: 'site.footprints', path: '/sites/:siteId/footprints', scope: 'site', group: 'content', titleKey: 'nav.footprints' },
-	{ id: 'site.settings', path: '/sites/:siteId/settings', scope: 'site', group: 'settings', titleKey: 'nav.settings' },
-	{ id: 'site.config', path: '/sites/:siteId/config', scope: 'site', group: 'settings', titleKey: 'nav.config' },
-	{ id: 'site.theme', path: '/sites/:siteId/theme', scope: 'site', group: 'settings', titleKey: 'nav.theme' },
-	{ id: 'site.builds', path: '/sites/:siteId/builds', scope: 'site', group: 'delivery', titleKey: 'nav.builds' },
-	{ id: 'site.releases', path: '/sites/:siteId/releases', scope: 'site', group: 'delivery', titleKey: 'nav.releases' }
+	{
+		id: 'account',
+		path: '/account',
+		scope: 'platform',
+		group: 'platform',
+		titleKey: 'nav.account'
+	},
+	{
+		id: 'site.overview',
+		path: '/sites/:siteId',
+		scope: 'site',
+		group: 'overview',
+		titleKey: 'nav.overview'
+	},
+	{
+		id: 'site.posts',
+		path: '/sites/:siteId/posts',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'nav.posts'
+	},
+	{
+		id: 'site.friends',
+		path: '/sites/:siteId/friends',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'nav.friends'
+	},
+	{
+		id: 'site.albums',
+		path: '/sites/:siteId/albums',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'nav.albums'
+	},
+	{
+		id: 'site.footprints',
+		path: '/sites/:siteId/footprints',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'nav.footprints'
+	},
+	{
+		id: 'site.settings',
+		path: '/sites/:siteId/settings',
+		scope: 'site',
+		group: 'settings',
+		titleKey: 'nav.settings'
+	},
+	{
+		id: 'site.config',
+		path: '/sites/:siteId/config',
+		scope: 'site',
+		group: 'settings',
+		titleKey: 'nav.config'
+	},
+	{
+		id: 'site.theme',
+		path: '/sites/:siteId/theme',
+		scope: 'site',
+		group: 'settings',
+		titleKey: 'nav.theme'
+	},
+	{
+		id: 'site.builds',
+		path: '/sites/:siteId/builds',
+		scope: 'site',
+		group: 'delivery',
+		titleKey: 'nav.builds'
+	},
+	{
+		id: 'site.releases',
+		path: '/sites/:siteId/releases',
+		scope: 'site',
+		group: 'delivery',
+		titleKey: 'nav.releases'
+	}
 ];
 
 export interface NavGroupMeta {

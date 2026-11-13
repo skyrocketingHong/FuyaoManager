@@ -10,6 +10,7 @@ import './styles/shell.css';
 import './styles/sidebar/sidebar.css';
 import './styles/statusbar/statusbar.css';
 import './styles/pages.css';
+import './styles/appearance.css';
 
 // A data router is required for the unsaved-changes navigation blocker.
 const router = createBrowserRouter([

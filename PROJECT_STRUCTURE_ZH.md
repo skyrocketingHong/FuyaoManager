@@ -62,14 +62,14 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── src/lib/navigation/    # 唯一导航元数据（路由、菜单、作用域）
 │   ├── src/lib/webauthn/      # 通行密钥仪式、JSON 转换、错误映射
 │   ├── src/lib/i18n/          # 中英文字典
-│   ├── src/lib/theme/         # 日夜状态 + 语义令牌装配
+│   ├── src/lib/theme/         # 日间/夜间/跟随系统、强调色持久化 + 语义令牌装配
 │   ├── src/lib/session/       # 会话状态：匿名/受限/完整/错误
 │   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
 │   │                          # TablePanel、DataTable、PageLoading、StatusTag、
 │   │                          # RouteErrorPage、layout/（AppShell、TopBar、
 │   │                          # SidebarInfo/Actions/Nav/Foot）
-│   ├── src/styles/            # base / shell / sidebar / statusbar / pages 样式（语义变量）
-│   ├── src/pages/             # 登录、通行密钥绑定、账号设置、主题目录、站点
+│   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance 样式
+│   ├── src/pages/             # 登录、通行密钥绑定、账号及管理台外观设置、主题目录、站点
 │   │                          # 与各业务页
 │   └── tests/                 # vitest 测试（jsdom）
 ├── contracts/

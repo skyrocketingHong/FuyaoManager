@@ -22,7 +22,7 @@ export default function SidebarNav({ module }: { module: SidebarNavModule }) {
 			<Menu
 				theme="light"
 				mode="inline"
-				inlineIndent={0}
+				inlineIndent={8}
 				items={module.items}
 				selectedKeys={module.selectedKeys}
 				onClick={({ key }) => module.onSelect(String(key))}

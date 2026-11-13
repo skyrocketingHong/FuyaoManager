@@ -2,6 +2,8 @@ English | [简体中文](./UI_REFERENCE_ZH.md)
 
 # Console UI reuse
 
+Console appearance settings additionally reuse `components/platform/features/settings/AppearancePage.tsx`, `styles/features/settings/appearance.css` and `lib/appearance.ts`: light/dark/system modes, twelve accent presets, a custom color picker and reset. Preferences remain browser-local, retain legacy mode choices and track system changes. The console default is system mode; status colors remain independent of the selected accent. Sidebar actions and menus share an 8px inner inset and 16px icon column to align their text.
+
 The console reuses generic interface code from the user-selected `robot-platform/frontend`. The read-only reference revision for this iteration is `8644ba55c7c1963892518ee77cc6bd18146144e9`. The reference repository was not modified.
 
 | Reference module (relative to its frontend)                                          | Manager implementation                                     | Reused behavior                                                                                              |

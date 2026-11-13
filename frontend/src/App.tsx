@@ -13,6 +13,7 @@ import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
 import LoginPage from './pages/LoginPage';
 import BindPasskeyPage from './pages/BindPasskeyPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
+import AppearancePage from './pages/AppearancePage';
 import SitesPage from './pages/SitesPage';
 import ThemesCatalogPage from './pages/ThemesCatalogPage';
 import SiteDetailPage from './pages/sites/SiteDetailPage';
@@ -41,7 +42,8 @@ const pageByNavId: Record<string, ComponentType> = {
 	'site.theme': ThemePage,
 	'site.builds': BuildsPage,
 	'site.releases': ReleasesPage,
-	account: AccountSettingsPage
+	account: AccountSettingsPage,
+	appearance: AppearancePage
 };
 
 type Status = ReturnType<typeof sessionSnapshot>['status'];
@@ -78,8 +80,9 @@ export default function App() {
 
 	useEffect(() => {
 		initLocale();
-		initTheme();
+		const stopTheme = initTheme();
 		void loadSession();
+		return () => stopTheme?.();
 	}, []);
 
 	if (session.status === 'loading') {

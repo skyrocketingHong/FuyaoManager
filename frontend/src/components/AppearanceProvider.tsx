@@ -15,9 +15,9 @@ import { appearanceTheme } from '../lib/theme/appearance';
 
 export default function AppearanceProvider({ children }: { children: ReactNode }) {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
-	const { dark } = useSyncExternalStore(subscribeTheme, themeSnapshot);
+	const { dark, accent } = useSyncExternalStore(subscribeTheme, themeSnapshot);
 	const mode = dark ? 'dark' : 'light';
-	const appearance = useMemo(() => appearanceTheme(mode), [mode]);
+	const appearance = useMemo(() => appearanceTheme(mode, accent), [mode, accent]);
 
 	useLayoutEffect(() => {
 		const root = document.documentElement;

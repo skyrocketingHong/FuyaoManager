@@ -68,6 +68,11 @@ export default function TopBar() {
 									},
 									{ type: 'divider' },
 									{
+										key: 'appearance',
+										label: t('nav.appearance'),
+										onClick: () => navigate('/appearance')
+									},
+									{
 										key: 'account-settings',
 										label: t('nav.account'),
 										onClick: () => navigate('/account')

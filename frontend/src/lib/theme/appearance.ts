@@ -131,14 +131,15 @@ export interface Appearance {
 	config: ThemeConfig;
 }
 
-export function appearanceTheme(mode: AppearanceMode): Appearance {
+export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearance {
+	const accentColor = /^#[\da-f]{6}$/i.test(accent) ? accent : ACCENT;
 	const p = palettes[mode];
-	const selected = mixColor(p.card, ACCENT, mode === 'dark' ? 0.16 : 0.1);
+	const selected = mixColor(p.card, accentColor, mode === 'dark' ? 0.16 : 0.1);
 	const primaryText = [selected, p.card, p.surface, p.muted, p.sidebar].reduce(
 		(color, bg) => readableColor(color, bg),
-		ACCENT
+		accentColor
 	);
-	const primary = readableColor(ACCENT, '#ffffff');
+	const primary = readableColor(accentColor, '#ffffff');
 
 	const variables: Record<string, string> = {
 		'--background': p.background,
@@ -198,7 +199,7 @@ export function appearanceTheme(mode: AppearanceMode): Appearance {
 			colorPrimaryTextActive: primaryText,
 			colorPrimaryBg: selected,
 			colorPrimaryBgHover: selected,
-			colorPrimaryBorder: readableColor(ACCENT, p.card, 3),
+			colorPrimaryBorder: readableColor(accentColor, p.card, 3),
 			colorLink: primaryText,
 			colorLinkHover: primaryText,
 			colorLinkActive: primaryText,
