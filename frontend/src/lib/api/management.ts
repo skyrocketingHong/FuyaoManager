@@ -267,6 +267,26 @@ export async function rollbackRelease(siteId: string, releaseId: string): Promis
 
 // --- site content (single authority for the frozen-snapshot builds) ---
 
+export interface PostTaxonomy {
+	directories: { slug: string; title: string; postCount: number }[];
+	categories: { name: string; postCount: number }[];
+	tags: { name: string; postCount: number }[];
+	postCount: number;
+	canEdit: boolean;
+}
+
+export async function getPostTaxonomy(
+	siteId: ContentTarget,
+	signal?: AbortSignal
+): Promise<PostTaxonomy> {
+	const { data } = await api<PostTaxonomy>(
+		'GET',
+		`${contentResourcePath(siteId, 'posts')}/taxonomy`,
+		{ signal }
+	);
+	return data;
+}
+
 export async function listPosts(
 	siteId: ContentTarget,
 	query: string,

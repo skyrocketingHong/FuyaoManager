@@ -882,6 +882,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/posts/taxonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the site's blog taxonomy
+         * @description Aggregates the posts tree for editor assistance: first-level physical
+         *     directories (with their post counts and `_index.md` display titles),
+         *     the frontmatter category and tag vocabularies (counted once per
+         *     post), and the total post count. Drafts and posts with invalid dates
+         *     count; broken files fail the read instead of being skipped. The
+         *     taxonomy follows the site's posts source: shared content reads the
+         *     platform library with `canEdit=false`.
+         */
+        get: operations["getPostsTaxonomy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/posts/{postPath}": {
         parameters: {
             query?: never;
@@ -1454,6 +1480,28 @@ export interface paths {
          * @description A full platform administrator session and CSRF are required. Site editing permission does not grant platform content writes.
          */
         post: operations["platformCreatePost"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/taxonomy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Manage content/posts in the platform library
+         * @description A full session may read the independent platform content library's
+         *     blog taxonomy: directories, frontmatter categories and tags, and the
+         *     total post count. No site ID is required.
+         */
+        get: operations["platformGetPostsTaxonomy"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2173,6 +2221,22 @@ export interface components {
             body?: string;
             /** @description `sha256:<hex>` content digest backing the ETag. */
             digest: string;
+        };
+        PostDirectory: {
+            slug: string;
+            title: string;
+            postCount: number;
+        };
+        TaxonomyTerm: {
+            name: string;
+            postCount: number;
+        };
+        PostTaxonomy: {
+            directories: components["schemas"]["PostDirectory"][];
+            categories: components["schemas"]["TaxonomyTerm"][];
+            tags: components["schemas"]["TaxonomyTerm"][];
+            postCount: number;
+            canEdit: boolean;
         };
         PostList: {
             posts: components["schemas"]["Post"][];
@@ -4412,6 +4476,42 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getPostsTaxonomy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The complete blog taxonomy of the resolved source. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostTaxonomy"];
+                };
+            };
+            400: components["responses"]["InvalidSiteId"];
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
     getPost: {
         parameters: {
             query?: never;
@@ -6034,6 +6134,38 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            /** @description The content store is not configured (`content_unavailable`). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetPostsTaxonomy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The complete blog taxonomy of the platform library. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostTaxonomy"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
             /** @description The content store is not configured (`content_unavailable`). */
             503: {
                 headers: {

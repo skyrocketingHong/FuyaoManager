@@ -295,9 +295,9 @@
 	"posts.fieldSlug": "Slug",
 	"posts.fieldDraft": "Draft",
 	"posts.fieldBody": "Body (Markdown)",
-	"posts.categoriesPlaceholder": "Web development, Life",
-	"posts.fieldCategories": "Categories (comma-separated)",
-	"posts.fieldTags": "Tags (comma-separated)",
+	"posts.categoriesPlaceholder": "Select or search categories",
+	"posts.fieldCategories": "Categories",
+	"posts.fieldTags": "Tags",
 	"posts.fieldDescription": "Description",
 	"posts.fieldCover": "Cover URL",
 	"posts.fieldPath": "Path",
@@ -662,5 +662,6 @@
 	"audit.action.createRelease": "Publish build",
 	"audit.action.rollbackRelease": "Roll back release",
 	"app.openNavigation": "Open navigation",
-	"app.navigation": "Navigation"
+	"app.navigation": "Navigation",
+	"posts.taxonomyError": "Failed to read the taxonomy"
 }

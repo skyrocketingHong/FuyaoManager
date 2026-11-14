@@ -51,6 +51,48 @@ func bindingFixture(t *testing.T, id uuid.UUID, label string, photos int) *conte
 	return s
 }
 
+// TestStoreGetPostTaxonomyFollowsPostsSource proves the taxonomy read is
+// explicitly bound to the posts source: an independent site reads its own
+// directories and a platform-sourced site reads the library — never the
+// embedded store's own tree by method promotion.
+func TestStoreGetPostTaxonomyFollowsPostsSource(t *testing.T) {
+	id := uuid.New()
+	local := bindingFixture(t, id, "local", 0)
+	library := bindingFixture(t, content.PlatformScopeID, "library", 0)
+	resolve := func(sources store.ContentSources) func(context.Context, uuid.UUID) (store.ContentSourceRecord, error) {
+		return func(_ context.Context, got uuid.UUID) (store.ContentSourceRecord, error) {
+			if got != id {
+				t.Fatalf("resolved wrong site: %s", got)
+			}
+			return store.ContentSourceRecord{Sources: sources, Revision: 1}, nil
+		}
+	}
+
+	bound := &Store{Store: local, Platform: library, Resolve: resolve(store.IndependentSources())}
+	independent, err := bound.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if independent.PostCount != 1 {
+		t.Fatalf("independent taxonomy must read the local tree: %+v", independent)
+	}
+	if len(independent.Directories) != 1 || independent.Directories[0].Slug != "tech" {
+		t.Fatalf("independent directories must come from the local tree: %+v", independent.Directories)
+	}
+
+	bound.Resolve = resolve(store.ContentSources{Posts: "platform"})
+	shared, err := bound.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shared.PostCount != 1 {
+		t.Fatalf("platform-sourced taxonomy must read the library: %+v", shared)
+	}
+	if len(shared.Directories) != 1 || shared.Directories[0].Slug != "tech" {
+		t.Fatalf("platform directories must come from the library: %+v", shared.Directories)
+	}
+}
+
 func TestStoreResolvesCategoriesWithoutSharingSiteConfiguration(t *testing.T) {
 	id := uuid.New()
 	local := bindingFixture(t, id, "local", 2)

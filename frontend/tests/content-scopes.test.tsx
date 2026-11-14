@@ -52,6 +52,7 @@ vi.mock('../src/lib/api/management', async (original) => ({
 	getSite: vi.fn(),
 	getCurrentRelease: vi.fn(),
 	listPosts: vi.fn(),
+	getPostTaxonomy: vi.fn(),
 	getFriends: vi.fn(),
 	putFriends: vi.fn(),
 	getAlbums: vi.fn(),
@@ -118,6 +119,13 @@ beforeEach(() => {
 		etag: '"sources-1"'
 	});
 	vi.mocked(content.listPosts).mockResolvedValue({ posts: [], total: 0 });
+	vi.mocked(content.getPostTaxonomy).mockResolvedValue({
+		directories: [],
+		categories: [],
+		tags: [],
+		postCount: 0,
+		canEdit: true
+	});
 	vi.mocked(content.getFriends).mockResolvedValue({
 		friends: { online: [], offline: [] },
 		digest: '"friends"'
@@ -377,4 +385,57 @@ it('resets pagination, query, and search display when the content scope switches
 	const search = (screen.getByPlaceholderText('Search title / slug / tag') as HTMLInputElement);
 	expect(search.value).toBe('');
 	expect(screen.queryByLabelText('Page 2')).toBeNull();
+});
+
+it('discards stale taxonomy responses when the scope switches', async () => {
+	let resolvePlatformTaxonomy!: (value: content.PostTaxonomy) => void;
+	vi.mocked(content.getPostTaxonomy).mockImplementationOnce(
+		() =>
+			new Promise<content.PostTaxonomy>((resolve) => {
+				resolvePlatformTaxonomy = resolve;
+			})
+	);
+
+	function ScopeHarness() {
+		const [siteScope, setSiteScope] = useState(false);
+		return (
+			<>
+				<button type="button" onClick={() => setSiteScope(true)}>
+					switch-scope
+				</button>
+				{siteScope ? (
+					<ContentScopeProvider site={site()} resource="posts">
+						<PostsPage />
+					</ContentScopeProvider>
+				) : (
+					<ContentScopeProvider resource="posts">
+						<PostsPage />
+					</ContentScopeProvider>
+				)}
+			</>
+		);
+	}
+	mount(<ScopeHarness />, '/content/posts');
+	// The platform taxonomy read stays pending while the scope switches.
+	await waitFor(() => expect(content.getPostTaxonomy).toHaveBeenCalledTimes(1));
+
+	fireEvent.click(screen.getByText('switch-scope'));
+	await waitFor(() => expect(content.getPostTaxonomy).toHaveBeenCalledTimes(2));
+	// The second call reads the site scope through the bound target.
+	expect(content.getPostTaxonomy).toHaveBeenLastCalledWith('site', expect.anything());
+
+	// The stale platform response resolves late and must be discarded.
+	resolvePlatformTaxonomy({
+		directories: [{ slug: 'platform', title: 'Platform', postCount: 1 }],
+		categories: [{ name: 'platform-cat', postCount: 1 }],
+		tags: [],
+		postCount: 1,
+		canEdit: true
+	} satisfies content.PostTaxonomy);
+	// The site scope loads its own (empty) taxonomy without any UI error, and
+	// the stale response does not trigger another read.
+	await waitFor(() => {
+		expect(screen.queryByRole('alert')).toBeNull();
+	});
+	expect(content.getPostTaxonomy).toHaveBeenCalledTimes(2);
 });

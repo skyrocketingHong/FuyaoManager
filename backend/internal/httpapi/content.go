@@ -54,6 +54,27 @@ func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request, auth store
 	writeJSON(w, http.StatusOK, map[string]any{"posts": posts, "total": total, "canEdit": target.CanEdit})
 }
 
+// handleGetPostsTaxonomy returns the blog directory/category/tag taxonomy
+// of the resolved posts source (any member may read).
+func (a *API) handleGetPostsTaxonomy(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, false)
+	if !ok {
+		return
+	}
+	taxonomy, err := a.content.GetPostTaxonomy(target.ID)
+	if err != nil {
+		writeContentError(w, err, "Failed to read the posts taxonomy.")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"directories": taxonomy.Directories,
+		"categories":  taxonomy.Categories,
+		"tags":        taxonomy.Tags,
+		"postCount":   taxonomy.PostCount,
+		"canEdit":     target.CanEdit,
+	})
+}
+
 // handleCreatePost writes a new markdown post.
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	rec, ok := a.contentTarget(w, r, auth, true)

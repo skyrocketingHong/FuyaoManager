@@ -9,11 +9,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
+	AutoComplete,
 	Button,
 	Form,
 	Input,
 	Modal,
 	Popconfirm,
+	Select,
 	Space,
 	Switch,
 	Typography,
@@ -30,10 +32,12 @@ import {
 	createPost,
 	deletePost,
 	getPost,
+	getPostTaxonomy,
 	getSite,
 	listPosts,
 	putPost,
 	type Post,
+	type PostTaxonomy,
 	type Site
 } from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
@@ -46,8 +50,8 @@ interface PostForm {
 	date: string;
 	lastmod?: string;
 	draft: boolean;
-	categories?: string;
-	tags?: string;
+	categories?: string[];
+	tags?: string[];
 	description?: string;
 	cover?: string;
 	coverAlt?: string;
@@ -64,8 +68,8 @@ function toForm(post: Post): PostForm {
 		date: post.date,
 		lastmod: post.lastmod || undefined,
 		draft: post.draft,
-		categories: (post.categories ?? []).join(', '),
-		tags: (post.tags ?? []).join(', '),
+		categories: post.categories ?? [],
+		tags: post.tags ?? [],
 		description: post.description || undefined,
 		cover: post.cover || undefined,
 		coverAlt: post.coverAlt || undefined,
@@ -102,6 +106,31 @@ export default function PostsPage() {
 	const [form] = Form.useForm<PostForm>();
 	// Request epoch guards against late responses after site switches.
 	const epoch = useRef(0);
+	// The taxonomy loads on its own epoch with its own abort controller so
+	// editor saves never get reported through it and scope switches discard
+	// stale candidate responses.
+	const [taxonomy, setTaxonomy] = useState<PostTaxonomy | null>(null);
+	const [taxonomyError, setTaxonomyError] = useState<MessageKey | null>(null);
+	const [taxonomyLoading, setTaxonomyLoading] = useState(false);
+	const taxonomyEpoch = useRef(0);
+	const loadTaxonomy = useCallback(() => {
+		if (!target) return;
+		const my = ++taxonomyEpoch.current;
+		const controller = new AbortController();
+		setTaxonomyLoading(true);
+		setTaxonomyError(null);
+		getPostTaxonomy(target, controller.signal)
+			.then((result) => {
+				if (my !== taxonomyEpoch.current) return;
+				setTaxonomy(result);
+				setTaxonomyLoading(false);
+			})
+			.catch((err) => {
+				if (my !== taxonomyEpoch.current || controller.signal.aborted) return;
+				setTaxonomyError(apiErrorKey(err));
+				setTaxonomyLoading(false);
+			});
+	}, [target]);
 
 	const refresh = useCallback(
 		async (pageArg?: number, queryArg?: string, pageSizeArg?: number) => {
@@ -140,6 +169,10 @@ export default function PostsPage() {
 		setPage(1);
 		setQuery('');
 		setSearch('');
+		taxonomyEpoch.current++;
+		setTaxonomy(null);
+		setTaxonomyError(null);
+		loadTaxonomy();
 		let cancelled = false;
 		if (siteId && scope.canEdit === undefined)
 			getSite(siteId)
@@ -215,6 +248,7 @@ export default function PostsPage() {
 			setBaseline(savedForm);
 			setDigest('');
 			await refresh();
+			loadTaxonomy();
 		} catch (err) {
 			if (apiErrorKey(err) === 'error.conflict') {
 				setConflict(true);
@@ -227,19 +261,17 @@ export default function PostsPage() {
 		}
 	}
 
-	function toBody(values: PostForm): Partial<Post> {
-		return {
-			...values,
-			categories: (values.categories ?? '')
-				.split(',')
-				.map((s) => s.trim())
-				.filter(Boolean),
-			tags: (values.tags ?? '')
-				.split(',')
-				.map((s) => s.trim())
-				.filter(Boolean)
-		};
-	}
+function toBody(values: PostForm): Partial<Post> {
+	return {
+		...values,
+		categories: (values.categories ?? [])
+			.map((s) => s.trim())
+			.filter((s) => s !== ''),
+		tags: (values.tags ?? [])
+			.map((s) => s.trim())
+			.filter((s) => s !== '')
+	};
+}
 
 	// After a 412, adopt the server version as the new baseline and ETag
 	// while preserving every locally-touched field: only untouched fields
@@ -280,21 +312,11 @@ export default function PostsPage() {
 		if (!target) return;
 		setSaving(true);
 		try {
-			const body: Partial<Post> = {
-				...values,
-				categories: (values.categories ?? '')
-					.split(',')
-					.map((s) => s.trim())
-					.filter(Boolean),
-				tags: (values.tags ?? '')
-					.split(',')
-					.map((s) => s.trim())
-					.filter(Boolean)
-			};
-			await createPost(target, body);
+			await createPost(target, toBody(values));
 			void messageApi.success(t('posts.saved'));
 			setEditorOpen(false);
 			await refresh();
+			loadTaxonomy();
 		} catch (err) {
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
@@ -309,6 +331,7 @@ export default function PostsPage() {
 			const { etag } = await getPost(target, post.path);
 			await deletePost(target, post.path, etag);
 			await refresh();
+			loadTaxonomy();
 		} catch (err) {
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
@@ -525,7 +548,19 @@ export default function PostsPage() {
 									]}
 									style={{ flex: 1 }}
 								>
-									<Input />
+									<AutoComplete
+										style={{ width: '100%' }}
+										options={(taxonomy?.directories ?? []).map((dir) => ({
+											value: dir.slug,
+											label: `${dir.title} (${dir.slug})`
+										}))}
+										filterOption={(input, option) =>
+											String(option?.label ?? '')
+												.toLowerCase()
+												.includes(input.toLowerCase()) ||
+											String(option?.value ?? '').includes(input.toLowerCase())
+										}
+									/>
 								</Form.Item>
 								<Form.Item
 									name="slug"
@@ -544,12 +579,61 @@ export default function PostsPage() {
 							<Switch checkedChildren={t('posts.draft')} unCheckedChildren={t('posts.published')} />
 						</Form.Item>
 					</Space>
-						<Space size={12} style={{ display: 'flex' }} align="start">
-							<Form.Item name="categories" label={t('posts.fieldCategories')} style={{ flex: 1 }}>
-								<Input placeholder={t('posts.categoriesPlaceholder')} />
-							</Form.Item>
-							<Form.Item name="tags" label={t('posts.fieldTags')} style={{ flex: 1 }}>
-								<Input placeholder="Svelte, Go" />
+					{taxonomyError !== null ? (
+						<Alert
+							type="error"
+							showIcon
+							title={t('posts.taxonomyError')}
+							description={t(taxonomyError)}
+							action={
+								<Button size="small" onClick={loadTaxonomy}>
+									{t('common.retry')}
+								</Button>
+							}
+						/>
+					) : null}
+					<Space size={12} style={{ display: 'flex' }} align="start">
+						<Form.Item
+							name="categories"
+							label={t('posts.fieldCategories')}
+							style={{ flex: 1 }}
+						>
+							<Select
+								mode="multiple"
+								showSearch
+								allowClear
+								loading={taxonomyLoading}
+								style={{ width: '100%' }}
+								placeholder={t('posts.categoriesPlaceholder')}
+								options={(taxonomy?.categories ?? []).map((entry) => ({
+									value: entry.name,
+									label: entry.name
+								}))}
+								filterOption={(input, option) =>
+									String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+								}
+							/>
+						</Form.Item>
+						<Form.Item name="tags" label={t('posts.fieldTags')} style={{ flex: 1 }}>
+							<Select
+								mode="tags"
+								showSearch
+								loading={taxonomyLoading}
+								style={{ width: '100%' }}
+								options={(taxonomy?.tags ?? []).map((entry) => ({
+									value: entry.name,
+									label: entry.name
+								}))}
+								filterOption={(input, option) =>
+									String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+								}
+								onChange={(values: string[]) => {
+									const cleaned = values.filter((v) => v.trim() !== '');
+									if (cleaned.length !== values.length) {
+										form.setFieldValue('tags', cleaned);
+									}
+								}}
+							/>
 							</Form.Item>
 						</Space>
 					<Form.Item name="description" label={t('posts.fieldDescription')}>

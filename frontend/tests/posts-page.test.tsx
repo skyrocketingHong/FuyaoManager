@@ -5,7 +5,7 @@
  * create action.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes, createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, createMemoryRouter, RouterProvider, useRouteError } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
@@ -17,8 +17,18 @@ import { initLocale } from '../src/lib/i18n';
 vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	getSite: vi.fn(),
-	listPosts: vi.fn()
+	listPosts: vi.fn(),
+	createPost: vi.fn(),
+	getPostTaxonomy: vi.fn()
 }));
+
+const emptyTaxonomy = {
+	directories: [] as { slug: string; title: string; postCount: number }[],
+	categories: [] as { name: string; postCount: number }[],
+	tags: [] as { name: string; postCount: number }[],
+	postCount: 0,
+	canEdit: true
+};
 
 const ownerSite: Site = {
 	siteId: '11111111-1111-1111-1111-111111111111',
@@ -74,6 +84,12 @@ function Header() {
 	);
 }
 
+function RouteErrorDump() {
+	const error = useRouteError();
+	console.log('ROUTE-ERROR:', error, '| STACK:', JSON.stringify((error as Error)?.stack, null, 0).slice(0, 700));
+	return <div>route-crash</div>;
+}
+
 function mountPosts() {
 	const router = createMemoryRouter(
 		[
@@ -89,7 +105,7 @@ function mountPosts() {
 						</AntApp>
 					</ConfigProvider>
 				),
-				errorElement: <div>route-crash</div>
+				errorElement: <RouteErrorDump />
 			}
 		],
 		{ initialEntries: ['/sites/11111111-1111-1111-1111-111111111111/posts'] }
@@ -101,8 +117,15 @@ describe('PostsPage', () => {
 	afterEach(cleanup);
 
 	beforeEach(() => {
-		vi.mocked(management.getSite).mockResolvedValue(ownerSite);
+		vi.clearAllMocks();
+		vi.mocked(management.getSite).mockImplementation(() => Promise.resolve(ownerSite));
 		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 1 });
+		vi.mocked(management.createPost).mockResolvedValue({
+			...samplePost,
+			category: 'tech',
+			digest: 'sha256:' + 'c'.repeat(64)
+		});
+		vi.mocked(management.getPostTaxonomy).mockResolvedValue(emptyTaxonomy);
 		initLocale();
 	});
 
@@ -199,4 +222,95 @@ describe('PostsPage', () => {
 		await screen.findByText('Hello');
 		expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
 	});
+
+	it('picks taxonomy candidates in the editor and saves arrays, refreshing after the save', async () => {
+		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+			directories: [{ slug: 'tech', title: 'Tech', postCount: 2 }],
+			categories: [
+				{ name: 'go', postCount: 3 },
+				{ name: 'travel', postCount: 1 }
+			],
+			tags: [{ name: 'perf', postCount: 4 }],
+			postCount: 5,
+			canEdit: true
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		const taxonomyCallsBefore = vi.mocked(management.getPostTaxonomy).mock.calls.length;
+
+		fireEvent.click(screen.getByRole('button', { name: /New post/ }));
+		await waitFor(() =>
+			expect(
+				document.querySelector('.ant-modal .ant-form')
+			).not.toBeNull()
+		);
+
+		// The directory AutoComplete offers the taxonomy directories.
+		const category = screen.getByLabelText('Category');
+		fireEvent.mouseDown(category);
+		fireEvent.change(category, { target: { value: 'tech' } });
+		await waitFor(() => {
+			const options = Array.from(
+				document.querySelectorAll('.ant-select-item-option-content')
+			).map((node) => node.textContent);
+			if (!options.some((text) => text === 'Tech (tech)')) {
+				throw new Error('directory candidates missing');
+			}
+		});
+		fireEvent.keyDown(category, { key: 'Enter' });
+
+		// Existing categories and tags are searchable selections.
+		fireEvent.mouseDown(screen.getByLabelText('Categories'));
+		fireEvent.click(
+			await screen.findByText('go', { selector: '.ant-select-item-option-content' })
+		);
+		const tags = screen.getByLabelText('Tags');
+		fireEvent.mouseDown(tags);
+		fireEvent.change(tags, { target: { value: 'newtag' } });
+		fireEvent.keyDown(tags, { key: 'Enter', keyCode: 13 });
+
+		// Required title and slug must pass before the form submits.
+		fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'kept' } });
+		fireEvent.change(screen.getByLabelText('Slug'), { target: { value: 'kept' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(management.createPost).toHaveBeenCalled());
+		const body = vi.mocked(management.createPost).mock.calls.at(-1)?.[1] as {
+			category: string;
+			categories: string[];
+			tags: string[];
+		};
+		expect(body.category).toBe('tech');
+		expect(body.categories).toEqual(['go']);
+		expect(body.tags).toEqual(['newtag']);
+
+		// The saved article refreshes the taxonomy for the next editor.
+		await waitFor(() =>
+			expect(vi.mocked(management.getPostTaxonomy).mock.calls.length).toBeGreaterThan(
+				taxonomyCallsBefore
+			)
+		);
+	}, 15000);
+
+	it('shows a retryable taxonomy error and keeps the editor values', async () => {
+		vi.mocked(management.getPostTaxonomy).mockRejectedValueOnce(new TypeError('offline'));
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: /New post/ }));
+		const title = await screen.findByLabelText('Title');
+		console.log(
+			'GETSITE-RESULTS:',
+			JSON.stringify(vi.mocked(management.getSite).mock.results.map((r) => [r.type, typeof r.value, r.value && typeof (r.value as Promise<unknown>).then])),
+			'TAX-RESULTS:',
+			JSON.stringify(vi.mocked(management.getPostTaxonomy).mock.results.map((r) => [r.type, typeof r.value, r.value && typeof (r.value as Promise<unknown>).then])),
+		);
+		fireEvent.change(title, { target: { value: 'kept' } });
+		const retry = await screen.findByRole('button', { name: 'Retry' });
+		fireEvent.click(retry);
+		await waitFor(() =>
+			expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+		);
+		expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('kept');
+		// The retry re-read the taxonomy instead of faking an empty one.
+		await waitFor(() => expect(management.getPostTaxonomy).toHaveBeenCalledTimes(2));
+	}, 15000);
 });

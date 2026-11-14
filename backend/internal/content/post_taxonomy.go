@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 )
 
 // PostTaxonomy aggregates the blog directory structure and the frontmatter
@@ -87,10 +87,16 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 			}
 			// Only first-level directories aggregate; deeper nesting stays
 			// out of the taxonomy along with its files.
-			if strings.Contains(filepath.ToSlash(rel), "/") {
+			rel = filepath.ToSlash(rel)
+			if strings.Contains(rel, "/") {
 				return fs.SkipDir
 			}
-			dirSlugs = append(dirSlugs, filepath.ToSlash(rel))
+			// A directory whose slug is not a valid category name (and its
+			// whole subtree) never enters the candidates.
+			if !categoryPattern.MatchString(rel) {
+				return fs.SkipDir
+			}
+			dirSlugs = append(dirSlugs, rel)
 			return nil
 		}
 		rel, relErr := filepath.Rel(root, path)
@@ -104,7 +110,7 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 		if !ValidPostPath(rel) {
 			return nil // section files and multi-level shapes stay out
 		}
-		data, readErr := os.ReadFile(path)
+		data, _, readErr := s.ReadFile(scopeID, RootContent, "posts/"+rel)
 		if readErr != nil {
 			return fmt.Errorf("read post %s: %w", rel, readErr)
 		}
@@ -124,7 +130,11 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 		return PostTaxonomy{}, err
 	}
 	for _, slug := range dirSlugs {
-		title := strings.TrimSpace(indexTitle(s, scopeID, slug))
+		title, err := s.indexTitle(scopeID, slug)
+		if err != nil {
+			return PostTaxonomy{}, fmt.Errorf("read index for %s: %w", slug, err)
+		}
+		title = strings.TrimSpace(title)
 		if title == "" {
 			title = slug
 		}
@@ -146,20 +156,38 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	return tax, nil
 }
 
-// indexTitle reads the directory's _index.md title, degrading to an empty
-// value (which falls back to the slug) for a missing, symlinked, or broken
-// index — the display name is a cosmetic fallback, never a hard failure.
-// The resolve jail keeps a symlinked index from reading outside the scope.
-func indexTitle(s *Store, scopeID uuid.UUID, slug string) string {
+// indexTitle reads only the title from a directory's _index.md — no post
+// field types apply to an index. A missing index yields an empty title
+// (slug fallback), a symlinked index that escapes the jail is skipped the
+// same way as any other link, and real read or syntax failures surface as
+// errors instead of being disguised as "no title".
+func (s *Store) indexTitle(scopeID uuid.UUID, slug string) (string, error) {
 	data, _, err := s.ReadFile(scopeID, RootContent, "posts/"+slug+"/_index.md")
-	if err != nil {
-		return ""
+	if errors.Is(err, ErrNotFound) {
+		return "", nil
 	}
-	post, err := ParsePost(slug+"/_index.md", data)
-	if err != nil {
-		return ""
+	if errors.Is(err, ErrInvalidPath) {
+		// A linked index outside the jail is skipped, consistent with the
+		// symlink policy for the rest of the tree.
+		return "", nil
 	}
-	return post.Title
+	if err != nil {
+		return "", err
+	}
+	fm, _, err := SplitFrontmatter(data)
+	if err != nil {
+		return "", err
+	}
+	if len(strings.TrimSpace(string(fm))) == 0 {
+		return "", nil
+	}
+	var doc struct {
+		Title string `yaml:"title"`
+	}
+	if err := yaml.Unmarshal(fm, &doc); err != nil {
+		return "", err
+	}
+	return doc.Title, nil
 }
 
 // countTaxonomyTerms adds every non-blank term once per post, preserving

@@ -54,6 +54,19 @@ func (s *Store) ListPosts(id uuid.UUID, q string, p, n int) ([]content.Post, int
 	}
 	return t.ListPosts(k, q, p, n)
 }
+
+// GetPostTaxonomy forwards the blog taxonomy read to the scope bound to
+// the site's posts source. The explicit method overrides the embedded
+// content.Store promotion: without it, a site sourcing its posts from the
+// platform would read its own (nonexistent) local directories instead of
+// the platform library.
+func (s *Store) GetPostTaxonomy(id uuid.UUID) (content.PostTaxonomy, error) {
+	t, k, e := s.target(id, "posts", false)
+	if e != nil {
+		return content.PostTaxonomy{}, e
+	}
+	return t.GetPostTaxonomy(k)
+}
 func (s *Store) GetPost(id uuid.UUID, path string) (content.Post, error) {
 	t, k, e := s.target(id, "posts", false)
 	if e != nil {

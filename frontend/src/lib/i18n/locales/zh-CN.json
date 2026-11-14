@@ -295,9 +295,9 @@
 	"posts.fieldSlug": "Slug",
 	"posts.fieldDraft": "草稿",
 	"posts.fieldBody": "正文（Markdown）",
-	"posts.categoriesPlaceholder": "技术开发, 生活",
-	"posts.fieldCategories": "分类（逗号分隔）",
-	"posts.fieldTags": "标签（逗号分隔）",
+	"posts.categoriesPlaceholder": "选择或搜索分类",
+	"posts.fieldCategories": "分类",
+	"posts.fieldTags": "标签",
 	"posts.fieldDescription": "描述",
 	"posts.fieldCover": "封面 URL",
 	"posts.fieldPath": "路径",
@@ -662,5 +662,6 @@
 	"audit.action.createRelease": "发布构建",
 	"audit.action.rollbackRelease": "回滚发布",
 	"app.openNavigation": "打开导航",
-	"app.navigation": "导航"
+	"app.navigation": "导航",
+	"posts.taxonomyError": "目录读取失败"
 }

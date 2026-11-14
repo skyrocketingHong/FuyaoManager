@@ -92,6 +92,7 @@ type EdgeManager interface {
 // disables the content endpoints (503).
 type ContentStore interface {
 	ListPosts(siteID uuid.UUID, query string, page, pageSize int) ([]content.Post, int, error)
+	GetPostTaxonomy(siteID uuid.UUID) (content.PostTaxonomy, error)
 	GetPost(siteID uuid.UUID, rel string) (content.Post, error)
 	CreatePost(siteID uuid.UUID, post content.Post) (content.Post, error)
 	SavePost(siteID uuid.UUID, post content.Post, expectedDigest string) (content.Post, error)
@@ -224,6 +225,7 @@ func (a *API) routes() []routeSpec {
 		// Per-site content (single authority for posts, friends, social
 		// links, and the visual site configuration the builds consume).
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts", "listPosts", a.requireFullScope(a.contentRoute(a.handleListPosts))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts/taxonomy", "getPostsTaxonomy", a.requireFullScope(a.contentRoute(a.handleGetPostsTaxonomy))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/posts", "createPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleCreatePost)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/{postPath}", "getPost", a.requireFullScope(a.contentRoute(a.handleGetPost))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/posts/{postPath}", "putPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPost)))},

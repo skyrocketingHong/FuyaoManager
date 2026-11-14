@@ -1718,6 +1718,45 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/posts/taxonomy:
+    get:
+      operationId: getPostsTaxonomy
+      tags: [Content]
+      summary: Read the site's blog taxonomy
+      description: |
+        Aggregates the posts tree for editor assistance: first-level physical
+        directories (with their post counts and `_index.md` display titles),
+        the frontmatter category and tag vocabularies (counted once per
+        post), and the total post count. Drafts and posts with invalid dates
+        count; broken files fail the read instead of being skipped. The
+        taxonomy follows the site's posts source: shared content reads the
+        platform library with `canEdit=false`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: The complete blog taxonomy of the resolved source.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostTaxonomy'
+        '400':
+          $ref: '#/components/responses/InvalidSiteId'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/posts/{postPath}:
     get:
       operationId: getPost
@@ -3383,6 +3422,37 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
       x-required-platform-role: admin
+  /api/v1/content/posts/taxonomy:
+    get:
+      operationId: platformGetPostsTaxonomy
+      tags: [Platform content]
+      summary: Manage content/posts in the platform library
+      description: |-
+        A full session may read the independent platform content library's
+        blog taxonomy: directories, frontmatter categories and tags, and the
+        total post count. No site ID is required.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The complete blog taxonomy of the platform library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostTaxonomy'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          description: The content store is not configured (`content_unavailable`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/content/posts/{postPath}:
     get:
       operationId: platformGetPost
@@ -5005,6 +5075,44 @@ components:
           type: string
           description: '`sha256:<hex>` content digest backing the ETag.'
 
+    PostDirectory:
+      type: object
+      required: [slug, title, postCount]
+      properties:
+        slug:
+          type: string
+        title:
+          type: string
+        postCount:
+          type: integer
+    TaxonomyTerm:
+      type: object
+      required: [name, postCount]
+      properties:
+        name:
+          type: string
+        postCount:
+          type: integer
+    PostTaxonomy:
+      type: object
+      required: [directories, categories, tags, postCount, canEdit]
+      properties:
+        directories:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostDirectory'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxonomyTerm'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaxonomyTerm'
+        postCount:
+          type: integer
+        canEdit:
+          type: boolean
     PostList:
       type: object
       required: [posts, total]

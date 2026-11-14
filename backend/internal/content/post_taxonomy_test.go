@@ -282,3 +282,45 @@ func TestGetPostTaxonomyEmptyScope(t *testing.T) {
 		t.Fatalf("an empty tree is an empty taxonomy: %+v", empty)
 	}
 }
+
+// TestGetPostTaxonomyFiltersInvalidDirectorySlugs proves a first-level
+// directory whose slug is not a valid category name — and everything inside
+// it — stays out of the candidates.
+func TestGetPostTaxonomyFiltersInvalidDirectorySlugs(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	seedPostFile(t, s, id, "Travel/one.md", "---\ntitle: one\nslug: one\ndate: 2026-01-02\ndraft: false\ncategories: [travel]\n---\nx\n")
+	seedPostFile(t, s, id, "with space/two.md", "---\ntitle: two\nslug: two\ndate: 2026-01-02\ndraft: false\ncategories: [space]\n---\nx\n")
+	seedPostFile(t, s, id, "valid/real.md", "---\ntitle: real\nslug: real\ndate: 2026-01-02\ndraft: false\ncategories: [valid]\n---\nx\n")
+
+	tax, err := s.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := directoryBySlug(tax.Directories, "Travel"); ok {
+		t.Fatalf("an invalid directory slug must not list: %+v", tax.Directories)
+	}
+	if _, ok := directoryBySlug(tax.Directories, "with space"); ok {
+		t.Fatalf("an invalid directory slug must not list: %+v", tax.Directories)
+	}
+	if tax.PostCount != 1 {
+		t.Fatalf("the invalid directories' posts must not count: %d", tax.PostCount)
+	}
+	if _, ok := taxonomyTermCount(tax.Categories, "travel"); ok {
+		t.Fatalf("files inside invalid directories must not feed the vocabulary: %+v", tax.Categories)
+	}
+	if n, ok := taxonomyTermCount(tax.Categories, "valid"); !ok || n != 1 {
+		t.Fatalf("the valid directory keeps its term: %+v", tax.Categories)
+	}
+}
+
+// TestGetPostTaxonomyFailsOnBrokenIndex proves a syntax-broken _index.md
+// fails the read with the directory context instead of disguising itself as
+// "no title".
+func TestGetPostTaxonomyFailsOnBrokenIndex(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	seedPostFile(t, s, id, "events/_index.md", "---\ntitle: [unclosed\n---\n")
+	seedPostFile(t, s, id, "events/one.md", "---\ntitle: one\nslug: one\ndate: 2026-01-02\ndraft: false\n---\nx\n")
+	if _, err := s.GetPostTaxonomy(id); err == nil {
+		t.Fatal("a broken index must fail the taxonomy read")
+	}
+}
