@@ -17,6 +17,10 @@
 	flex: 1;
 	min-height: 0;
 	min-width: 0;
+	/* Flex column host: the top bar's real height flows through this chain
+	   (never a fixed offset), and page stacks can fill the remaining space. */
+	display: flex;
+	flex-direction: column;
 	overflow-y: auto;
 	scrollbar-gutter: stable;
 	padding: var(--space-4);

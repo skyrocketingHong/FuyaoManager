@@ -11,6 +11,82 @@
 	flex-direction: column;
 	gap: var(--space-4);
 	max-width: none;
+	/* Fill the scroll host's height; taller content keeps its natural height
+	   and the host scrolls. */
+	flex: 1 0 auto;
+}
+
+/* Workspace fill: stack children with .fill-height absorb the remaining
+   height; every other child keeps its natural size (forms, short panels).
+   Each stretching surface owns its internal scrolling — nothing is clipped
+   by the shell. */
+.page-stack > .fill-height {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* Panel fill plumbing: the card body becomes the flexible area so editor
+   surfaces built on Panel can stretch; inner content owns its scrolling. */
+.fill-height.panel {
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.panel > .ant-card-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.panel > .ant-card-body > .panel-body {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+/* TablePanel fill plumbing: the bordered table surface fills the panel, rows
+   keep their normal height and scroll inside the surface (sticky headers
+   keep context), and the pagination row stays pinned below the table. */
+.fill-height.table-panel {
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.table-panel > .table-panel-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.table-panel .ant-table-wrapper {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.table-panel .ant-spin-nested-loading,
+.fill-height.table-panel .ant-spin-container {
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.table-panel .ant-spin-container {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+.fill-height.table-panel .ant-table,
+.fill-height.table-panel .ant-table-container {
+	flex: 1 1 auto;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+.fill-height.table-panel .ant-table-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+}
+/* Tables using scroll.y split header and body; the body takes the remainder
+   under the same contract. */
+.fill-height.table-panel .ant-table-body {
+	flex: 1 1 auto;
+	min-height: 0;
 }
 .subtle,
 .section-caption {

@@ -234,6 +234,7 @@ export default function SitesPage() {
 			{groups.map((group) => (
 				<TablePanel
 					key={group.mode}
+					className="fill-height"
 					title={
 						<Space size={8}>
 							{group.mode === 'caddy' && <CaddyIcon />}
