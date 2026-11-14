@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App as AntApp, ConfigProvider } from 'antd';
@@ -172,7 +173,7 @@ it('makes shared site content read-only and links to its platform editor', async
 	expect(
 		(await screen.findByRole('link', { name: 'Manage platform content' })).getAttribute('href')
 	).toBe('/content/posts');
-	await waitFor(() => expect(content.listPosts).toHaveBeenCalledWith('site', '', 1, 10));
+	await waitFor(() => expect(content.listPosts).toHaveBeenCalledWith('site', '', 1, 20));
 	expect((screen.getByRole('button', { name: 'New post' }) as HTMLButtonElement).disabled).toBe(
 		true
 	);
@@ -296,4 +297,84 @@ it('shows server content counts on an adopted static site without fabricated tra
 		'/sites/site/caddy'
 	);
 	expect(screen.queryByText(/Cloudflare|visitors|traffic/i)).toBeNull();
+});
+
+it('resets pagination, query, and search display when the content scope switches', async () => {
+	const platformPost: content.Post = {
+		path: 'tech/platform.md',
+		category: 'tech',
+		title: 'Platform post',
+		slug: 'platform',
+		date: '2026-11-11T10:00:00.000Z',
+		draft: false,
+		categories: [],
+		tags: [],
+		body: 'x',
+		digest: 'sha256:' + 'a'.repeat(64)
+	};
+	const sitePost: content.Post = {
+		...platformPost,
+		path: 'tech/site.md',
+		title: 'Site post',
+		digest: 'sha256:' + 'b'.repeat(64)
+	};
+	vi.mocked(content.listPosts).mockResolvedValue({ posts: [platformPost], total: 30 });
+
+	function ScopeHarness() {
+		const [siteScope, setSiteScope] = useState(false);
+		return (
+			<>
+				<button type="button" onClick={() => setSiteScope(true)}>
+					switch-scope
+				</button>
+				{siteScope ? (
+					<ContentScopeProvider site={site()} resource="posts">
+						<PostsPage />
+					</ContentScopeProvider>
+				) : (
+					<ContentScopeProvider resource="posts">
+						<PostsPage />
+					</ContentScopeProvider>
+				)}
+			</>
+		);
+	}
+	mount(<ScopeHarness />, '/content/posts');
+	await screen.findByText('Platform post');
+
+	// Page two of the platform scope stays pending while the scope switches.
+	let resolveLate!: (value: { posts: content.Post[]; total: number }) => void;
+	vi.mocked(content.listPosts).mockImplementationOnce(
+		() =>
+			new Promise((resolve) => {
+				resolveLate = resolve;
+			})
+	);
+	fireEvent.click(screen.getByLabelText('Page 2'));
+	await waitFor(() =>
+		expect(content.listPosts).toHaveBeenLastCalledWith({ type: 'platform' }, '', 2, 20)
+	);
+	const latePost: content.Post = {
+		...platformPost,
+		path: 'tech/late.md',
+		title: 'Late platform post'
+	};
+	// The new scope's first load carries its own post.
+	vi.mocked(content.listPosts).mockResolvedValueOnce({ posts: [sitePost], total: 1 });
+
+	fireEvent.click(screen.getByText('switch-scope'));
+	await waitFor(() =>
+		expect(content.listPosts).toHaveBeenLastCalledWith('site', '', 1, 20)
+	);
+
+	// The late platform response must not cover the new scope's data.
+	resolveLate({ posts: [latePost], total: 30 });
+	await screen.findByText('Site post');
+	expect(screen.queryByText('Late platform post')).toBeNull();
+	expect(screen.queryByText('Platform post')).toBeNull();
+
+	// The page and the search display were reset with the scope.
+	const search = (screen.getByPlaceholderText('Search title / slug / tag') as HTMLInputElement);
+	expect(search.value).toBe('');
+	expect(screen.queryByLabelText('Page 2')).toBeNull();
 });

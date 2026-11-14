@@ -27,7 +27,7 @@ export default function SiteRoute({ page, children }: { page: string; children: 
 	const resource = page.replace('site.', '') as ContentResource;
 	if (site && ['posts', 'albums', 'footprints', 'friends'].includes(resource))
 		return (
-			<ContentScopeProvider site={site} resource={resource}>
+			<ContentScopeProvider site={site} resource={resource} fill={resource === 'posts'}>
 				{children}
 			</ContentScopeProvider>
 		);

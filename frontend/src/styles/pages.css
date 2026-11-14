@@ -78,6 +78,15 @@
 	overflow-y: auto;
 }
 
+/* PostsPage fill table: the existing .ant-table-content node carries both
+   axes — the table keeps a page-local minimum width, so narrow viewports
+   scroll it horizontally inside the fill chain. scroll.x is deliberately
+   not used: rc-table would inline overflowY:hidden onto the content node
+   and break the vertical chain. */
+.posts-table .ant-table-content > table {
+	min-width: 720px;
+}
+
 @media (max-width: 991px) {
 	.page-stack--fill > .fill-height {
 		min-height: 0;

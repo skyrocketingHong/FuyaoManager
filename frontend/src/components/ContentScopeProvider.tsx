@@ -25,10 +25,15 @@ const Context = createContext<ContentScope | null>(null);
 export function ContentScopeProvider({
 	site,
 	resource,
+	fill = false,
 	children
 }: {
 	site?: Site;
 	resource: ContentResource;
+	/** Opt-in workspace fill: the wrapper stack joins the height chain so
+	 * scrolling surfaces inside it can span the full workspace. Content
+	 * resources without a stretching surface keep the natural layout. */
+	fill?: boolean;
 	children: ReactNode;
 }) {
 	const load = useCallback(
@@ -53,7 +58,7 @@ export function ContentScopeProvider({
 		<Context.Provider
 			value={{ target, key: site?.siteId ?? 'platform', canEdit, amap: query.data?.metadata?.amap }}
 		>
-			<div className="page-stack">
+			<div className={fill ? 'page-stack page-stack--fill' : 'page-stack'}>
 				{query.error && (
 					<Alert
 						type="error"

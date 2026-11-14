@@ -5,8 +5,10 @@
  * create action.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, Route, Routes, createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { App as AntApp, ConfigProvider } from 'antd';
+import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
 import PostsPage from '../src/pages/sites/PostsPage';
 import * as management from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
@@ -62,6 +64,39 @@ beforeAll(() => {
 	});
 });
 
+function Header() {
+	const header = usePageHeaderContent();
+	return (
+		<div>
+			{header?.content}
+			{header?.actions}
+		</div>
+	);
+}
+
+function mountPosts() {
+	const router = createMemoryRouter(
+		[
+			{
+				path: '/sites/:siteId/posts',
+				element: (
+					<ConfigProvider theme={{ token: { motion: false } }}>
+						<AntApp>
+							<PageHeaderProvider scope="posts">
+								<Header />
+								<PostsPage />
+							</PageHeaderProvider>
+						</AntApp>
+					</ConfigProvider>
+				),
+				errorElement: <div>route-crash</div>
+			}
+		],
+		{ initialEntries: ['/sites/11111111-1111-1111-1111-111111111111/posts'] }
+	);
+	return render(<RouterProvider router={router} />);
+}
+
 describe('PostsPage', () => {
 	afterEach(cleanup);
 
@@ -102,5 +137,66 @@ describe('PostsPage', () => {
 		});
 		const create = screen.getByRole('button', { name: /New post/ });
 		expect(create.hasAttribute('disabled')).toBe(true);
+	});
+	it('renders the search and create action once through the top slot', async () => {
+		mountPosts();
+		await screen.findByText('Hello');
+		expect(screen.getAllByPlaceholderText('Search title / slug / tag')).toHaveLength(1);
+		expect(screen.getAllByRole('button', { name: /New post/ })).toHaveLength(1);
+	});
+
+	it('paginates with a shared page size and resets the page on search and size changes', async () => {
+		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 25 });
+		mountPosts();
+		await screen.findByText('Hello');
+		expect(vi.mocked(management.listPosts).mock.calls[0]).toEqual([expect.anything(), '', 1, 20]);
+
+		// Searching returns to page one with the typed query.
+		const search = screen.getByPlaceholderText('Search title / slug / tag');
+		fireEvent.change(search, { target: { value: 'hello' } });
+		fireEvent.keyDown(search, { key: 'Enter' });
+		await waitFor(() =>
+			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
+				expect.anything(),
+				'hello',
+				1,
+				20
+			])
+		);
+
+		// Page navigation keeps the query and the shared page size.
+		fireEvent.click(screen.getByLabelText('Page 2'));
+		await waitFor(() =>
+			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
+				expect.anything(),
+				'hello',
+				2,
+				20
+			])
+		);
+
+		// Changing the page size returns to page one and drives the same size.
+		fireEvent.mouseDown(screen.getByRole('combobox'));
+		fireEvent.click(
+			await screen.findByText('50 / page', { selector: '.ant-select-item-option-content' })
+		);
+		await waitFor(() =>
+			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
+				expect.anything(),
+				'hello',
+				1,
+				50
+			])
+		);
+	});
+
+	it('offers a working retry after a failed list load', async () => {
+		vi.mocked(management.listPosts).mockRejectedValueOnce(new TypeError('offline'));
+		mountPosts();
+		const retry = await screen.findByRole('button', { name: 'Retry' });
+		expect(screen.queryByText('Hello')).toBeNull();
+		fireEvent.click(retry);
+		await screen.findByText('Hello');
+		expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
 	});
 });

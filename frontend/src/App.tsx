@@ -178,6 +178,7 @@ export default function App() {
 												) : item.id.startsWith('content.') ? (
 													<ContentScopeProvider
 														resource={item.id.slice('content.'.length) as ContentResource}
+														fill={item.id === 'content.posts'}
 													>
 														<Page />
 													</ContentScopeProvider>

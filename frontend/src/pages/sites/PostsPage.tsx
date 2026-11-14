@@ -22,6 +22,7 @@ import {
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
+import { timeText } from '../../components/Widgets';
 import StatusTag from '../../components/StatusTag';
 import { TablePanel } from '../../components/Panel';
 import { useContentScope } from '../../components/ContentScopeProvider';
@@ -83,7 +84,9 @@ export default function PostsPage() {
 	const [posts, setPosts] = useState<Post[] | null>(null);
 	const [total, setTotal] = useState(0);
 	const [page, setPage] = useState(1);
+	const [pageSize, setPageSize] = useState(20);
 	const [query, setQuery] = useState('');
+	const [search, setSearch] = useState('');
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [editorOpen, setEditorOpen] = useState(false);
 	const [editing, setEditing] = useState<Post | null>(null);
@@ -101,11 +104,16 @@ export default function PostsPage() {
 	const epoch = useRef(0);
 
 	const refresh = useCallback(
-		async (pageArg?: number, queryArg?: string) => {
+		async (pageArg?: number, queryArg?: string, pageSizeArg?: number) => {
 			if (!target) return;
 			const my = ++epoch.current;
 			try {
-				const list = await listPosts(target, queryArg ?? query, pageArg ?? page, 10);
+				const list = await listPosts(
+					target,
+					queryArg ?? query,
+					pageArg ?? page,
+					pageSizeArg ?? pageSize
+				);
 				if (my !== epoch.current) return;
 				setPosts(list.posts);
 				setTotal(list.total);
@@ -120,7 +128,7 @@ export default function PostsPage() {
 				setErrorKey(key);
 			}
 		},
-		[target, navigate, page, query]
+		[target, navigate, page, query, pageSize]
 	);
 
 	useEffect(() => {
@@ -129,6 +137,9 @@ export default function PostsPage() {
 		setSite(null);
 		setPosts(null);
 		setErrorKey(null);
+		setPage(1);
+		setQuery('');
+		setSearch('');
 		let cancelled = false;
 		if (siteId && scope.canEdit === undefined)
 			getSite(siteId)
@@ -309,9 +320,11 @@ export default function PostsPage() {
 
 	const searchBox = (
 		<Input.Search
+			className="posts-search"
 			placeholder={t('posts.searchPlaceholder')}
 			allowClear
-			style={{ width: 260 }}
+			value={search}
+			onChange={(event) => setSearch(event.target.value)}
 			onSearch={(value) => {
 				setQuery(value);
 				setPage(1);
@@ -327,26 +340,43 @@ export default function PostsPage() {
 	const headerActive = usePageHeader({ content: searchBox, actions: newButton });
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
-				<Space style={{ width: '100%', justifyContent: 'space-between' }}>
+				<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
 					{searchBox}
 					{newButton}
 				</Space>
 			) : null}
-			{errorKey !== null ? <Alert type="error" showIcon title={t(errorKey)} /> : null}
-			<TablePanel>
+			{errorKey !== null ? (
+				<Alert
+					type="error"
+					showIcon
+					title={t(errorKey)}
+					action={
+						<Button onClick={() => void refresh()}>{t('common.retry')}</Button>
+					}
+				/>
+			) : null}
+			<TablePanel className="fill-height">
 				<DataTable<Post>
+					className="posts-table"
 					rowKey="path"
 					dataSource={posts ?? []}
 					loading={posts === null}
 					pagination={{
 						current: page,
-						pageSize: 10,
+						pageSize,
 						total,
-						showSizeChanger: false,
-						onChange: (p) => {
+						showSizeChanger: true,
+						pageSizeOptions: [10, 20, 50],
+						onChange: (p, size) => {
+							if (size !== pageSize) {
+								setPageSize(size);
+								setPage(1);
+								void refresh(1, query, size);
+								return;
+							}
 							setPage(p);
 							void refresh(p);
 						}
@@ -374,7 +404,12 @@ export default function PostsPage() {
 									<StatusTag kind="success">{t('posts.published')}</StatusTag>
 								)
 						},
-						{ title: t('posts.dateColumn'), dataIndex: 'date', width: 170 },
+						{
+							title: t('posts.dateColumn'),
+							dataIndex: 'date',
+							width: 170,
+							render: (_, post) => timeText(post.date)
+						},
 						{
 							title: t('posts.tagsColumn'),
 							dataIndex: 'tags',
@@ -391,7 +426,7 @@ export default function PostsPage() {
 						{
 							width: 170,
 							render: (_, post) => (
-								<Space>
+								<Space wrap size={4}>
 									<Button size="small" onClick={() => void openEditor(post.path)}>
 										{t('posts.edit')}
 									</Button>
