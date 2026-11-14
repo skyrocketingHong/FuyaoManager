@@ -80,7 +80,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── src/components/        # AppearanceProvider、PageHeader(+PageTabs)、Panel/
 │   │                          # TablePanel、DataTable、PageLoading、StatusTag、
 │   │                          # RouteErrorPage、admin/UserDrawer、layout/（AppShell、TopBar、
-│   │                          # SidebarInfo/Actions/Nav/Foot）
+│   │                          # SidebarContent、SidebarInfo/Actions/Nav/Foot）
 │   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance 样式
 │   ├── src/pages/             # 登录、通行密钥绑定、用户管理、日志、账号及外观设置、主题目录、站点
 │   │                          # 与各业务页

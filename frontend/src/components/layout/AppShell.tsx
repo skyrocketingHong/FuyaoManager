@@ -1,8 +1,15 @@
 // SideMenu's brand → information → actions → scrolling menu → footer skeleton
 // from robot-platform; modules here consume the manager's own site metadata.
-import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Layout, type MenuProps } from 'antd';
+import {
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+	useSyncExternalStore,
+	type ReactNode
+} from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Button, Drawer, Layout, type MenuProps } from 'antd';
 import {
 	ArrowLeft,
 	ChevronRight,
@@ -13,6 +20,7 @@ import {
 	LayoutDashboard,
 	Link2,
 	MapPin,
+	Menu as MenuIcon,
 	Palette,
 	Rocket,
 	Settings,
@@ -35,13 +43,20 @@ import {
 	platformNavGroups
 } from '../../lib/navigation';
 import { PageHeaderProvider } from '../PageHeader';
-import SidebarActions, { type SidebarAction } from './SidebarActions';
-import SidebarNav from './SidebarNav';
-import SidebarInfo from './SidebarInfo';
-import SidebarFoot from './SidebarFoot';
+import SidebarContent from './SidebarContent';
+import type { SidebarNavModule } from './SidebarNav';
+import type { SidebarAction } from './SidebarActions';
+import type { SidebarStat } from './SidebarInfo';
 import TopBar from './TopBar';
 import CaddyIcon from '../CaddyIcon';
 import { allowSitePage } from '../../lib/navigation/workspace';
+
+/**
+ * The shell switches to the navigation drawer below 992px. This query must
+ * stay in lockstep with the CSS media queries (shell.css, sidebar.css,
+ * pages.css use the same 991px boundary).
+ */
+export const NARROW_MEDIA_QUERY = '(max-width: 991px)';
 
 type MenuItem = Required<MenuProps>['items'][number];
 const navIcons: Record<string, LucideIcon> = {
@@ -91,6 +106,39 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		if (session.status === 'authenticated') void loadSiteList();
 	}, [session.status, session.user?.id, authGeneration]);
 
+	// Narrow-viewport state: mirror the CSS breakpoint and follow live
+	// viewport changes so the Sider and the Drawer never mount together.
+	const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_MEDIA_QUERY).matches);
+	useEffect(() => {
+		const query = window.matchMedia(NARROW_MEDIA_QUERY);
+		const onMediaChange = (event: MediaQueryListEvent) => setNarrow(event.matches);
+		query.addEventListener('change', onMediaChange);
+		setNarrow(query.matches);
+		return () => query.removeEventListener('change', onMediaChange);
+	}, []);
+	// A viewport-width change always resets the drawer (a re-entered narrow
+	// viewport starts closed), and a successful route change closes it —
+	// blocked navigation keeps the drawer open.
+	const [navOpen, setNavOpen] = useState(false);
+	useEffect(() => {
+		setNavOpen(false);
+	}, [narrow, pathname]);
+	// Focus guarantee: rc-drawer returns focus to the trigger after its leave
+	// animation; the deferred focus here guarantees it even when that
+	// animation is cut short. Running after the commit keeps the drawer's
+	// focus trap from pulling focus back, the navOpen re-check avoids stealing
+	// focus from a reopened drawer, and the unmounted ref (desktop switch)
+	// keeps focus off removed nodes.
+	const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+	const navOpenRef = useRef(false);
+	navOpenRef.current = navOpen;
+	const closeNavigation = useCallback(() => {
+		setNavOpen(false);
+		window.setTimeout(() => {
+			if (!navOpenRef.current) menuButtonRef.current?.focus({ preventScroll: true });
+		}, 0);
+	}, []);
+
 	const match = matchRoute(pathname);
 	const siteId = match?.item.scope === 'site' ? match.siteId : null;
 	const currentSite = siteId ? siteList.sites.find((site) => site.siteId === siteId) : null;
@@ -127,7 +175,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			active: match?.item.id === 'site.overview',
 			onClick: () => navigate(`/sites/${siteId}`)
 		});
-	const stats = siteId
+	const stats: SidebarStat[] = siteId
 		? [
 				{ label: t('site.slug'), value: currentSite?.slug ?? siteId, machine: true },
 				{
@@ -149,6 +197,30 @@ export default function AppShell({ children }: { children: ReactNode }) {
 				}
 			];
 	const selected = selectedPath(pathname);
+	const navModule: SidebarNavModule = {
+		items: menuItems,
+		selectedKeys: selected ? [selected] : [],
+		onSelect: (key) => navigate(key),
+		ariaLabel: t('app.title')
+	};
+	const infoTitle = currentSite?.name ?? (siteId ? t('nav.overview') : t('nav.platformGroup'));
+
+	// The drawer's own close handling (native close button, mask, Escape) is
+	// covered by the rc-drawer defaults; it also restores focus to this
+	// button when the drawer leaves. Unmounting on the breakpoint switch
+	// cleans mask and scroll lock without touching focus.
+	const menuButton = (
+		<Button
+			ref={menuButtonRef}
+			className="topbar-icon"
+			type="text"
+			icon={<MenuIcon size={16} strokeWidth={1.8} />}
+			aria-label={t('app.openNavigation')}
+			aria-haspopup="dialog"
+			aria-expanded={navOpen}
+			onClick={() => setNavOpen(true)}
+		/>
+	);
 
 	return (
 		<PageHeaderProvider scope={`${session.user?.id ?? 'anon'}:${pathname}`}>
@@ -156,35 +228,37 @@ export default function AppShell({ children }: { children: ReactNode }) {
 				{t('app.skipWorkspace')}
 			</a>
 			<Layout className="app-shell">
-				<Layout.Sider width={208} theme="light" className="app-sider" trigger={null}>
-					<div className="sidebar-brand">
-						<Link to="/sites">
-							<img src="/favicon.svg" alt="" width={24} height={24} />
-							<span>{t('app.title')}</span>
-						</Link>
-					</div>
-					<SidebarInfo
-						title={currentSite?.name ?? (siteId ? t('nav.overview') : t('nav.platformGroup'))}
-						stats={stats}
-					/>
-					<SidebarActions items={actions} ariaLabel={t('nav.actions')} />
-					<SidebarNav
-						module={{
-							items: menuItems,
-							selectedKeys: selected ? [selected] : [],
-							onSelect: (key) => navigate(key),
-							ariaLabel: t('app.title')
-						}}
-					/>
-					<SidebarFoot />
-				</Layout.Sider>
+				{!narrow && (
+					<Layout.Sider width={208} theme="light" className="app-sider" trigger={null}>
+						<SidebarContent infoTitle={infoTitle} stats={stats} actions={actions} menu={navModule} />
+					</Layout.Sider>
+				)}
 				<Layout className="shell-main">
-					<TopBar />
+					<TopBar navigationSlot={narrow ? menuButton : undefined} />
 					<Layout.Content id="workspace" tabIndex={-1} className="shell-content">
 						{children}
 					</Layout.Content>
 				</Layout>
 			</Layout>
+			{narrow && (
+				<Drawer
+					rootClassName="nav-drawer"
+					placement="left"
+					size={320}
+					open={navOpen}
+					onClose={closeNavigation}
+					aria-label={t('app.navigation')}
+					classNames={{ section: 'drawer-sidebar-surface', body: 'drawer-sidebar' }}
+				>
+					<SidebarContent
+						infoTitle={infoTitle}
+						stats={stats}
+						actions={actions}
+						menu={navModule}
+						onNavigate={closeNavigation}
+					/>
+				</Drawer>
+			)}
 		</PageHeaderProvider>
 	);
 }

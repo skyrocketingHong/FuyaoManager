@@ -87,7 +87,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
 │   │                          # TablePanel, DataTable, PageLoading, StatusTag,
 │   │                          # RouteErrorPage, admin/UserDrawer, layout/ (AppShell, TopBar,
-│   │                          # SidebarInfo/Actions/Nav/Foot)
+│   │                          # SidebarContent, SidebarInfo/Actions/Nav/Foot)
 │   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance CSS (semantic
 │   │                          # variables)
 │   ├── src/pages/             # login, passkey binding, users, logs, account and appearance settings,

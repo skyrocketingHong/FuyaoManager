@@ -69,6 +69,15 @@
 	position: relative;
 	z-index: 1;
 }
+/* Narrow-screen navigation toggle slot; empty on desktop widths. */
+.topbar-navigation {
+	display: flex;
+	align-items: center;
+	flex: 0 0 auto;
+}
+.topbar-navigation:empty {
+	display: none;
+}
 .topbar-main {
 	display: flex;
 	flex-wrap: nowrap;

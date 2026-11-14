@@ -635,5 +635,7 @@
 	"audit.action.createPreviewLink": "开启私有预览",
 	"audit.action.closePreviewLink": "关闭私有预览",
 	"audit.action.createRelease": "发布构建",
-	"audit.action.rollbackRelease": "回滚发布"
+	"audit.action.rollbackRelease": "回滚发布",
+	"app.openNavigation": "打开导航",
+	"app.navigation": "导航"
 }

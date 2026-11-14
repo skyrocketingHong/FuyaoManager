@@ -1,4 +1,5 @@
 // Adapted from robot-platform/frontend/components/platform/statusbar/TopBar.tsx.
+import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, ConfigProvider, Dropdown, Tooltip } from 'antd';
@@ -8,7 +9,7 @@ import { i18nSnapshot, setLocale, subscribeI18n, t, type Locale } from '../../li
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
 import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
 
-export default function TopBar() {
+export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode }) {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const { dark } = useSyncExternalStore(subscribeTheme, themeSnapshot);
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
@@ -29,6 +30,7 @@ export default function TopBar() {
 					<i />
 				</span>
 				<div className="topbar-main">
+					<div className="topbar-navigation">{navigationSlot}</div>
 					<div className="topbar-identity">
 						{header?.content && <div className="topbar-page-content">{header.content}</div>}
 					</div>

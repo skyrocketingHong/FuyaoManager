@@ -635,5 +635,7 @@
 	"audit.action.createPreviewLink": "Open private preview",
 	"audit.action.closePreviewLink": "Close private preview",
 	"audit.action.createRelease": "Publish build",
-	"audit.action.rollbackRelease": "Roll back release"
+	"audit.action.rollbackRelease": "Roll back release",
+	"app.openNavigation": "Open navigation",
+	"app.navigation": "Navigation"
 }
