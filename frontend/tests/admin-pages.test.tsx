@@ -368,8 +368,10 @@ it('filters logs by outcome and expands metadata without inventing record detail
 
 
 // The real top bar renders page filters and actions exactly once and keeps
-// every control operable next to the locale, theme, and account entries.
+// every control operable next to the locale, theme, account, and navigation
+// entries.
 it('renders UsersPage filters and actions once in the real top bar and keeps them operable', async () => {
+	let navigationActivations = 0;
 	const router = createMemoryRouter([
 		{
 			path: '*',
@@ -377,7 +379,19 @@ it('renders UsersPage filters and actions once in the real top bar and keeps the
 				<ConfigProvider theme={{ token: { motion: false } }}>
 					<AntApp>
 						<PageHeaderProvider scope="admin">
-							<TopBar />
+							<TopBar
+								navigationSlot={
+									<button
+										type="button"
+										aria-label="Open navigation"
+										onClick={() => {
+											navigationActivations += 1;
+										}}
+									>
+										Open navigation
+									</button>
+								}
+							/>
 							<UsersPage />
 						</PageHeaderProvider>
 					</AntApp>
@@ -407,5 +421,10 @@ it('renders UsersPage filters and actions once in the real top bar and keeps the
 	expect(screen.getByRole('button', { name: 'zh-CN' })).toBeDefined();
 	// The account button keeps the username as its accessible name.
 	expect(screen.getByRole('button', { name: 'admin' })).toBeDefined();
-	expect(document.querySelector('.topbar-navigation')).not.toBeNull();
+
+	// The navigation slot hosts a live button whose click behavior works.
+	const navigationButton = screen.getByRole('button', { name: 'Open navigation' });
+	expect(navigationButton).toBeDefined();
+	fireEvent.click(navigationButton);
+	expect(navigationActivations).toBe(1);
 });

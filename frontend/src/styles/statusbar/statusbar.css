@@ -1,10 +1,13 @@
 /* Ported from robot-platform/frontend/styles/statusbar/statusbar.css:
    shared single-row slots, layered background, 32px controls, user menu. */
 /* Responsive top bar: three stable grid slots (navigation | page area |
-   session). The page area wraps its filters and actions onto further rows
-   when the .shell-main container runs out of width, so nothing scrolls
-   horizontally, nothing is hidden, and the bar grows in height while the
-   workspace absorbs the remainder. */
+   session) inside the .shell-main container, so the available width already
+   accounts for the desktop sidebar. While the container offers enough room
+   the bar keeps its compact single-line arrangement; below 720px the grid
+   switches — navigation and session hold the first row and the page area
+   spans the full second row, where its filters and actions wrap normally.
+   Nothing scrolls horizontally at the bar level, nothing is hidden, and the
+   bar grows in height while the workspace absorbs the remainder. */
 .topbar {
 	--topbar-control-height: 32px;
 	position: sticky;
@@ -20,6 +23,14 @@
 	padding-inline: var(--space-4);
 	border-bottom: 1px solid var(--border);
 	background: var(--card);
+}
+@container (max-width: 719px) {
+	.topbar {
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			'nav session'
+			'main main';
+	}
 }
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
 	.topbar {
@@ -117,8 +128,6 @@
 	   being squeezed beside the session controls. */
 	min-width: min(360px, 100%);
 	flex: 1 1 auto;
-	overflow-x: auto;
-	scrollbar-width: thin;
 }
 .topbar-page-actions {
 	display: flex;
@@ -161,7 +170,11 @@
 	min-width: 0;
 	width: max-content;
 	flex: 0 0 auto;
-	max-width: none;
+	/* Rigid tab strips are the only horizontally scrolling widgets: they cap
+	   at their own bounds instead of dragging the whole filter row along. */
+	max-width: 100%;
+	overflow-x: auto;
+	scrollbar-width: thin;
 }
 .topbar-tabs .ant-segmented-group {
 	margin: 0;
@@ -189,6 +202,11 @@
 	padding-inline: 10px;
 	justify-content: flex-start;
 	max-width: 220px;
+	/* The account button alone may shrink while every other top-bar button
+	   keeps its size; the username ellipsizes behind the full accessible
+	   name, title, and account menu. */
+	flex-shrink: 1;
+	min-width: 0;
 }
 .operator-name {
 	color: var(--muted-foreground);
