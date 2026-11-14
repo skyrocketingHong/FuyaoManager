@@ -7,6 +7,26 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.6.1 - 2026-11-14
+
+### Changed
+
+- Status colors now follow the day/night palettes: the antd success, warning and error base colors derive from the theme palette, so badges, progress and alerts no longer render with light-mode values in dark mode.
+- Token cleanup: removed CSS variables that were defined but never consumed (`--good`, `--danger`, `--elevated`, `--primary-fill`, `--motion-fast`, and others), merged `--surface-high` into `--surface`, and routed radii, font sizes and spacing through the existing tokens. Dropped CSS overrides that duplicated antd component tokens (table header and hover backgrounds, Segmented track background) and the hand-written dropdown shadow.
+- The top-bar user menu presents identity and passkey state as non-interactive group captions instead of disabled menu items; the user button drops its redundant tooltip.
+
+### Fixed
+
+- Site lists no longer show an unrelated configuration-source string in the visibility and setup columns for Caddy sites; they show a dash instead.
+- The releases page consolidates disabled-state explanations on the publish button (viewer role, no publishable build) instead of permanent alert banners; publish-failure toasts map stage names and missing items to readable copy; the release status column uses a dedicated label.
+- Builds no longer confirm "new build" through a Popconfirm; failure stages render mapped copy; the ID and actions columns carry proper titles.
+- Album alt-text states use themed status tags; move-up, move-down and remove buttons gained accessible names; the edit dialog aligns with the shared form styles; empty states use Empty.
+- Friends and footprints remove buttons are unified as "Remove"; footprint field placeholders and labels moved into the locale files so the English UI no longer leaks Chinese text; text inputs gained aria-labels.
+- Post slug and body labels and the categories placeholder moved into the locale files; the actions column carries a title.
+- The theme catalog shows the registration command itself instead of a hover-only hint; the account page states the username rules once instead of tooltip plus repeated line; API catalog rows no longer duplicate the version note shown in the expanded details.
+- The content-sources disclaimer is a quiet line instead of an alert; the overview theme panel is renamed "Theme and delivery"; the site detail page drops the entry-point panel that duplicated the sidebar, folds timestamps into the state panel, and adds a loading state to setup retry.
+- Locale cleanup: removed 15 unreferenced keys, aligned status and role label granularity and casing between locales, and rewrote the initialization copy as positive steps.
+
 ## 0.6.0 - 2026-11-13
 
 ### Added
