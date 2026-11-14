@@ -46,10 +46,9 @@ func TestSplitFrontmatter(t *testing.T) {
 			body: "",
 		},
 		{
-			name: "end delimiter crlf at eof gives empty body",
+			name: "bare cr at eof after dashes is unterminated",
 			in:   "---\ntitle: x\n---\r",
-			fm:   "title: x\n",
-			body: "",
+			err:  "unterminated frontmatter",
 		},
 		{name: "bare start delimiter at eof is unterminated", in: "---", err: "unterminated frontmatter"},
 		{

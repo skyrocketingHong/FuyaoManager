@@ -4964,9 +4964,19 @@ components:
           pattern: '^[a-z0-9][a-z0-9-]{0,120}$'
         date:
           type: string
-          description: ISO date or datetime (RFC 3339 or date-only).
+          description: |
+            Post date. Accepted shapes: `YYYY-MM-DD`, `YYYY-MM-DDTHH:mm`,
+            with optional seconds and fractional seconds, and any of those
+            with a `Z` or `±HH:mm` offset. Impossible calendar dates, hours,
+            minutes, seconds, or offsets are rejected instead of rolled
+            over. Values without an offset sort as UTC; the submitted string
+            is stored verbatim and never rewritten.
         lastmod:
           type: string
+          description: |
+            Optional last-modified stamp using the same shapes and
+            semantics as `date`. An empty value clears the stored stamp;
+            a non-empty value is stored verbatim.
         draft:
           type: boolean
         categories:

@@ -229,9 +229,10 @@ func SplitFrontmatter(data []byte) (frontmatter []byte, body []byte, err error) 
 	for {
 		idx := bytes.IndexByte(rest[offset:], '\n')
 		if idx < 0 {
-			// The final line runs to EOF: an exact "---" closes the header,
-			// anything else means the header never closed.
-			if isFrontmatterEndLine(rest[offset:]) {
+			// The final line runs to EOF. Without an actual LF there is no
+			// CRLF: only a line that reads exactly "---" closes the header,
+			// so "---\r" at EOF is an unterminated header, never a CRLF end.
+			if string(rest[offset:]) == "---" {
 				return rest[:offset], rest[len(rest):], nil
 			}
 			return nil, nil, errUnterminatedFrontmatter

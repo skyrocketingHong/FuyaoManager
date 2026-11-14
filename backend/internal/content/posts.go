@@ -50,6 +50,47 @@ var (
 	dateTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$`)
 )
 
+// postDateLayouts enumerates the accepted post date shapes; the shape is
+// pinned by dateTimePattern first and the real calendar/time/offset values
+// are validated by the standard parser afterwards.
+var postDateLayouts = []string{
+	"2006-01-02",
+	"2006-01-02T15:04",
+	"2006-01-02T15:04Z07:00",
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04:05Z07:00",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02T15:04:05.999999999Z07:00",
+}
+
+// parsePostDate validates and interprets one post date/lastmod value. It
+// rejects impossible calendar dates, hours, minutes, seconds, and offsets
+// instead of letting the parser roll them over. Values without an offset
+// (date-only and naive datetimes) and date-only values are interpreted as
+// UTC so every comparison happens on one clock; values with an offset keep
+// their actual point in time. The original string is never rewritten.
+func parsePostDate(value string) (time.Time, error) {
+	if !dateTimePattern.MatchString(value) {
+		return time.Time{}, errors.New("must be an ISO date or datetime")
+	}
+	var parsed time.Time
+	var lastErr error
+	for _, layout := range postDateLayouts {
+		parsed, lastErr = time.Parse(layout, value)
+		if lastErr == nil {
+			return parsed.UTC(), nil
+		}
+		// A value-range failure means the layout matched the shape but the
+		// value is impossible — surface it immediately instead of trying a
+		// coarser shape. Shape mismatches (cannot parse / extra text) move
+		// on to the next, more specific layout.
+		if strings.Contains(lastErr.Error(), "out of range") {
+			return time.Time{}, lastErr
+		}
+	}
+	return time.Time{}, lastErr
+}
+
 // Validate checks the editable fields; date accepts the theme's formats.
 func (p *Post) Validate() error {
 	if !categoryPattern.MatchString(p.Category) {
@@ -61,11 +102,13 @@ func (p *Post) Validate() error {
 	if strings.TrimSpace(p.Title) == "" {
 		return fieldError("title", "must not be empty")
 	}
-	if !dateTimePattern.MatchString(p.Date) {
-		return fieldError("date", "must be an ISO date or datetime")
+	if _, err := parsePostDate(p.Date); err != nil {
+		return fieldError("date", err.Error())
 	}
-	if p.Lastmod != "" && !dateTimePattern.MatchString(p.Lastmod) {
-		return fieldError("lastmod", "must be an ISO date or datetime")
+	if p.Lastmod != "" {
+		if _, err := parsePostDate(p.Lastmod); err != nil {
+			return fieldError("lastmod", err.Error())
+		}
 	}
 	for _, list := range []struct {
 		name   string
@@ -334,15 +377,33 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int) (p
 	if err != nil {
 		return nil, 0, err
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		di, _ := time.Parse(time.RFC3339, all[i].Date)
-		dj, _ := time.Parse(time.RFC3339, all[j].Date)
-		if !di.Equal(dj) {
-			return di.After(dj)
+	// Sort by the shared date parser: valid dates descend by their actual
+	// point in time (naive values on UTC), invalid historical dates land
+	// after every valid one, and ties — or two invalid dates — break by
+	// path. History is never filtered out for a bad date.
+	dated := make([]datedPost, 0, len(all))
+	for _, p := range all {
+		at, err := parsePostDate(p.Date)
+		if err != nil {
+			dated = append(dated, datedPost{post: p})
+			continue
 		}
-		return all[i].Path < all[j].Path
+		dated = append(dated, datedPost{post: p, at: at, valid: true})
+	}
+	sort.SliceStable(dated, func(i, j int) bool {
+		a, b := dated[i], dated[j]
+		if a.valid && b.valid {
+			if !a.at.Equal(b.at) {
+				return a.at.After(b.at)
+			}
+			return a.post.Path < b.post.Path
+		}
+		if a.valid != b.valid {
+			return a.valid
+		}
+		return a.post.Path < b.post.Path
 	})
-	total = len(all)
+	total = len(dated)
 	if pageSize <= 0 {
 		pageSize = 20
 	}
@@ -357,7 +418,19 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int) (p
 	if end > total {
 		end = total
 	}
-	return all[start:end], total, nil
+	posts = make([]Post, 0, end-start)
+	for _, entry := range dated[start:end] {
+		posts = append(posts, entry.post)
+	}
+	return posts, total, nil
+}
+
+// datedPost pairs a listing entry with its parsed sort key; invalid dates
+// sort behind every valid one.
+type datedPost struct {
+	post  Post
+	at    time.Time
+	valid bool
 }
 
 // GetPost reads one post by its site-relative path.

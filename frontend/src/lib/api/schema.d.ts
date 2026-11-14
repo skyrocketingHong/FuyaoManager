@@ -2144,8 +2144,20 @@ export interface components {
             category: string;
             title: string;
             slug: string;
-            /** @description ISO date or datetime (RFC 3339 or date-only). */
+            /**
+             * @description Post date. Accepted shapes: `YYYY-MM-DD`, `YYYY-MM-DDTHH:mm`,
+             *     with optional seconds and fractional seconds, and any of those
+             *     with a `Z` or `±HH:mm` offset. Impossible calendar dates, hours,
+             *     minutes, seconds, or offsets are rejected instead of rolled
+             *     over. Values without an offset sort as UTC; the submitted string
+             *     is stored verbatim and never rewritten.
+             */
             date: string;
+            /**
+             * @description Optional last-modified stamp using the same shapes and
+             *     semantics as `date`. An empty value clears the stored stamp;
+             *     a non-empty value is stored verbatim.
+             */
             lastmod?: string;
             draft: boolean;
             categories?: string[];
