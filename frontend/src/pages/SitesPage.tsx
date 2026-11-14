@@ -212,7 +212,7 @@ export default function SitesPage() {
 	].filter((group) => group.mode !== 'unknown' || group.records.length > 0);
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			<Panel title={t('content.platform')}>
 				{library.data ? (
 					<ContentStatistics counts={library.data.counts} />
@@ -234,7 +234,7 @@ export default function SitesPage() {
 			{groups.map((group) => (
 				<TablePanel
 					key={group.mode}
-					className="fill-height"
+					className={group.records.length > 0 ? 'fill-height' : undefined}
 					title={
 						<Space size={8}>
 							{group.mode === 'caddy' && <CaddyIcon />}

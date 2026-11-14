@@ -11,18 +11,27 @@
 	flex-direction: column;
 	gap: var(--space-4);
 	max-width: none;
-	/* Fill the scroll host's height; taller content keeps its natural height
-	   and the host scrolls. */
-	flex: 1 0 auto;
 }
 
-/* Workspace fill: stack children with .fill-height absorb the remaining
-   height; every other child keeps its natural size (forms, short panels).
-   Each stretching surface owns its internal scrolling — nothing is clipped
-   by the shell. */
-.page-stack > .fill-height {
+/* Workspace fill mode, enabled per page with .page-stack--fill: the stack is
+   constrained to the scroll host's height (it may shrink below its content
+   height) and .fill-height surfaces scroll internally. When the surfaces hit
+   their floor they stop shrinking and overflow the stack, so the host
+   scrolls normally again. Stacks without the modifier stay in natural
+   document flow and never clip. */
+.page-stack--fill {
 	flex: 1 1 auto;
 	min-height: 0;
+}
+
+/* Stretch participants opt in with .fill-height. The remaining space is
+   shared equally on top of each participant's natural size, so heights
+   follow content instead of equalizing; other stack children keep their
+   natural size. The floor keeps a participant usable; on narrow screens it
+   is dropped and the page scrolls normally. */
+.page-stack--fill > .fill-height {
+	flex: 1 1 auto;
+	min-height: 12rem;
 }
 
 /* Panel fill plumbing: the card body becomes the flexible area so editor
@@ -42,51 +51,37 @@
 	min-height: 0;
 }
 
-/* TablePanel fill plumbing: the bordered table surface fills the panel, rows
-   keep their normal height and scroll inside the surface (sticky headers
-   keep context), and the pagination row stays pinned below the table. */
-.fill-height.table-panel {
+/* TablePanel fill plumbing, verified against the installed antd 6.7.0 DOM:
+   wrapper > .ant-spin > .ant-spin-container > .ant-table >
+   .ant-table-container > .ant-table-content > table, with pagination a
+   sibling of .ant-table inside .ant-spin-container and the loading overlay
+   absolutely positioned (out of flow). Child combinators scope the chain to
+   the enabled wrapper only, so loading indicators, nested tables, and other
+   Spin instances are untouched. Title and pagination keep natural heights;
+   the content area takes the remainder and scrolls (sticky headers stay
+   pinned). Tables that pass scroll props render a different split with
+   inline overflow styles and are not covered here yet. */
+.fill-height.table-panel > .table-panel-content,
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper,
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin,
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container,
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table,
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container {
 	display: flex;
 	flex-direction: column;
-}
-.fill-height.table-panel > .table-panel-content {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-.fill-height.table-panel .ant-table-wrapper {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-.fill-height.table-panel .ant-spin-nested-loading,
-.fill-height.table-panel .ant-spin-container {
-	display: flex;
-	flex-direction: column;
-}
-.fill-height.table-panel .ant-spin-container {
 	flex: 1 1 auto;
 	min-height: 0;
 }
-.fill-height.table-panel .ant-table,
-.fill-height.table-panel .ant-table-container {
-	flex: 1 1 auto;
-	min-height: 0;
-	display: flex;
-	flex-direction: column;
-}
-.fill-height.table-panel .ant-table-content {
+.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-content {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
 }
-/* Tables using scroll.y split header and body; the body takes the remainder
-   under the same contract. */
-.fill-height.table-panel .ant-table-body {
-	flex: 1 1 auto;
-	min-height: 0;
+
+@media (max-width: 991px) {
+	.page-stack--fill > .fill-height {
+		min-height: 0;
+	}
 }
 .subtle,
 .section-caption {
