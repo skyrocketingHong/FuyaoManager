@@ -309,3 +309,120 @@ func TestCreatePostStillRefusesOverwrite(t *testing.T) {
 		t.Fatalf("refused create must leave the file intact: %v %s", err, raw)
 	}
 }
+
+// TestSavePostRejectsDuplicateTopLevelKeys proves an ambiguous original —
+// the same top-level key twice, modeled or not — fails the save explicitly
+// instead of being silently cleaned, leaving the stored bytes untouched.
+// The duplicate file cannot be GetPost'd (its projection fails), so the
+// case seeds the raw bytes and calls SavePost directly.
+func TestSavePostRejectsDuplicateTopLevelKeys(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	duplicate := []byte(`---
+title: first
+title: second
+slug: extra
+date: 2026-11-12
+draft: true
+summary: kept
+---
+body
+`)
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/extra.md", duplicate); err != nil {
+		t.Fatal(err)
+	}
+	_, digest, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := Post{Category: "tech", Slug: "extra", Title: "updated", Date: "2026-11-12", Draft: false, Body: "x"}
+	if _, err := s.SavePost(id, next, digest); err == nil {
+		t.Fatal("duplicate top-level keys must fail the save")
+	}
+	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil || afterDigest != digest || string(after) != string(duplicate) {
+		t.Fatalf("rejected save must not touch the stored file: %v %s", err, afterDigest)
+	}
+}
+
+// TestSavePostRejectsYAMLMergeKey proves a top-level merge key cannot
+// resurrect cleared modeled fields through the preserved unknown data: the
+// save fails before the write and the original bytes stay untouched.
+func TestSavePostRejectsYAMLMergeKey(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	merge := []byte(`---
+title: base
+slug: extra
+date: 2026-11-12
+draft: true
+defaults: &d
+  lastmod: 2026-01-01
+  tags: [old]
+<<: *d
+summary: kept
+---
+body
+`)
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/extra.md", merge); err != nil {
+		t.Fatal(err)
+	}
+	_, digest, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The request clears lastmod and tags; a merge expansion would fill them
+	// back in, so the whole save is rejected.
+	next := Post{Category: "tech", Slug: "extra", Title: "updated", Date: "2026-11-12", Draft: false, Body: "x"}
+	if _, err := s.SavePost(id, next, digest); err == nil {
+		t.Fatal("a top-level merge key must fail the save")
+	}
+	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil || afterDigest != digest || string(after) != string(merge) {
+		t.Fatalf("rejected save must not touch the stored file: %v %s", err, afterDigest)
+	}
+}
+
+// TestSavePostKeepsLiteralMergeStyleKey proves a quoted "<<" string key is
+// ordinary unknown data: it survives a save verbatim instead of being
+// mistaken for merge semantics.
+func TestSavePostKeepsLiteralMergeStyleKey(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	literal := []byte(`---
+title: base
+slug: extra
+date: 2026-11-12
+draft: true
+"<<": kept as data
+---
+body
+`)
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/extra.md", literal); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.GetPost(id, "tech/extra.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := Post{Category: "tech", Slug: "extra", Title: "updated", Date: "2026-11-12", Draft: false, Body: "x"}
+	if _, err := s.SavePost(id, next, current.Digest); err != nil {
+		t.Fatal(err)
+	}
+	raw, _, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "kept as data") {
+		t.Fatalf("the literal << key must survive as unknown data:\n%s", raw)
+	}
+	fm, _, err := SplitFrontmatter(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(fm, &doc); err != nil {
+		t.Fatal(err)
+	}
+	value := findKey(t, doc.Content[0], "<<")
+	if value.Tag != "!!str" || value.Value != "kept as data" {
+		t.Fatalf("the literal << key must keep its string type: %s %q", value.Tag, value.Value)
+	}
+}

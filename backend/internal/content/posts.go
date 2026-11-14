@@ -153,7 +153,9 @@ func renderPost(p Post, unknown []*yaml.Node) ([]byte, error) {
 		// Unknown keys keep their server-side nodes (names, nesting, values,
 		// and YAML types) and their original order, rendered as one block
 		// after the modeled keys. A dangling alias here (its anchor lived in
-		// a replaced known field) fails the encode, so nothing is written.
+		// a replaced known field) is emitted verbatim — SavePost's pre-write
+		// parse of the merged document is what rejects it, so nothing is
+		// written.
 		merge := &yaml.Node{Kind: yaml.MappingNode, Content: unknown}
 		enc := yaml.NewEncoder(&buf)
 		enc.SetIndent(2)
@@ -239,7 +241,13 @@ var knownFrontmatterKeys = func() map[string]struct{} {
 // unknownFrontmatter extracts the unmodeled key/value pairs from the raw
 // frontmatter, preserving their order, nesting, values, and YAML types. A
 // frontmatter that is not a mapping has no preservable pairs and fails
-// explicitly instead of being silently flattened.
+// explicitly instead of being silently flattened. The node-based decode
+// skips the usual duplicate-key check, so the top level (modeled and
+// unmodeled keys alike) is checked here: a duplicated key means an
+// ambiguous original, never a silent cleanup. Top-level YAML merge keys
+// (the `<<` merge tag, which a quoted "<<" string key does not carry) are
+// rejected too: their expansion would resurrect cleared modeled fields, and
+// a plain "<<" string key stays ordinary unknown data.
 func unknownFrontmatter(raw []byte) ([]*yaml.Node, error) {
 	fm, _, err := SplitFrontmatter(raw)
 	if err != nil {
@@ -256,12 +264,21 @@ func unknownFrontmatter(raw []byte) ([]*yaml.Node, error) {
 		return nil, fieldError("frontmatter", "must be a YAML mapping")
 	}
 	mapping := doc.Content[0]
+	seen := make(map[string]struct{}, len(mapping.Content)/2)
 	var unknown []*yaml.Node
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
-		if _, known := knownFrontmatterKeys[mapping.Content[i].Value]; known {
+		key := mapping.Content[i]
+		if key.Tag == "!!merge" {
+			return nil, fieldError("frontmatter", "must not use YAML merge keys")
+		}
+		if _, dup := seen[key.Value]; dup {
+			return nil, fieldError("frontmatter", fmt.Sprintf("duplicate key %q", key.Value))
+		}
+		seen[key.Value] = struct{}{}
+		if _, known := knownFrontmatterKeys[key.Value]; known {
 			continue
 		}
-		unknown = append(unknown, mapping.Content[i], mapping.Content[i+1])
+		unknown = append(unknown, key, mapping.Content[i+1])
 	}
 	return unknown, nil
 }
