@@ -5,19 +5,40 @@
  * marker page's draft. Covers the Sider/Drawer switch, native close paths
  * with focus restoration across consecutive rounds, blocked/cancelled/
  * confirmed navigation against the drawer, current-page entries closing
- * without a leave confirmation, mask/scroll-lock cleanup on the desktop
- * switch, and scope/permission parity with the desktop sidebar. The suite
- * disables antd motion locally (token.motion → rc-motion) so close callbacks
- * are deterministic in jsdom; the matchMedia replacement is installed per
- * test and restored afterwards so other suites keep the shared stub.
+ * without a leave confirmation, brand modifier-key passthrough, mask/
+ * scroll-lock cleanup on the desktop switch, and scope/permission parity
+ * with the desktop sidebar. The suite disables antd motion locally
+ * (token.motion → rc-motion) so close callbacks are deterministic in jsdom,
+ * and initializes NODE_ENV to development before the antd chain first loads
+ * (restored afterwards) so rc-util's module-init selection uses real layout
+ * effects like production; the matchMedia replacement is installed per test
+ * and restored afterwards so other suites keep the shared stub.
  */
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { App as AntApp, ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
-import { NARROW_MEDIA_QUERY } from '../src/components/layout/AppShell';
+
+// rc-util chooses React.useLayoutEffect vs React.useEffect at module init
+// from NODE_ENV ('test' degrades to passive effects, which reorders the
+// drawer's opener capture after its autofocus). Set development BEFORE the
+// antd chain is first loaded — static imports would evaluate too early, so
+// the antd-backed modules are imported dynamically here. No module resets
+// (no second React instance) and nothing outside this file is affected.
+// The frontend tsconfig has no node types; vitest runs this file with a
+// real process global.
+declare const process: { env: { NODE_ENV: string | undefined } };
+
+const originalNodeEnv = process.env.NODE_ENV;
+process.env.NODE_ENV = 'development';
+const [{ App: AntApp, ConfigProvider }, { default: App }, { NARROW_MEDIA_QUERY }, { setLocale }] =
+	await Promise.all([
+		import('antd'),
+		import('../src/App'),
+		import('../src/components/layout/AppShell'),
+		import('../src/lib/i18n')
+	]);
 
 const alice = {
 	id: '11111111-1111-1111-1111-111111111111',
@@ -146,8 +167,6 @@ vi.mock('../src/pages/sites/PostsPage', async () => {
 	};
 });
 
-import App from '../src/App';
-import { setLocale } from '../src/lib/i18n';
 
 // --- switchable matchMedia double -------------------------------------------
 const originalMatchMedia = window.matchMedia;
@@ -193,6 +212,10 @@ async function openNavigationDrawer() {
 	button.focus();
 	fireEvent.click(button);
 	await waitFor(() => expect(document.querySelector('.ant-drawer-open')).not.toBeNull());
+	// The drawer's autofocus has moved focus into the real drawer surface.
+	await waitFor(() =>
+		expect(document.querySelector('.ant-drawer')?.contains(document.activeElement)).toBe(true)
+	);
 	expect(button.getAttribute('aria-expanded')).toBe('true');
 	return button;
 }
@@ -307,6 +330,10 @@ afterEach(() => {
 		value: originalMatchMedia
 	});
 	mediaListeners.clear();
+});
+
+afterAll(() => {
+	process.env.NODE_ENV = originalNodeEnv;
 });
 
 describe('breakpoint switch', () => {
@@ -486,6 +513,73 @@ describe('unsaved-changes navigation', () => {
 		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
 			'unsaved'
 		);
+	}, 15000);
+
+	it('keeps drawer state on a blocked fixed-action navigation from a dirty site page', async () => {
+		renderAt('/sites/abc/posts');
+		const input = (await screen.findByRole('textbox', { name: 'draft-value' })) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: 'unsaved' } });
+		const button = await openNavigationDrawer();
+
+		// The fixed action targets the platform home; the dirty page blocks it.
+		fireEvent.click(screen.getByText(zh['nav.returnPlatform']).closest('button')!);
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull());
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+		expect(document.querySelector('.ant-modal')?.contains(document.activeElement)).toBe(true);
+
+		// Cancel: route, draft, and drawer state all survive.
+		fireEvent.click(buttonByName(zh['draft.leaveCancel']));
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).toBeNull());
+		expect(screen.getByText('page-posts')).toBeDefined();
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect(input.isConnected).toBe(true);
+
+		// Confirm: the route changes, the drawer closes, focus returns.
+		fireEvent.click(screen.getByText(zh['nav.returnPlatform']).closest('button')!);
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull());
+		fireEvent.click(buttonByName(zh['draft.leaveConfirm']));
+		expect(await screen.findByText('page-sites')).toBeDefined();
+		await expectDrawerClosed(button);
+		expect(input.isConnected).toBe(false);
+	}, 15000);
+
+	it('passes modifier-key brand clicks to the browser and closes on the current-page plain click', async () => {
+		renderAt('/sites');
+		const input = (await screen.findByRole('textbox', { name: 'draft-value' })) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: 'unsaved' } });
+		const button = await openNavigationDrawer();
+		const link = document.querySelector('.sidebar-brand a')!;
+
+		// Ctrl-click on the current page: the event stays uncancelled for the
+		// browser (new tab), the drawer stays open, nothing navigates.
+		let prevented: boolean | null = null;
+		const record = (event: MouseEvent) => {
+			prevented = event.defaultPrevented;
+		};
+		document.body.addEventListener('click', record);
+		fireEvent.click(link, { ctrlKey: true });
+		document.body.removeEventListener('click', record);
+		expect(prevented).toBe(false);
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+		expect(screen.queryByText(zh['draft.leaveTitle'])).toBeNull();
+
+		// Plain click on the current page: closed directly, no leave dialog.
+		fireEvent.click(link);
+		await expectDrawerClosed(button);
+		expect(screen.getByText('page-sites')).toBeDefined();
+		expect(screen.queryByText(zh['draft.leaveTitle'])).toBeNull();
+		expect(
+			(screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value
+		).toBe('unsaved');
 	}, 15000);
 
 	it('closes only after the route changes when the brand link navigates away', async () => {
