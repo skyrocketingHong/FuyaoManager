@@ -97,7 +97,7 @@ export default function ThemesCatalogPage() {
 	];
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{errorKey !== null ? (
 				<Alert
 					type="error"
@@ -118,6 +118,7 @@ export default function ThemesCatalogPage() {
 			) : null}
 			{errorKey === null ? (
 				<TablePanel
+					className="fill-height"
 					tools={
 						<Tooltip title={t('themes.registerHint')}>
 							<Typography.Text type="secondary" className="version-text text-caption">
@@ -127,6 +128,7 @@ export default function ThemesCatalogPage() {
 					}
 				>
 					<DataTable<Theme>
+						className="themes-table"
 						rowKey="id"
 						columns={columns}
 						dataSource={themes ?? []}

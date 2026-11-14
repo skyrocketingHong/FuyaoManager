@@ -87,6 +87,19 @@
 	min-width: 720px;
 }
 
+/* Themes catalog fill table: same local-min-width approach as the posts
+   table — the existing content node carries both axes without scroll.x. */
+.themes-table .ant-table-content > table {
+	min-width: 880px;
+}
+
+/* Blog search box: 260px target width, never wider than its container in
+   either the top-bar slot or the local fallback toolbar. */
+.posts-search {
+	width: 260px;
+	max-width: 100%;
+}
+
 @media (max-width: 991px) {
 	.page-stack--fill > .fill-height {
 		min-height: 0;
