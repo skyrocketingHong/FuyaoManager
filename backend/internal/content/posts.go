@@ -85,8 +85,17 @@ func (p *Post) PostPath() string {
 	return p.Category + "/" + p.Slug + ".md"
 }
 
-// Render produces the full markdown file: frontmatter + body.
+// Render produces the full markdown file: frontmatter + body. Unknown
+// frontmatter pairs (none on a fresh render) would be appended after the
+// modeled keys; SavePost supplies them from the locked server copy.
 func (p *Post) Render() ([]byte, error) {
+	return renderPost(*p, nil)
+}
+
+// renderPost writes the modeled fields in frontmatterOrder, then any
+// unknown frontmatter pairs (key, value nodes) taken verbatim from the
+// server copy, then the fenced body with the existing newline convention.
+func renderPost(p Post, unknown []*yaml.Node) ([]byte, error) {
 	fields := map[string]any{
 		"title": p.Title,
 		"slug":  p.Slug,
@@ -139,6 +148,21 @@ func (p *Post) Render() ([]byte, error) {
 		}
 		buf.WriteString(key + ": " + strings.TrimRight(string(raw), "\n") + "\n")
 		delete(fields, key)
+	}
+	if len(unknown) > 0 {
+		// Unknown keys keep their server-side nodes (names, nesting, values,
+		// and YAML types) and their original order, rendered as one block
+		// after the modeled keys. A dangling alias here (its anchor lived in
+		// a replaced known field) fails the encode, so nothing is written.
+		merge := &yaml.Node{Kind: yaml.MappingNode, Content: unknown}
+		enc := yaml.NewEncoder(&buf)
+		enc.SetIndent(2)
+		if err := enc.Encode(merge); err != nil {
+			return nil, err
+		}
+		if err := enc.Close(); err != nil {
+			return nil, err
+		}
 	}
 	buf.WriteString("---\n")
 	body := strings.ReplaceAll(p.Body, "\r\n", "\n")
@@ -200,6 +224,46 @@ func ParsePost(rel string, data []byte) (Post, error) {
 		post.Slug = strings.TrimSuffix(filepath.Base(rel), ".md")
 	}
 	return post, nil
+}
+
+// knownFrontmatterKeys is the modeled projection set; everything else in a
+// post's frontmatter is unknown data that SavePost must preserve.
+var knownFrontmatterKeys = func() map[string]struct{} {
+	set := make(map[string]struct{}, len(frontmatterOrder))
+	for _, key := range frontmatterOrder {
+		set[key] = struct{}{}
+	}
+	return set
+}()
+
+// unknownFrontmatter extracts the unmodeled key/value pairs from the raw
+// frontmatter, preserving their order, nesting, values, and YAML types. A
+// frontmatter that is not a mapping has no preservable pairs and fails
+// explicitly instead of being silently flattened.
+func unknownFrontmatter(raw []byte) ([]*yaml.Node, error) {
+	fm, _, err := SplitFrontmatter(raw)
+	if err != nil {
+		return nil, err
+	}
+	if len(strings.TrimSpace(string(fm))) == 0 {
+		return nil, nil
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(fm, &doc); err != nil {
+		return nil, fmt.Errorf("frontmatter is not valid YAML: %w", err)
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, fieldError("frontmatter", "must be a YAML mapping")
+	}
+	mapping := doc.Content[0]
+	var unknown []*yaml.Node
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if _, known := knownFrontmatterKeys[mapping.Content[i].Value]; known {
+			continue
+		}
+		unknown = append(unknown, mapping.Content[i], mapping.Content[i+1])
+	}
+	return unknown, nil
 }
 
 // ListPosts scans the site's posts tree (one category nesting level),
@@ -295,7 +359,11 @@ func (s *Store) GetPost(siteID uuid.UUID, rel string) (Post, error) {
 // The digest comparison and the write happen inside one exclusive file lock,
 // so concurrent savers presenting the same old ETag serialize: exactly one
 // wins and the rest observe the moved digest and return ErrConflict. The
-// returned post and digest describe exactly the bytes this call wrote.
+// frontmatter keys outside the modeled projection survive from the locked
+// server copy (names, nesting, values, and YAML types); the modeled fields
+// come from this request alone, so clearing an optional value deletes its
+// old entry. The merged document is parsed before anything is written, and
+// the returned post and digest describe exactly the bytes this call wrote.
 func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Post, error) {
 	if err := post.Validate(); err != nil {
 		return Post{}, err
@@ -303,21 +371,34 @@ func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Po
 	rel := post.PostPath()
 	var saved Post
 	err := s.withFileLock(siteID, "posts", "posts/"+rel, func() error {
-		if expectedDigest != "" {
-			raw, currentDigest, err := s.ReadFile(siteID, RootContent, "posts/"+rel)
-			if errors.Is(err, ErrNotFound) {
+		var unknown []*yaml.Node
+		raw, currentDigest, err := s.ReadFile(siteID, RootContent, "posts/"+rel)
+		switch {
+		case errors.Is(err, ErrNotFound):
+			if expectedDigest != "" {
 				return ErrNotFound
 			}
+		case err != nil:
+			return err
+		default:
+			if expectedDigest != "" && currentDigest != expectedDigest {
+				return ErrConflict
+			}
+			// The unknown keys only ever come from the server copy read under
+			// this lock — never from the request payload.
+			unknown, err = unknownFrontmatter(raw)
 			if err != nil {
 				return err
 			}
-			if currentDigest != expectedDigest {
-				return ErrConflict
-			}
-			_ = raw
 		}
-		data, err := post.Render()
+		data, err := renderPost(post, unknown)
 		if err != nil {
+			return err
+		}
+		// The merged document must parse cleanly (this also rejects dangling
+		// aliases into the replaced known fields) before anything is written;
+		// a failure here leaves the original file untouched.
+		if _, err := ParsePost(rel, data); err != nil {
 			return err
 		}
 		if _, err := s.WriteFile(siteID, RootContent, "posts/"+rel, data); err != nil {
