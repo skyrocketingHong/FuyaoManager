@@ -1,17 +1,21 @@
 /**
  * Narrow-screen navigation drawer tests: a controllable matchMedia double
- * drives the 991px breakpoint with the real antd Drawer in play. Covers the
- * Sider/Drawer switch, focus restoration after the native close paths,
- * route- and entry-driven closes, mask/scroll-lock cleanup when switching
- * back to desktop, stable page state across breakpoints, and scope/permission
- * parity with the desktop sidebar. The matchMedia replacement is installed
- * per test and restored afterwards so other suites keep the shared stub.
+ * drives the 991px breakpoint with the real antd Drawer in play, and the
+ * real useUnsavedGuard (data-router blocker + AntApp modal) protects the
+ * marker page's draft. Covers the Sider/Drawer switch, native close paths
+ * with focus restoration across consecutive rounds, blocked/cancelled/
+ * confirmed navigation against the drawer, current-page entries closing
+ * without a leave confirmation, mask/scroll-lock cleanup on the desktop
+ * switch, and scope/permission parity with the desktop sidebar. The suite
+ * disables antd motion locally (token.motion → rc-motion) so close callbacks
+ * are deterministic in jsdom; the matchMedia replacement is installed per
+ * test and restored afterwards so other suites keep the shared stub.
  */
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 import { NARROW_MEDIA_QUERY } from '../src/components/layout/AppShell';
 
@@ -80,14 +84,18 @@ vi.mock('../src/lib/api/client', () => ({
 	}
 }));
 
-// The sites marker publishes real top-bar slot content and hosts a draft
-// input so breakpoint switches must not remount the page.
+// The sites marker runs the real useUnsavedGuard over a draft input and
+// publishes real top-bar slot content, so blocked navigation and breakpoint
+// switches exercise the production protection instead of a stand-in.
 vi.mock('../src/pages/SitesPage', async () => {
 	const { useState } = await import('react');
+	const { useUnsavedGuard } = await import('../src/lib/editing/useUnsavedGuard');
 	const { usePageHeader } = await import('../src/components/PageHeader');
 	return {
 		default: function SitesMarker() {
 			const [draft, setDraft] = useState('initial');
+			const dirty = draft !== 'initial';
+			useUnsavedGuard(dirty);
 			usePageHeader({
 				content: <span>marker-slot-content</span>,
 				actions: <button type="button">marker-slot-action</button>
@@ -112,7 +120,31 @@ vi.mock('../src/pages/ThemesCatalogPage', () => ({ default: () => <div>page-them
 vi.mock('../src/pages/UsersPage', () => ({ default: () => <div>page-users</div> }));
 vi.mock('../src/pages/LogsPage', () => ({ default: () => <div>page-logs</div> }));
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
-vi.mock('../src/pages/sites/PostsPage', () => ({ default: () => <div>page-posts</div> }));
+// The posts marker carries the real guard too, so the brand link's
+// cross-page navigation (site page → platform home) can be blocked.
+vi.mock('../src/pages/sites/PostsPage', async () => {
+	const { useState } = await import('react');
+	const { useUnsavedGuard } = await import('../src/lib/editing/useUnsavedGuard');
+	return {
+		default: function PostsMarker() {
+			const [draft, setDraft] = useState('initial');
+			useUnsavedGuard(draft !== 'initial');
+			return (
+				<div>
+					<span>page-posts</span>
+					<label>
+						{zh['common.save']}
+						<input
+							aria-label="draft-value"
+							value={draft}
+							onChange={(event) => setDraft(event.target.value)}
+						/>
+					</label>
+				</div>
+			);
+		}
+	};
+});
 
 import App from '../src/App';
 import { setLocale } from '../src/lib/i18n';
@@ -150,57 +182,46 @@ function switchViewport(narrow: boolean) {
 	for (const listener of [...mediaListeners]) listener({ matches: narrow } as MediaQueryListEvent);
 }
 
-// --- drawer motion helpers ---------------------------------------------------
-// jsdom never fires real transitions; re-dispatching transitionend until the
-// expected condition holds drives the rc-motion enter/leave steps to
-// completion no matter which frame they are on. The motion ref lives on the
-// drawer section, so events are dispatched there (the content wrapper keeps
-// the transition styles, so both targets are covered). The portal root stays
-// mounted after a normal close (rc-drawer autoDestroy=false): a closed drawer
-// is the open-class/mask/wrapper-hidden state, not a removed node.
-async function settleDrawerMotion() {
-	document.querySelector('.ant-drawer-section')?.dispatchEvent(new Event('transitionend'));
-	document.querySelector('.ant-drawer-content-wrapper')?.dispatchEvent(new Event('transitionend'));
-}
-
+// --- drawer helpers -----------------------------------------------------------
+// With token.motion: false the rc-motion steps complete synchronously, so
+// the observable close state (and rc-drawer's native focus restoration) is
+// deterministic. The portal root stays mounted after a normal close
+// (rc-drawer autoDestroy=false): a closed drawer is the
+// open-class/mask/wrapper-hidden state, not a removed node.
 async function openNavigationDrawer() {
 	const button = screen.getByRole('button', { name: zh['app.openNavigation'] });
 	button.focus();
 	fireEvent.click(button);
 	await waitFor(() => expect(document.querySelector('.ant-drawer-open')).not.toBeNull());
-	await waitFor(
-		() => {
-			settleDrawerMotion();
-			expect(button.getAttribute('aria-expanded')).toBe('true');
-		},
-		{ timeout: 5000 }
-	);
+	expect(button.getAttribute('aria-expanded')).toBe('true');
 	return button;
 }
 
 async function expectDrawerClosed(button?: HTMLElement) {
-	await waitFor(
-		() => {
-			settleDrawerMotion();
-			expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(
-				false
-			);
-			expect(document.querySelector('.ant-drawer-mask')).toBeNull();
-			expect(
-				document
-					.querySelector('.ant-drawer-content-wrapper')
-					?.classList.contains('ant-drawer-content-wrapper-hidden')
-			).toBe(true);
-			if (button) expect(document.activeElement).toBe(button);
-		},
-		{ timeout: 5000 }
-	);
+	await waitFor(() => {
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(
+			false
+		);
+		expect(document.querySelector('.ant-drawer-mask')).toBeNull();
+		expect(
+			document
+				.querySelector('.ant-drawer-content-wrapper')
+				?.classList.contains('ant-drawer-content-wrapper-hidden')
+		).toBe(true);
+		if (button) expect(document.activeElement).toBe(button);
+	});
 }
 
 function bodyHasScrollLockStyle() {
 	return Array.from(document.querySelectorAll('style')).some((tag) =>
 		tag.textContent?.includes('overflow-y: hidden')
 	);
+}
+
+// antd inserts a space between two CJK button characters; compare without
+// whitespace.
+function buttonByName(text: string) {
+	return screen.getByRole('button', { name: (name) => name.replace(/\s/g, '') === text });
 }
 
 // --- shared fixtures ---------------------------------------------------------
@@ -217,8 +238,10 @@ function authenticated() {
 function renderAt(path: string) {
 	const router = createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: [path] });
 	return render(
-		<ConfigProvider>
-			<RouterProvider router={router} />
+		<ConfigProvider theme={{ token: { motion: false } }}>
+			<AntApp>
+				<RouterProvider router={router} />
+			</AntApp>
 		</ConfigProvider>
 	);
 }
@@ -324,9 +347,9 @@ describe('breakpoint switch', () => {
 		await act(async () => {
 			switchViewport(false);
 		});
-		expect(
-			(screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value
-		).toBe('unsaved');
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
 		expect(screen.getByText('marker-slot-content')).toBeDefined();
 		expect(screen.getByText('marker-slot-action')).toBeDefined();
 
@@ -335,24 +358,25 @@ describe('breakpoint switch', () => {
 		});
 		// The drawer is closed by default and the page state survives again.
 		expect(document.querySelector('.ant-drawer')).toBeNull();
-		expect(
-			(screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value
-		).toBe('unsaved');
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
 		expect(screen.getByText('marker-slot-content')).toBeDefined();
 	});
 });
 
-describe('drawer interactions', () => {
+describe('native close paths and focus', () => {
 	beforeEach(() => {
 		useNarrowViewport(true);
 		authenticated();
 	});
 
-	it('opens the navigation regions in order and closes via Escape back to the menu button', async () => {
+	it('restores focus to the menu button across consecutive open-close rounds', async () => {
 		renderAt('/sites');
 		await screen.findByText('page-sites');
+
+		// Round 1: Escape.
 		const button = await openNavigationDrawer();
-		expect(document.querySelector('.app-sider')).toBeNull();
 		const drawer = document.querySelector('.ant-drawer')!;
 		expect(drawer.querySelector('.sidebar-brand a')).not.toBeNull();
 		expect(drawer.querySelector('.sidebar-info')).not.toBeNull();
@@ -363,50 +387,18 @@ describe('drawer interactions', () => {
 			drawer.querySelector('.sidebar-actions')!.compareDocumentPosition(drawer.querySelector('nav')!) &
 				Node.DOCUMENT_POSITION_FOLLOWING
 		).not.toBe(0);
-		expect(screen.getByRole('menuitem', { name: zh['nav.themesCatalog'] })).toBeDefined();
-
 		fireEvent.keyDown(window, { key: 'Escape' });
 		await expectDrawerClosed(button);
-	}, 15000);
 
-	it('closes via the native close button and restores focus', async () => {
-		renderAt('/sites');
-		await screen.findByText('page-sites');
-		const button = await openNavigationDrawer();
-		fireEvent.click(document.querySelector('.ant-drawer-close')!);
-		await expectDrawerClosed(button);
-	}, 15000);
-
-	it('closes via the mask and restores focus', async () => {
-		renderAt('/sites');
-		await screen.findByText('page-sites');
-		const button = await openNavigationDrawer();
-		fireEvent.click(document.querySelector('.ant-drawer-mask')!);
-		await expectDrawerClosed(button);
-	}, 15000);
-
-	it('closes after a successful menu navigation and after the brand link', async () => {
-		renderAt('/sites');
-		await screen.findByText('page-sites');
-		const button = await openNavigationDrawer();
-		fireEvent.click(screen.getByRole('menuitem', { name: zh['nav.themesCatalog'] }));
-		expect(await screen.findByText('page-themes')).toBeDefined();
-		await expectDrawerClosed(button);
-
-		// The brand link navigates home and closes the drawer as well.
+		// Round 2: native close button, straight after the first cycle.
 		const buttonAgain = await openNavigationDrawer();
-		fireEvent.click(document.querySelector('.sidebar-brand a')!);
-		expect(await screen.findByText('page-sites')).toBeDefined();
+		fireEvent.click(document.querySelector('.ant-drawer-close')!);
 		await expectDrawerClosed(buttonAgain);
-	}, 15000);
 
-	it('closes when the current page entry is clicked without changing routes', async () => {
-		renderAt('/sites');
-		await screen.findByText('page-sites');
-		const button = await openNavigationDrawer();
-		fireEvent.click(screen.getByText(zh['nav.platformHome']).closest('button')!);
-		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
-		await expectDrawerClosed(button);
+		// Round 3: mask click.
+		const buttonThird = await openNavigationDrawer();
+		fireEvent.click(document.querySelector('.ant-drawer-mask')!);
+		await expectDrawerClosed(buttonThird);
 	}, 15000);
 
 	it('cleans the mask and scroll lock when the viewport returns to desktop while open', async () => {
@@ -427,6 +419,94 @@ describe('drawer interactions', () => {
 			true
 		);
 		expect(document.querySelector('.app-sider')).not.toBeNull();
+	}, 15000);
+});
+
+describe('unsaved-changes navigation', () => {
+	beforeEach(() => {
+		useNarrowViewport(true);
+		authenticated();
+	});
+
+	async function openWithDirtyDraft() {
+		renderAt('/sites');
+		const input = (await screen.findByRole('textbox', { name: 'draft-value' })) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: 'unsaved' } });
+		await openNavigationDrawer();
+		return input;
+	}
+
+	it('keeps the drawer and draft intact when navigation is blocked, then closes after confirming', async () => {
+		const input = await openWithDirtyDraft();
+		const button = screen.getByRole('button', { name: zh['app.openNavigation'] });
+
+		// Cross-page menu click with a dirty page: the blocker dialog appears
+		// while the drawer stays open, and nothing steals the dialog's focus.
+		fireEvent.click(screen.getByRole('menuitem', { name: zh['nav.themesCatalog'] }));
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull());
+		expect(document.querySelector('.ant-modal-confirm-title')?.textContent).toBe(
+			zh['draft.leaveTitle']
+		);
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect(
+			(screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value
+		).toBe('unsaved');
+		// The drawer stays open behind the dialog and nothing steals the
+		// dialog's focus.
+		expect(document.querySelector('.ant-modal')?.contains(document.activeElement)).toBe(true);
+
+		// Cancel: route, draft, and drawer state all survive.
+		fireEvent.click(buttonByName(zh['draft.leaveCancel']));
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).toBeNull());
+		expect(screen.getByText('page-sites')).toBeDefined();
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect(input.isConnected).toBe(true);
+
+		// Confirm: the route changes, the drawer closes, focus returns.
+		fireEvent.click(screen.getByRole('menuitem', { name: zh['nav.themesCatalog'] }));
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull());
+		fireEvent.click(buttonByName(zh['draft.leaveConfirm']));
+		expect(await screen.findByText('page-themes')).toBeDefined();
+		await expectDrawerClosed(button);
+	}, 15000);
+
+	it('closes the current-page entry directly without a leave confirmation', async () => {
+		await openWithDirtyDraft();
+		const button = screen.getByRole('button', { name: zh['app.openNavigation'] });
+
+		fireEvent.click(screen.getByText(zh['nav.platformHome']).closest('button')!);
+		await expectDrawerClosed(button);
+		// No navigation attempt, so the leave confirmation never appears and
+		// the draft survives.
+		expect(screen.queryByText(zh['draft.leaveTitle'])).toBeNull();
+		expect(screen.getByText('page-sites')).toBeDefined();
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+	}, 15000);
+
+	it('closes only after the route changes when the brand link navigates away', async () => {
+		// The brand link always targets the platform home; a dirty site page
+		// makes the click a blocked cross-page navigation.
+		renderAt('/sites/abc/posts');
+		const input = (await screen.findByRole('textbox', { name: 'draft-value' })) as HTMLInputElement;
+		fireEvent.change(input, { target: { value: 'unsaved' } });
+		const button = await openNavigationDrawer();
+
+		fireEvent.click(document.querySelector('.sidebar-brand a')!);
+		await waitFor(() => expect(document.querySelector('.ant-modal-confirm')).not.toBeNull());
+		expect(document.querySelector('.ant-drawer')?.classList.contains('ant-drawer-open')).toBe(true);
+		expect((screen.getByRole('textbox', { name: 'draft-value' }) as HTMLInputElement).value).toBe(
+			'unsaved'
+		);
+
+		fireEvent.click(buttonByName(zh['draft.leaveConfirm']));
+		expect(await screen.findByText('page-sites')).toBeDefined();
+		await expectDrawerClosed(button);
+		expect(input.isConnected).toBe(false);
 	}, 15000);
 });
 

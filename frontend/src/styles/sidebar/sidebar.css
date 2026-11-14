@@ -252,3 +252,10 @@
 .nav-drawer .ant-drawer-content-wrapper {
 	max-width: 86vw;
 }
+/* Very short drawer windows: the menu keeps an operable floor while the
+   brand, info, actions, and foot stay reachable through the drawer body's
+   own scroll. Normal heights are unaffected (the menu simply fills more);
+   the desktop Sider keeps its existing sizing. */
+.drawer-sidebar > .sidebar-content > nav {
+	min-height: 8rem;
+}

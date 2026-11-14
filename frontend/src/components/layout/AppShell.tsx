@@ -3,9 +3,9 @@
 import {
 	useCallback,
 	useEffect,
-	useRef,
 	useState,
 	useSyncExternalStore,
+	type MouseEvent,
 	type ReactNode
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -123,21 +123,23 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		setNavOpen(false);
 	}, [narrow, pathname]);
-	// Focus guarantee: rc-drawer returns focus to the trigger after its leave
-	// animation; the deferred focus here guarantees it even when that
-	// animation is cut short. Running after the commit keeps the drawer's
-	// focus trap from pulling focus back, the navOpen re-check avoids stealing
-	// focus from a reopened drawer, and the unmounted ref (desktop switch)
-	// keeps focus off removed nodes.
-	const menuButtonRef = useRef<HTMLButtonElement | null>(null);
-	const navOpenRef = useRef(false);
-	navOpenRef.current = navOpen;
-	const closeNavigation = useCallback(() => {
-		setNavOpen(false);
-		window.setTimeout(() => {
-			if (!navOpenRef.current) menuButtonRef.current?.focus({ preventScroll: true });
-		}, 0);
-	}, []);
+	const closeNavigation = useCallback(() => setNavOpen(false), []);
+
+	// One navigation entry point for the menu, the fixed actions, and the
+	// brand link: an already-current target closes the drawer directly (no
+	// pointless navigation, no leave confirmation), while a cross-page target
+	// navigates and lets the pathname effect above close the drawer only
+	// after the route actually changes — a blocked navigation keeps it open.
+	const navigateWorkspace = useCallback(
+		(target: string) => {
+			if (target === pathname) {
+				setNavOpen(false);
+				return;
+			}
+			navigate(target);
+		},
+		[navigate, pathname]
+	);
 
 	const match = matchRoute(pathname);
 	const siteId = match?.item.scope === 'site' ? match.siteId : null;
@@ -164,7 +166,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			icon: siteId ? <ArrowLeft size={16} /> : <LayoutDashboard size={16} strokeWidth={1.8} />,
 			trailing: siteId ? undefined : <ChevronRight size={14} />,
 			active: pathname === '/sites',
-			onClick: () => navigate('/sites')
+			onClick: () => navigateWorkspace('/sites')
 		}
 	];
 	if (siteId)
@@ -173,7 +175,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			label: t('nav.overview'),
 			icon: <Globe size={16} strokeWidth={1.8} />,
 			active: match?.item.id === 'site.overview',
-			onClick: () => navigate(`/sites/${siteId}`)
+			onClick: () => navigateWorkspace(`/sites/${siteId}`)
 		});
 	const stats: SidebarStat[] = siteId
 		? [
@@ -200,18 +202,36 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	const navModule: SidebarNavModule = {
 		items: menuItems,
 		selectedKeys: selected ? [selected] : [],
-		onSelect: (key) => navigate(key),
+		onSelect: (key) => navigateWorkspace(key),
 		ariaLabel: t('app.title')
 	};
 	const infoTitle = currentSite?.name ?? (siteId ? t('nav.overview') : t('nav.platformGroup'));
 
-	// The drawer's own close handling (native close button, mask, Escape) is
-	// covered by the rc-drawer defaults; it also restores focus to this
-	// button when the drawer leaves. Unmounting on the breakpoint switch
-	// cleans mask and scroll lock without touching focus.
+	// The brand anchor keeps its href (modified clicks, middle-click);
+	// routing decisions live here. A current-page click closes the drawer
+	// without navigating, so a dirty page never gets a pointless leave
+	// confirmation; cross-page clicks keep the anchor's default navigation,
+	// and the drawer closes via the pathname effect only after the route
+	// actually changes.
+	const handleBrandClick = useCallback(
+		(event: MouseEvent<HTMLAnchorElement>) => {
+			if (pathname === '/sites') {
+				event.preventDefault();
+				setNavOpen(false);
+			}
+		},
+		[pathname]
+	);
+
+	// The drawer's native close paths (close button, mask, Escape) and
+	// rc-drawer's focus restoration cover the leave lifecycle; unmounting on
+	// the breakpoint switch cleans mask and scroll lock without touching
+	// focus. autoFocus stays off: rc-drawer captures the opener for the
+	// restore, and the drawer-root autofocus would race that capture on
+	// reopen — with focus left on the launcher, the focus trap walks Tab
+	// into the drawer and the restore always lands on this button.
 	const menuButton = (
 		<Button
-			ref={menuButtonRef}
 			className="topbar-icon"
 			type="text"
 			icon={<MenuIcon size={16} strokeWidth={1.8} />}
@@ -247,6 +267,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					size={320}
 					open={navOpen}
 					onClose={closeNavigation}
+					autoFocus={false}
 					aria-label={t('app.navigation')}
 					classNames={{ section: 'drawer-sidebar-surface', body: 'drawer-sidebar' }}
 				>
@@ -255,7 +276,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 						stats={stats}
 						actions={actions}
 						menu={navModule}
-						onNavigate={closeNavigation}
+						onBrandClick={handleBrandClick}
 					/>
 				</Drawer>
 			)}
