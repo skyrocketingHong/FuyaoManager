@@ -6,10 +6,10 @@
 package content
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -187,20 +187,72 @@ func ValidPostPath(rel string) bool {
 	return PostPathPattern.MatchString(rel)
 }
 
+// errUnterminatedFrontmatter marks a recognized start delimiter whose
+// closing line never arrives; it is a hard error, never a "no frontmatter".
+var errUnterminatedFrontmatter = errors.New("unterminated frontmatter")
+
+// utf8BOM is stripped only when it sits directly before a start delimiter.
+const utf8BOM = "\xef\xbb\xbf"
+
 // SplitFrontmatter separates YAML frontmatter from the markdown body and
-// returns the raw frontmatter bytes ("" when absent).
+// returns the raw frontmatter bytes (nil when absent, verbatim input — BOM
+// included — as the body). The start delimiter must be the first line,
+// optionally after a UTF-8 BOM, exactly "---" with LF or CRLF; a bare "---"
+// at EOF is a recognized but unterminated header. The end delimiter must be
+// a whole line exactly "---" (a trailing CR is allowed for CRLF; suffix
+// text, extra dashes, indentation, and trailing spaces keep it from
+// counting), and only that line's own LF or CRLF is consumed — leading
+// blank lines, mixed newlines, trailing newlines, and mid-body "---" lines
+// stay part of the body untouched. Newlines are never normalized.
 func SplitFrontmatter(data []byte) (frontmatter []byte, body []byte, err error) {
-	text := string(data)
-	if !strings.HasPrefix(text, "---\n") {
+	rest := data
+	if bytes.HasPrefix(rest, []byte(utf8BOM)) {
+		rest = rest[3:]
+	}
+	if !bytes.HasPrefix(rest, []byte("---")) {
 		return nil, data, nil
 	}
-	end := strings.Index(text[4:], "\n---")
-	if end < 0 {
-		return nil, nil, fmt.Errorf("unterminated frontmatter")
+	switch {
+	case len(rest) == 3:
+		// A bare start delimiter at EOF is an unterminated header.
+		return nil, nil, errUnterminatedFrontmatter
+	case rest[3] == '\n':
+		rest = rest[4:]
+	case rest[3] == '\r' && len(rest) >= 5 && rest[4] == '\n':
+		rest = rest[5:]
+	default:
+		// The first line is not exactly "---": no frontmatter at all, and the
+		// input is the body verbatim.
+		return nil, data, nil
 	}
-	fm := text[4 : 4+end]
-	body = []byte(strings.TrimPrefix(text[4+end+4:], "\n"))
-	return []byte(fm), body, nil
+	offset := 0
+	for {
+		idx := bytes.IndexByte(rest[offset:], '\n')
+		if idx < 0 {
+			// The final line runs to EOF: an exact "---" closes the header,
+			// anything else means the header never closed.
+			if isFrontmatterEndLine(rest[offset:]) {
+				return rest[:offset], rest[len(rest):], nil
+			}
+			return nil, nil, errUnterminatedFrontmatter
+		}
+		line := rest[offset : offset+idx]
+		if isFrontmatterEndLine(line) {
+			// Consume only the end line's own line terminator; everything
+			// after it is the body, byte for byte.
+			return rest[:offset], rest[offset+idx+1:], nil
+		}
+		offset += idx + 1
+	}
+}
+
+// isFrontmatterEndLine reports whether a whole line is exactly the closing
+// delimiter, tolerating one trailing CR for CRLF endings and nothing else.
+func isFrontmatterEndLine(line []byte) bool {
+	if len(line) > 0 && line[len(line)-1] == '\r' {
+		line = line[:len(line)-1]
+	}
+	return string(line) == "---"
 }
 
 // RenderFrontmatter marshals ordered frontmatter fields as YAML with the

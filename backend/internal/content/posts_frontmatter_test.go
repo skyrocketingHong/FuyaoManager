@@ -426,3 +426,52 @@ body
 		t.Fatalf("the literal << key must keep its string type: %s %q", value.Tag, value.Value)
 	}
 }
+
+// TestSavePostPreservesUnknownDataAcrossFormats proves BOM and CRLF
+// originals keep their unknown frontmatter through a save, and that the
+// stale-digest and unterminated-header guards still fail without touching
+// the stored bytes.
+func TestSavePostPreservesUnknownDataAcrossFormats(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	crlf := "\xef\xbb\xbf---\r\ntitle: base\r\nslug: extra\r\ndate: 2026-11-12\r\ndraft: true\r\nsummary: kept\r\n---\r\noriginal body\r\n"
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/extra.md", []byte(crlf)); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.GetPost(id, "tech/extra.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	next := Post{Category: "tech", Slug: "extra", Title: "updated", Date: "2026-11-12", Draft: false, Body: "new body"}
+	saved, err := s.SavePost(id, next, current.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, digest, err := s.ReadFile(id, RootContent, "posts/tech/extra.md")
+	if err != nil || digest != saved.Digest {
+		t.Fatalf("stored bytes disagree with the returned digest: %v %s %s", err, digest, saved.Digest)
+	}
+	if !strings.Contains(string(raw), "summary: kept") {
+		t.Fatalf("unknown data must survive the CRLF/BOM save:\n%s", raw)
+	}
+	if saved.Title != "updated" {
+		t.Fatalf("modeled fields must follow the request: %+v", saved)
+	}
+
+	// An unterminated header cannot be saved: the failure leaves the stored
+	// bytes and digest exactly as they were.
+	unterminated := "---\ntitle: broken"
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/broken.md", []byte(unterminated)); err != nil {
+		t.Fatal(err)
+	}
+	_, brokenDigest, err := s.ReadFile(id, RootContent, "posts/tech/broken.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SavePost(id, Post{Category: "tech", Slug: "broken", Title: "u", Date: "2026-11-12", Draft: false, Body: "b"}, brokenDigest); err == nil {
+		t.Fatal("saving over an unterminated header must fail")
+	}
+	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/broken.md")
+	if err != nil || afterDigest != brokenDigest || string(after) != unterminated {
+		t.Fatalf("rejected save must not touch the stored file: %v %s", err, afterDigest)
+	}
+}
