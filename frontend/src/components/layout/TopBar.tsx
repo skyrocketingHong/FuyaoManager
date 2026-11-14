@@ -29,8 +29,8 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 					<i />
 					<i />
 				</span>
+				<div className="topbar-navigation">{navigationSlot}</div>
 				<div className="topbar-main">
-					<div className="topbar-navigation">{navigationSlot}</div>
 					<div className="topbar-identity">
 						{header?.content && <div className="topbar-page-content">{header.content}</div>}
 					</div>

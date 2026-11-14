@@ -97,7 +97,7 @@ export default function UsersPage() {
 		else close();
 	};
 	const content = (
-		<Space size={8}>
+		<Space wrap size={8}>
 			<Input.Search
 				aria-label={t('admin.search')}
 				placeholder={t('admin.search')}
@@ -144,7 +144,7 @@ export default function UsersPage() {
 		</Space>
 	);
 	const actions = (
-		<Space size={8}>
+		<Space wrap size={8}>
 			<Button
 				icon={<RefreshCw size={16} />}
 				onClick={query.reload}

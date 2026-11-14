@@ -1,16 +1,23 @@
 /* Ported from robot-platform/frontend/styles/statusbar/statusbar.css:
    shared single-row slots, layered background, 32px controls, user menu. */
+/* Responsive top bar: three stable grid slots (navigation | page area |
+   session). The page area wraps its filters and actions onto further rows
+   when the .shell-main container runs out of width, so nothing scrolls
+   horizontally, nothing is hidden, and the bar grows in height while the
+   workspace absorbs the remainder. */
 .topbar {
 	--topbar-control-height: 32px;
 	position: sticky;
 	top: 0;
 	z-index: 30;
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	grid-template-areas: 'nav main session';
+	align-items: start;
 	min-height: 44px;
 	flex: 0 0 auto;
-	padding: 0 var(--space-4);
+	padding-block: 6px;
+	padding-inline: var(--space-4);
 	border-bottom: 1px solid var(--border);
 	background: var(--card);
 }
@@ -64,6 +71,7 @@
 		transparent
 	);
 }
+.topbar-navigation,
 .topbar-main,
 .topbar-session {
 	position: relative;
@@ -71,29 +79,54 @@
 }
 /* Narrow-screen navigation toggle slot; empty on desktop widths. */
 .topbar-navigation {
+	grid-area: nav;
 	display: flex;
 	align-items: center;
-	flex: 0 0 auto;
+	min-width: 0;
 }
 .topbar-navigation:empty {
 	display: none;
 }
 .topbar-main {
+	grid-area: main;
 	display: flex;
-	flex-wrap: nowrap;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2);
 	font-size: var(--text-body);
 	color: var(--muted-foreground);
 	min-width: 0;
-	overflow-x: auto;
-	overflow-y: hidden;
-	padding-block: 6px;
-	scrollbar-width: thin;
-	overscroll-behavior-inline: contain;
 }
-.topbar-main > * {
-	flex-shrink: 0;
+.topbar-identity {
+	display: flex;
+	align-items: center;
+	gap: var(--space-3);
+	min-width: 0;
+	flex: 1 1 auto;
+}
+.topbar-identity:empty {
+	display: none;
+}
+.topbar-page-content {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	/* The floor keeps filter rows readable: when the first row cannot fit it
+	   any more, the whole filter block wraps onto its own line instead of
+	   being squeezed beside the session controls. */
+	min-width: min(360px, 100%);
+	flex: 1 1 auto;
+	overflow-x: auto;
+	scrollbar-width: thin;
+}
+.topbar-page-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	flex: 0 0 auto;
+	margin-inline-start: auto;
 }
 .topbar .ant-btn:not(.ant-btn-link) {
 	height: var(--topbar-control-height);
@@ -123,31 +156,6 @@
 	min-height: 0;
 	height: 100%;
 }
-.topbar-identity {
-	min-width: max-content;
-	display: flex;
-	align-items: center;
-	gap: var(--space-3);
-	flex: 1 0 auto;
-}
-.topbar-identity:empty {
-	display: none;
-}
-.topbar-page-content {
-	display: flex;
-	align-items: center;
-	gap: var(--space-2);
-	min-width: 0;
-	flex: 1 0 auto;
-}
-.topbar-page-actions {
-	display: flex;
-	flex-wrap: nowrap;
-	flex: 0 0 auto;
-	align-items: center;
-	gap: var(--space-2);
-	margin-inline: auto var(--space-3);
-}
 .topbar-tabs.ant-segmented {
 	display: inline-flex;
 	min-width: 0;
@@ -168,12 +176,13 @@
 	line-height: 28px;
 }
 .topbar-session {
+	grid-area: session;
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-2);
-	min-width: max-content;
+	min-width: 0;
 }
 .topbar .ant-btn.user-button {
 	gap: var(--space-2);
@@ -199,12 +208,4 @@
 	background: var(--muted);
 	color: var(--foreground);
 	font-size: 11px;
-}
-@container (max-width: 640px) {
-	.topbar {
-		grid-template-columns: minmax(160px, 1fr) max-content;
-		overflow-x: auto;
-		scrollbar-width: thin;
-		overscroll-behavior-inline: contain;
-	}
 }

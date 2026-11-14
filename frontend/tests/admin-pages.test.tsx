@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { App as AntApp, ConfigProvider } from 'antd';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
+import TopBar from '../src/components/layout/TopBar';
 import UsersPage from '../src/pages/UsersPage';
 import LogsPage from '../src/pages/LogsPage';
 import { setLocale } from '../src/lib/i18n';
@@ -363,4 +364,48 @@ it('filters logs by outcome and expands metadata without inventing record detail
 		).toBe('failure')
 	);
 	expect(await screen.findByText('No matching events')).toBeDefined();
+});
+
+
+// The real top bar renders page filters and actions exactly once and keeps
+// every control operable next to the locale, theme, and account entries.
+it('renders UsersPage filters and actions once in the real top bar and keeps them operable', async () => {
+	const router = createMemoryRouter([
+		{
+			path: '*',
+			element: (
+				<ConfigProvider theme={{ token: { motion: false } }}>
+					<AntApp>
+						<PageHeaderProvider scope="admin">
+							<TopBar />
+							<UsersPage />
+						</PageHeaderProvider>
+					</AntApp>
+				</ConfigProvider>
+			),
+			errorElement: <div>route-crash</div>
+		}
+	]);
+	render(<RouterProvider router={router} />);
+
+	expect(screen.getAllByLabelText('Search users')).toHaveLength(1);
+	expect(screen.getAllByLabelText('Platform role')).toHaveLength(1);
+	expect(screen.getAllByLabelText('Status')).toHaveLength(1);
+	expect(screen.getAllByRole('button', { name: 'Refresh' })).toHaveLength(1);
+	expect(screen.getAllByRole('button', { name: 'Create user' })).toHaveLength(1);
+
+	// Typing keeps its value and the refresh still drives the query.
+	await screen.findByText('member');
+	const search = screen.getByLabelText('Search users');
+	fireEvent.change(search, { target: { value: 'member' } });
+	expect((search as HTMLInputElement).value).toBe('member');
+	fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+	await waitFor(() => expect(vi.mocked(service.listUsers)).toHaveBeenCalledTimes(2));
+
+	// Locale, account, and navigation entries stay reachable beside the filters.
+	// aria-label carries the target locale code, mirroring the top bar.
+	expect(screen.getByRole('button', { name: 'zh-CN' })).toBeDefined();
+	// The account button keeps the username as its accessible name.
+	expect(screen.getByRole('button', { name: 'admin' })).toBeDefined();
+	expect(document.querySelector('.topbar-navigation')).not.toBeNull();
 });
