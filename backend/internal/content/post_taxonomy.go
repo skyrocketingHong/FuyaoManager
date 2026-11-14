@@ -1,0 +1,189 @@
+package content
+
+import (
+	"errors"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"github.com/google/uuid"
+)
+
+// PostTaxonomy aggregates the blog directory structure and the frontmatter
+// category/tag vocabulary of one content scope. Physical directories and
+// frontmatter categories are separate views: a directory is a path on disk,
+// a category is a value inside the article frontmatter, and neither feeds
+// the other.
+type PostTaxonomy struct {
+	Directories []PostDirectory `json:"directories"`
+	Categories  []TaxonomyTerm  `json:"categories"`
+	Tags        []TaxonomyTerm  `json:"tags"`
+	PostCount   int             `json:"postCount"`
+}
+
+// PostDirectory is one valid first-level physical directory of the posts
+// tree. The display name prefers the non-empty title of the directory's
+// _index.md and falls back to the slug.
+type PostDirectory struct {
+	Slug      string `json:"slug"`
+	Title     string `json:"title"`
+	PostCount int    `json:"postCount"`
+}
+
+// TaxonomyTerm is one category or tag name with the number of posts
+// referencing it, counted once per post and preserving the submitted case.
+type TaxonomyTerm struct {
+	Name      string `json:"name"`
+	PostCount int    `json:"postCount"`
+}
+
+// GetPostTaxonomy reads the complete blog taxonomy of one content scope.
+// It scans the whole valid post set — drafts and posts with invalid dates
+// count, _index.md, lock artifacts, and temp files do not — so the
+// aggregate never depends on the current page, search results, or a valid
+// date. Unlike ListPosts, unreadable or unparseable files fail the call
+// with the site-relative path instead of producing a seemingly complete
+// success. The current store and scope are the read boundary: nothing
+// outside the jailed posts tree is read, symlinked entries are skipped, and
+// the contentbind binding decides which scope a caller may see (HTTP wiring
+// comes later and must bind per posts source).
+func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
+	tax := PostTaxonomy{
+		Directories: []PostDirectory{},
+		Categories:  []TaxonomyTerm{},
+		Tags:        []TaxonomyTerm{},
+	}
+	root, err := resolve(s.ContentRoot(scopeID), "posts")
+	if errors.Is(err, ErrNotFound) {
+		// No posts tree yet: an empty vocabulary is a real state.
+		return tax, nil
+	}
+	if err != nil {
+		return PostTaxonomy{}, err
+	}
+	var dirSlugs []string
+	dirPosts := map[string]int{}
+	catCounts := map[string]int{}
+	tagCounts := map[string]int{}
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		// Symlinks never cross the read boundary: linked files are skipped
+		// and linked directories are not walked into.
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
+		if d.IsDir() {
+			if path == root {
+				return nil
+			}
+			rel, relErr := filepath.Rel(root, path)
+			if relErr != nil {
+				return relErr
+			}
+			// Only first-level directories aggregate; deeper nesting stays
+			// out of the taxonomy along with its files.
+			if strings.Contains(filepath.ToSlash(rel), "/") {
+				return fs.SkipDir
+			}
+			dirSlugs = append(dirSlugs, filepath.ToSlash(rel))
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		rel = filepath.ToSlash(rel)
+		if !strings.HasSuffix(rel, ".md") || strings.HasPrefix(d.Name(), "_") {
+			return nil // _index.md and lock/temp artifacts are not posts
+		}
+		if !ValidPostPath(rel) {
+			return nil // section files and multi-level shapes stay out
+		}
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("read post %s: %w", rel, readErr)
+		}
+		post, parseErr := ParsePost(rel, data)
+		if parseErr != nil {
+			return fmt.Errorf("parse post %s: %w", rel, parseErr)
+		}
+		tax.PostCount++
+		if dir := filepath.Dir(rel); dir != "." {
+			dirPosts[dir]++
+		}
+		countTaxonomyTerms(post.Categories, catCounts)
+		countTaxonomyTerms(post.Tags, tagCounts)
+		return nil
+	})
+	if err != nil {
+		return PostTaxonomy{}, err
+	}
+	for _, slug := range dirSlugs {
+		title := strings.TrimSpace(indexTitle(s, scopeID, slug))
+		if title == "" {
+			title = slug
+		}
+		tax.Directories = append(tax.Directories, PostDirectory{
+			Slug:      slug,
+			Title:     title,
+			PostCount: dirPosts[slug],
+		})
+	}
+	sort.Slice(tax.Directories, func(i, j int) bool {
+		return tax.Directories[i].Slug < tax.Directories[j].Slug
+	})
+	for _, name := range sortedTaxonomyNames(catCounts) {
+		tax.Categories = append(tax.Categories, TaxonomyTerm{Name: name, PostCount: catCounts[name]})
+	}
+	for _, name := range sortedTaxonomyNames(tagCounts) {
+		tax.Tags = append(tax.Tags, TaxonomyTerm{Name: name, PostCount: tagCounts[name]})
+	}
+	return tax, nil
+}
+
+// indexTitle reads the directory's _index.md title, degrading to an empty
+// value (which falls back to the slug) for a missing, symlinked, or broken
+// index — the display name is a cosmetic fallback, never a hard failure.
+// The resolve jail keeps a symlinked index from reading outside the scope.
+func indexTitle(s *Store, scopeID uuid.UUID, slug string) string {
+	data, _, err := s.ReadFile(scopeID, RootContent, "posts/"+slug+"/_index.md")
+	if err != nil {
+		return ""
+	}
+	post, err := ParsePost(slug+"/_index.md", data)
+	if err != nil {
+		return ""
+	}
+	return post.Title
+}
+
+// countTaxonomyTerms adds every non-blank term once per post, preserving
+// case and the submitted value verbatim.
+func countTaxonomyTerms(terms []string, counts map[string]int) {
+	seen := map[string]struct{}{}
+	for _, term := range terms {
+		if strings.TrimSpace(term) == "" {
+			continue
+		}
+		if _, dup := seen[term]; dup {
+			continue
+		}
+		seen[term] = struct{}{}
+		counts[term]++
+	}
+}
+
+// sortedTaxonomyNames orders the aggregated names for stable output.
+func sortedTaxonomyNames(counts map[string]int) []string {
+	names := make([]string, 0, len(counts))
+	for name := range counts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
