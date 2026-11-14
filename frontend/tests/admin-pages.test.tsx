@@ -240,7 +240,7 @@ it('requires confirmation before elevating a platform role', async () => {
 	vi.mocked(service.setUserRole).mockResolvedValue({ ...member, platformRole: 'admin' });
 	mount();
 	const drawer = await openMember();
-	await choose(within(drawer).getByRole('combobox', { name: 'Platform role' }), 'Administrator');
+	await choose(within(drawer).getByRole('combobox', { name: 'Platform role' }), 'Platform administrator');
 	expect(service.setUserRole).not.toHaveBeenCalled();
 	const confirmation = await screen.findByRole('dialog', { name: 'Change platform role · member' });
 	fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirm' }));
@@ -349,7 +349,7 @@ it('filters logs by outcome and expands metadata without inventing record detail
 	expect(await screen.findByText('/api/v1/admin/users/', { exact: false })).toBeDefined();
 	expect(screen.getByText('Before')).toBeDefined();
 	expect(screen.getByText('After')).toBeDefined();
-	expect(screen.getByText('Administrator')).toBeDefined();
+	expect(screen.getByText('Platform administrator')).toBeDefined();
 	vi.mocked(service.listAudit).mockResolvedValue({
 		entries: [],
 		total: 0,

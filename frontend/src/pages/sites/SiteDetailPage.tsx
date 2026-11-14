@@ -4,7 +4,7 @@
  * configuration, and builds. No invented metrics.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Space, Switch, Typography, message } from 'antd';
 import { SiteDetail } from '../../lib/sites/site-detail';
@@ -43,6 +43,7 @@ export default function SiteDetailPage() {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const [messageApi, contextHolder] = message.useMessage();
 	const [switching, setSwitching] = useState(false);
+	const [retrying, setRetrying] = useState(false);
 	const [edge, setEdge] = useState<EdgeFacts>({ kind: 'loading' });
 	const [reapplying, setReapplying] = useState(false);
 	const [release, setRelease] = useState<ReleaseState>({ kind: 'loading' });
@@ -170,6 +171,7 @@ export default function SiteDetailPage() {
 		if (!siteId) return;
 		const myGen = generation.current;
 		const authGen = currentAuthGeneration();
+		setRetrying(true);
 		try {
 			const refreshed = await provisionSite(siteId);
 			if (generation.current !== myGen) return;
@@ -179,6 +181,8 @@ export default function SiteDetailPage() {
 			if (generation.current !== myGen) return;
 			const key = apiErrorKey(err);
 			if (key !== null) void messageApi.warning(t(key));
+		} finally {
+			setRetrying(false);
 		}
 	}
 
@@ -215,7 +219,7 @@ export default function SiteDetailPage() {
 									{t(`site.provision.${site.provisionState}` as never)}
 								</StatusTag>
 								{site.provisionState === 'failed' ? (
-									<Button size="small" onClick={() => void handleRetryProvision()}>
+									<Button size="small" loading={retrying} onClick={() => void handleRetryProvision()}>
 										{t('sites.retryProvision')}
 									</Button>
 								) : null}
@@ -240,6 +244,14 @@ export default function SiteDetailPage() {
 						<dd>
 							<StatusTag kind="neutral">{t(`role.${site.role}` as never)}</StatusTag>
 						</dd>
+					</div>
+					<div>
+						<dt>{t('site.updatedAt')}</dt>
+						<dd>{new Date(site.updatedAt).toLocaleString(locale)}</dd>
+					</div>
+					<div>
+						<dt>{t('site.createdAt')}</dt>
+						<dd>{new Date(site.createdAt).toLocaleString(locale)}</dd>
 					</div>
 				</dl>
 			</Panel>
@@ -305,7 +317,7 @@ export default function SiteDetailPage() {
 							</Button>
 						) : null}
 						{trustedEdge.lastError ? (
-							<Typography.Text type="danger" style={{ fontSize: 12 }}>
+							<Typography.Text type="danger" className="text-caption">
 								{trustedEdge.lastError}
 							</Typography.Text>
 						) : null}
@@ -337,38 +349,7 @@ export default function SiteDetailPage() {
 						)}
 					</Space>
 				)}
-			</Panel>
-
-			<Panel title={t('overview.actionsTitle')}>
-				<Space wrap>
-					<Link to={`/sites/${site.siteId}/posts`}>
-						<Button>{t('nav.posts')}</Button>
-					</Link>
-					<Link to={`/sites/${site.siteId}/config`}>
-						<Button>{t('nav.config')}</Button>
-					</Link>
-					<Link to={`/sites/${site.siteId}/theme`}>
-						<Button>{t('nav.theme')}</Button>
-					</Link>
-					<Link to={`/sites/${site.siteId}/builds`}>
-						<Button>{t('nav.builds')}</Button>
-					</Link>
-					<Link to={`/sites/${site.siteId}/releases`}>
-						<Button>{t('nav.releases')}</Button>
-					</Link>
-				</Space>
-			</Panel>
-
-			<dl className="fact-grid" style={{ padding: '0 4px' }}>
-				<div>
-					<dt>{t('site.updatedAt')}</dt>
-					<dd>{new Date(site.updatedAt).toLocaleString(locale)}</dd>
-				</div>
-				<div>
-					<dt>{t('site.createdAt')}</dt>
-					<dd>{new Date(site.createdAt).toLocaleString(locale)}</dd>
-				</div>
-			</dl>
-		</div>
-	);
-}
+				</Panel>
+			</div>
+		);
+	}

@@ -441,8 +441,8 @@ export default function SiteConfigPage() {
 					{field(t('config.codingLanguagesProxyUrl'), 'codingLanguagesProxyUrl')}
 				</div>
 				<div className="form-grid">
-					{field('AMap Key', 'amapBrowserKey')}
-					{field('AMap ServiceHost', 'amapServiceHost', 'https://…/_AMapService')}
+					{field(t('config.amapKey'), 'amapBrowserKey')}
+					{field(t('config.amapServiceHost'), 'amapServiceHost', 'https://…/_AMapService')}
 					<label className="field">
 						<span className="field-label">
 							AMap {t('config.securityCode')} {securitySet ? `(${t('config.securitySet')})` : ''}

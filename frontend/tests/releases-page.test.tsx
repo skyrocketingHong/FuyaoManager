@@ -258,8 +258,11 @@ describe('ReleasesPage publish feedback and candidate binding', () => {
 		});
 		await settled();
 
-		// Structured failure text is visible...
-		expect(screen.getByText(/artifacts/)).toBeDefined();
+		// Structured failure text is visible: the stage uses the mapped label
+		// inside the composed failure toast...
+		expect(
+			screen.getByText(new RegExp(zh['releases.failureStage.artifacts'] as string))
+		).toBeDefined();
 		expect(screen.getByText(/sitemap\.xml/)).toBeDefined();
 		// ...and the history was refreshed so the attempt is listed.
 		expect(vi.mocked(listReleases).mock.calls.length).toBeGreaterThan(before);

@@ -14,6 +14,7 @@ import {
 	Button,
 	Card,
 	Collapse,
+	Empty,
 	Input,
 	InputNumber,
 	Popconfirm,
@@ -304,7 +305,7 @@ export default function FootprintsPage() {
 			const env = await getFootprints(target);
 			if (my !== epoch.current) return;
 			editor.syncAfterConflict(env.footprints, env.digest);
-			void messageApi.info(t('friends.conflictSynced'));
+			void messageApi.info(t('posts.conflictSynced'));
 		} catch {
 			// keep the banner
 		}
@@ -416,7 +417,7 @@ export default function FootprintsPage() {
 			{(state.draft ?? state.baseline) === null || state.loading ? (
 				<PageLoading spec="page" label={t('common.loading')} />
 			) : (state.draft ?? state.baseline)!.cities.length === 0 ? (
-				<p>{t('footprints.empty')}</p>
+				<Empty description={t('footprints.empty')} />
 			) : (
 				<Collapse
 					items={(state.draft ?? state.baseline)!.cities.map((city, ci) => ({
@@ -428,7 +429,8 @@ export default function FootprintsPage() {
 									<Input
 										size="small"
 										style={{ width: 140 }}
-										placeholder="ID"
+										placeholder={t('footprints.fieldId')}
+										aria-label={t('footprints.fieldId')}
 										value={city.id}
 										disabled={!editable}
 										onChange={(e) => updateCity(ci, { id: e.target.value })}
@@ -436,7 +438,8 @@ export default function FootprintsPage() {
 									<Input
 										size="small"
 										style={{ width: 110 }}
-										placeholder="名称 zh"
+										placeholder={t('footprints.fieldNameZh')}
+										aria-label={t('footprints.fieldNameZh')}
 										value={city.name?.zh}
 										disabled={!editable}
 										onChange={(e) => updateCity(ci, { name: { ...city.name, zh: e.target.value } })}
@@ -444,7 +447,8 @@ export default function FootprintsPage() {
 									<Input
 										size="small"
 										style={{ width: 110 }}
-										placeholder="Name en"
+										placeholder={t('footprints.fieldNameEn')}
+										aria-label={t('footprints.fieldNameEn')}
 										value={city.name?.en}
 										disabled={!editable}
 										onChange={(e) => updateCity(ci, { name: { ...city.name, en: e.target.value } })}
@@ -452,7 +456,8 @@ export default function FootprintsPage() {
 									<Input
 										size="small"
 										style={{ width: 110 }}
-										placeholder="YYYYMMDD"
+										placeholder={t('footprints.fieldDate')}
+										aria-label={t('footprints.fieldDate')}
 										value={city.visitDate}
 										disabled={!editable}
 										onChange={(e) => updateCity(ci, { visitDate: e.target.value })}
@@ -468,50 +473,54 @@ export default function FootprintsPage() {
 											onConfirm={() => mutate((cities) => cities.filter((_, i) => i !== ci))}
 										>
 											<Button size="small" danger>
-												{t('posts.delete')}
+												{t('common.remove')}
 											</Button>
 										</Popconfirm>
 									) : null}
 								</Space>
 								{(city.places ?? []).map((place, pi) => (
 									<Card key={pi} size="small" style={{ marginBottom: 8 }}>
-										<Space wrap>
-											<Input
-												size="small"
-												style={{ width: 120 }}
-												placeholder="ID"
-												value={place.id}
-												disabled={!editable}
-												onChange={(e) => updatePlace(ci, pi, { id: e.target.value })}
-											/>
-											<Input
-												size="small"
-												style={{ width: 100 }}
-												placeholder="名称 zh"
-												value={place.name?.zh}
-												disabled={!editable}
-												onChange={(e) =>
-													updatePlace(ci, pi, { name: { ...place.name, zh: e.target.value } })
-												}
-											/>
-											<Input
-												size="small"
-												style={{ width: 100 }}
-												placeholder="Name en"
-												value={place.name?.en}
-												disabled={!editable}
-												onChange={(e) =>
-													updatePlace(ci, pi, { name: { ...place.name, en: e.target.value } })
-												}
-											/>
-											<Input
-												size="small"
-												style={{ width: 100 }}
-												placeholder="YYYYMMDD"
-												value={place.visitDate}
-												disabled={!editable}
-												onChange={(e) => updatePlace(ci, pi, { visitDate: e.target.value })}
-											/>
+									<Space wrap>
+										<Input
+											size="small"
+											style={{ width: 120 }}
+											placeholder={t('footprints.fieldId')}
+											aria-label={t('footprints.fieldId')}
+											value={place.id}
+											disabled={!editable}
+											onChange={(e) => updatePlace(ci, pi, { id: e.target.value })}
+										/>
+										<Input
+											size="small"
+											style={{ width: 100 }}
+											placeholder={t('footprints.fieldNameZh')}
+											aria-label={t('footprints.fieldNameZh')}
+											value={place.name?.zh}
+											disabled={!editable}
+											onChange={(e) =>
+												updatePlace(ci, pi, { name: { ...place.name, zh: e.target.value } })
+											}
+										/>
+										<Input
+											size="small"
+											style={{ width: 100 }}
+											placeholder={t('footprints.fieldNameEn')}
+											aria-label={t('footprints.fieldNameEn')}
+											value={place.name?.en}
+											disabled={!editable}
+											onChange={(e) =>
+												updatePlace(ci, pi, { name: { ...place.name, en: e.target.value } })
+											}
+										/>
+										<Input
+											size="small"
+											style={{ width: 100 }}
+											placeholder={t('footprints.fieldDate')}
+											aria-label={t('footprints.fieldDate')}
+											value={place.visitDate}
+											disabled={!editable}
+											onChange={(e) => updatePlace(ci, pi, { visitDate: e.target.value })}
+										/>
 											{coordInputs(
 												place.coordinates,
 												(coord) => updatePlace(ci, pi, { coordinates: coord }),
@@ -530,8 +539,8 @@ export default function FootprintsPage() {
 														)
 													}
 												>
-													<Button size="small" danger>
-														×
+													<Button size="small" danger aria-label={t('common.remove')}>
+														{t('common.remove')}
 													</Button>
 												</Popconfirm>
 											) : null}

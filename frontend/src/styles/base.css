@@ -1,27 +1,23 @@
 /* Base layer: pre-JS fallback tokens (light palette, replaced at runtime by
    AppearanceProvider), document scaffolding, focus, motion, and the small
    shared primitives (status tags, version text, loading, auth screens).
-   Spacing steps 4/8/10/12/16, radii 4/8/12, weights 400/600. */
+   Spacing steps 4/8/10/12/16, radii 4/8/12, weights 400/600.
+   Only tokens consumed in CSS are declared here; the antd layer takes its
+   colors from the palette object directly. */
 
 :root {
 	--background: #f2f5fa;
 	--foreground: #1e293b;
 	--card: #ffffff;
 	--surface: #f6f8fc;
-	--elevated: #ffffff;
 	--muted: #e9eef5;
 	--muted-foreground: #526176;
 	--border: #d8e1ee;
 	--control-border: #7b8a9e;
 	--sidebar-bg: #f9fbff;
 	--primary: #1677ff;
-	--primary-fill: #1677ff;
 	--primary-foreground: #ffffff;
 	--accent: #e6f4ff;
-	--good: #237b4b;
-	--warning: #946200;
-	--danger: #c63742;
-	--info: #1668dc;
 	--status-success: #237b4b;
 	--status-warning: #946200;
 	--status-danger: #c63742;
@@ -42,9 +38,7 @@
 	--text-body: 14px;
 	--text-title: 16px;
 	--text-page: 20px;
-	--motion-fast: 100ms;
 	--motion-mid: 200ms;
-	--motion-slow: 300ms;
 	--topbar-height: 44px;
 	--topbar-control-height: 32px;
 }

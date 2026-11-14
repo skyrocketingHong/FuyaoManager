@@ -1,6 +1,6 @@
 // Layout and component calls from robot-platform/features/api/ApiPage.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Collapse, Input, Select, Table, Tooltip } from 'antd';
+import { Alert, Button, Collapse, Input, Select, Table } from 'antd';
 import { TablePanel, Tag } from '../components/Widgets';
 import PageLoading from '../components/PageLoading';
 import { usePageHeader } from '../components/PageHeader';
@@ -113,8 +113,10 @@ export default function ApiPage() {
 			);
 		} catch {
 			if (!alive.current || generation !== copyGeneration.current) return;
+			// The visible role=alert region announces failures; the sr-only
+			// status stays reserved for success so errors are not announced twice.
 			setCopyError(t('api.copyError'));
-			setCopyStatus(t('api.copyError'));
+			setCopyStatus('');
 		}
 	}
 	const hasFilter = Boolean(query || group || method);
@@ -239,11 +241,9 @@ export default function ApiPage() {
 												<span className="api-row-group">{apiGroup(operation).name}</span>
 											</span>
 											<span className="api-row-meta">
-												<Tooltip title={apiVersionDescription(operation)}>
-													<span className="api-version-label version-text">
-														{apiVersionLabel(operation)}
-													</span>
-												</Tooltip>
+												<span className="api-version-label version-text">
+													{apiVersionLabel(operation)}
+												</span>
 												<span className="api-summary">{operation.summary || t('api.details')}</span>
 											</span>
 										</span>

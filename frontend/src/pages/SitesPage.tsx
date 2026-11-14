@@ -273,9 +273,7 @@ export default function SitesPage() {
 											<div>
 												<Link to={`/sites/${site.siteId}`}>{name}</Link>
 											</div>
-											<div className="version-text" style={{ color: 'var(--muted-foreground)' }}>
-												{site.slug}
-											</div>
+											<div className="version-text subtle">{site.slug}</div>
 										</>
 									)
 								},
@@ -292,8 +290,11 @@ export default function SitesPage() {
 									dataIndex: 'visibility',
 									width: 100,
 									render: (v: string, site) =>
+										// Visibility and provisioning are platform concepts: Caddy
+										// sites have neither, so show a plain dash instead of a
+										// borrowed label that reads as the wrong column.
 										site.kind && site.kind !== 'theme' ? (
-											t('caddy.sourceValue')
+											'—'
 										) : (
 											<StatusTag kind={v === 'public' ? 'warning' : 'neutral'}>
 												{t(`site.visibility.${v}` as never)}
@@ -306,11 +307,7 @@ export default function SitesPage() {
 									width: 190,
 									render: (_: string, site) =>
 										site.kind && site.kind !== 'theme' ? (
-											t(
-												managementMode(site) === 'platform'
-													? 'caddy.managedConfiguration'
-													: 'caddy.sourceValue'
-											)
+											'—'
 										) : (
 											<span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
 												<StatusTag kind={provisionKind(site)}>

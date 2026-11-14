@@ -129,7 +129,7 @@ export default function UsersPage() {
 			<Select
 				className="admin-filter"
 				aria-label={t('admin.status')}
-				placeholder={t('admin.defaultStatuses')}
+				placeholder={t('admin.statusPlaceholder')}
 				allowClear
 				value={status || undefined}
 				onChange={(value) => {

@@ -175,7 +175,7 @@ export default function SiteOverviewPage() {
 				/>
 			)}
 			{overview && (
-				<Panel title={t('nav.themeSelection')}>
+				<Panel title={t('overview.themePanel')}>
 					<Space wrap>
 						{overview.theme.selected && overview.theme.theme ? (
 							<code>

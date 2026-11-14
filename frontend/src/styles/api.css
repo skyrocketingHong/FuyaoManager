@@ -65,7 +65,7 @@
 	background: var(--card);
 	margin-top: 0;
 	border: 1px solid var(--border);
-	border-radius: 12px;
+	border-radius: var(--radius-lg);
 }
 .api-catalog-list > .ant-collapse-item {
 	border-bottom: 1px solid var(--border);
@@ -77,7 +77,7 @@
 	border-bottom: 0;
 }
 .api-catalog-list .ant-collapse-header:hover {
-	background: var(--surface-high);
+	background: var(--surface);
 }
 .api-catalog-list .ant-collapse-header {
 	padding-block: var(--space-3);
@@ -181,17 +181,12 @@
 	margin-block: var(--space-2);
 	max-height: 360px;
 	overflow: auto;
-	background: var(--surface-high);
+	background: var(--surface);
 	border: 1px solid var(--border);
-	border-radius: 4px;
+	border-radius: var(--radius-sm);
 	font-size: var(--text-caption);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
-}
-
-.api-schema:focus-visible {
-	outline: 2px solid var(--primary);
-	outline-offset: 2px;
 }
 
 @media (max-width: 900px) {

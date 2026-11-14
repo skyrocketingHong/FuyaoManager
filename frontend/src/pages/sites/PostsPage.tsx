@@ -384,14 +384,14 @@ export default function PostsPage() {
 					columns={[
 						{
 							title: t('posts.titleColumn'),
-							render: (_, post) => (
-								<>
-									<div>{post.title}</div>
-									<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-										{post.path}
-									</Typography.Text>
-								</>
-							)
+								render: (_, post) => (
+									<>
+										<div>{post.title}</div>
+										<Typography.Text type="secondary" className="text-caption">
+											{post.path}
+										</Typography.Text>
+									</>
+								)
 						},
 						{
 							title: t('posts.draftColumn'),
@@ -424,6 +424,7 @@ export default function PostsPage() {
 							)
 						},
 						{
+							title: t('admin.actions'),
 							width: 170,
 							render: (_, post) => (
 								<Space wrap size={4}>
@@ -528,7 +529,7 @@ export default function PostsPage() {
 								</Form.Item>
 								<Form.Item
 									name="slug"
-									label="Slug"
+									label={t('posts.fieldSlug')}
 									rules={[
 										{ required: true },
 										{ pattern: /^[a-z0-9][a-z0-9-]{0,120}$/, message: t('posts.slugPattern') }
@@ -543,21 +544,21 @@ export default function PostsPage() {
 							<Switch checkedChildren={t('posts.draft')} unCheckedChildren={t('posts.published')} />
 						</Form.Item>
 					</Space>
-					<Space size={12} style={{ display: 'flex' }} align="start">
-						<Form.Item name="categories" label={t('posts.fieldCategories')} style={{ flex: 1 }}>
-							<Input placeholder="技术开发, 生活" />
-						</Form.Item>
-						<Form.Item name="tags" label={t('posts.fieldTags')} style={{ flex: 1 }}>
-							<Input placeholder="Svelte, Go" />
-						</Form.Item>
-					</Space>
+						<Space size={12} style={{ display: 'flex' }} align="start">
+							<Form.Item name="categories" label={t('posts.fieldCategories')} style={{ flex: 1 }}>
+								<Input placeholder={t('posts.categoriesPlaceholder')} />
+							</Form.Item>
+							<Form.Item name="tags" label={t('posts.fieldTags')} style={{ flex: 1 }}>
+								<Input placeholder="Svelte, Go" />
+							</Form.Item>
+						</Space>
 					<Form.Item name="description" label={t('posts.fieldDescription')}>
 						<Input.TextArea rows={2} maxLength={500} />
 					</Form.Item>
 					<Form.Item name="cover" label={t('posts.fieldCover')}>
 						<Input placeholder="https://…" />
 					</Form.Item>
-					<Form.Item name="body" label="Markdown">
+					<Form.Item name="body" label={t('posts.fieldBody')}>
 						<Input.TextArea rows={10} style={{ fontFamily: 'monospace' }} />
 					</Form.Item>
 					<Form.Item name="lastmod" label={t('posts.fieldLastmod')} hidden>

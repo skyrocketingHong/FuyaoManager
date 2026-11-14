@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Modal, Select, Space, Typography, message } from 'antd';
 import DataTable from '../../components/DataTable';
+import ActionButton from '../../components/ActionButton';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -43,6 +44,35 @@ function failedReleaseOf(err: unknown): Release | null {
 		if (body.status === 'failed' && body.failure) return body as Release;
 	}
 	return null;
+}
+
+/** Readable names for the documented publish stages; unknown stages stay raw. */
+const releaseStageKeys: Record<string, MessageKey> = {
+	'capability-check': 'releases.failureStage.capability-check',
+	artifacts: 'releases.failureStage.artifacts',
+	workspace: 'releases.failureStage.workspace',
+	'release-metadata': 'releases.failureStage.release-metadata',
+	persist: 'releases.failureStage.persist'
+};
+
+function releaseStageLabel(stage: string): string {
+	const key = releaseStageKeys[stage];
+	return key ? t(key) : stage;
+}
+
+function releaseFailureDetail(failure: NonNullable<Release['failure']>): string {
+	const missing = [
+		failure.missingArtifacts?.length
+			? `${t('releases.failureMissing.artifacts')}: ${failure.missingArtifacts.join(', ')}`
+			: '',
+		failure.missingCapabilities?.length
+			? `${t('releases.failureMissing.capabilities')}: ${failure.missingCapabilities.join(', ')}`
+			: '',
+		failure.missingUrlConventions?.length
+			? `${t('releases.failureMissing.urlConventions')}: ${failure.missingUrlConventions.join(', ')}`
+			: ''
+	].filter(Boolean);
+	return [releaseStageLabel(failure.stage), ...missing].join(', ');
 }
 
 export default function ReleasesPage() {
@@ -179,13 +209,8 @@ export default function ReleasesPage() {
 			// history so the attempt is visible.
 			const failed = failedReleaseOf(err);
 			if (failed && failed.failure) {
-				const missing = [
-					...(failed.failure.missingArtifacts ?? []),
-					...(failed.failure.missingCapabilities ?? []),
-					...(failed.failure.missingUrlConventions ?? [])
-				].join(', ');
 				void messageApi.error(
-					`${t('releases.status.failed')}: ${failed.failure.stage}${missing ? ` (${missing})` : ''}`
+					t('releases.publishFailed', { detail: releaseFailureDetail(failed.failure) })
 				);
 			} else {
 				const key = apiErrorKey(err);
@@ -250,8 +275,20 @@ export default function ReleasesPage() {
 		candidate !== null && succeeded.some((b) => b.id === candidate)
 			? candidate
 			: (succeeded.find((b) => !releasedBuildIds.has(b.id))?.id ?? null);
-	const publishable =
-		editable && effectiveCandidate !== null && !releasedBuildIds.has(effectiveCandidate);
+	// Why the publish button is off: one reason at a time, surfaced on the
+	// button itself so viewers and empty-catalog states are explained without
+	// a permanent alert wall above the table. Isolation stays alert-only: the
+	// page-level notice already states it, and a repeated tooltip would just
+	// duplicate the same sentence for screen readers.
+	const publishDisabledReason = !editable
+		? t('releases.roleNotice')
+		: isolated
+			? undefined
+			: effectiveCandidate === null
+				? t('releases.noSucceededBuild')
+				: releasedBuildIds.has(effectiveCandidate)
+					? t('releases.candidatePublished')
+					: undefined;
 
 	const headerContent = editable && succeeded.length > 0 && (
 		<Select
@@ -270,14 +307,15 @@ export default function ReleasesPage() {
 					<Trans text={t('releases.open')} />
 				</Button>
 			) : null}
-			<Button
+			<ActionButton
 				type="primary"
 				loading={publishing}
-				disabled={!publishable || isolated}
+				disabledReason={publishDisabledReason}
+				disabled={isolated}
 				onClick={() => void handlePublish()}
 			>
 				<Trans text={t('releases.publish')} />
-			</Button>
+			</ActionButton>
 		</Space>
 	);
 	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
@@ -309,12 +347,7 @@ export default function ReleasesPage() {
 								style={{ marginBottom: 16 }}
 							/>
 						) : (
-							<Alert
-								type="info"
-								showIcon
-								title={t('error.noLiveRelease')}
-								style={{ marginBottom: 16 }}
-							/>
+							<Alert type="info" showIcon title={t('releases.noLive')} style={{ marginBottom: 16 }} />
 						)}
 						{workspace ? (
 							!workspace.deployable && (
@@ -349,22 +382,6 @@ export default function ReleasesPage() {
 								style={{ marginBottom: 16 }}
 							/>
 						) : null}
-						{!editable ? (
-							<Alert
-								type="info"
-								showIcon
-								title={t('releases.roleNotice')}
-								style={{ marginBottom: 16 }}
-							/>
-						) : null}
-						{editable && succeeded.length === 0 ? (
-							<Alert
-								type="info"
-								showIcon
-								title={t('releases.noSucceededBuild')}
-								style={{ marginBottom: 16 }}
-							/>
-						) : null}
 						{!headerActive && editable && succeeded.length > 0 ? (
 							<Space orientation="vertical" style={{ width: '100%', marginBottom: 16 }}>
 								<label htmlFor="release-candidate">{t('releases.candidate')}</label>
@@ -390,7 +407,7 @@ export default function ReleasesPage() {
 										render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
 									},
 									{
-										title: t('builds.status'),
+										title: t('releases.statusColumn'),
 										dataIndex: 'status',
 										render: (status: string) => (
 											<StatusTag
@@ -407,10 +424,13 @@ export default function ReleasesPage() {
 										render: (_, record) => record.reasons.join(', ')
 									},
 									{
+										title: t('admin.actions'),
 										render: (_, record) => (
 											<Space>
 												{record.failure ? (
-													<Typography.Text type="danger">{record.failure.stage}</Typography.Text>
+													<Typography.Text type="danger">
+														{releaseStageLabel(record.failure.stage)}
+													</Typography.Text>
 												) : null}
 												{editable && record.status !== 'live' && record.status !== 'failed' ? (
 													<Button

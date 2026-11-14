@@ -170,7 +170,9 @@ function ContentSourcesEditor({ siteId }: { siteId: string }) {
 					</div>
 				)}
 			</Panel>
-			<Alert type="info" showIcon title={t('content.sourcesSavedSeparately')} />
+			{/* Saving only switches the source mapping; publishing stays a
+				separate release action. Stated once, without alert weight. */}
+			<p className="subtle">{t('content.sourcesSavedSeparately')}</p>
 		</div>
 	);
 }

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Input, Popconfirm, Space, message } from 'antd';
+import { ArrowDown, ArrowUp, X } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -203,6 +204,7 @@ export default function FriendsPage() {
 								size="small"
 								style={{ width: 140 }}
 								placeholder={t('friends.fieldName')}
+								aria-label={t('friends.fieldName')}
 								value={row.name}
 								disabled={!editable}
 								onChange={(e) => updateRow(group, index, { name: e.target.value })}
@@ -211,6 +213,7 @@ export default function FriendsPage() {
 								size="small"
 								style={{ width: 200 }}
 								placeholder="https://…"
+								aria-label={t('config.linkUrl')}
 								value={row.url}
 								disabled={!editable}
 								onChange={(e) => updateRow(group, index, { url: e.target.value })}
@@ -219,6 +222,7 @@ export default function FriendsPage() {
 								size="small"
 								style={{ width: 180 }}
 								placeholder={t('friends.fieldDescription')}
+								aria-label={t('friends.fieldDescription')}
 								value={row.description ?? ''}
 								disabled={!editable}
 								onChange={(e) => updateRow(group, index, { description: e.target.value })}
@@ -227,24 +231,35 @@ export default function FriendsPage() {
 								size="small"
 								style={{ width: 180 }}
 								placeholder={t('friends.fieldAvatar')}
+								aria-label={t('friends.fieldAvatar')}
 								value={row.avatar ?? ''}
 								disabled={!editable}
 								onChange={(e) => updateRow(group, index, { avatar: e.target.value })}
 							/>
 							{editable ? (
 								<Space size={0}>
-									<Button size="small" type="text" onClick={() => moveRow(group, index, -1)}>
-										↑
+									<Button
+										size="small"
+										type="text"
+										aria-label={t('common.moveUp')}
+										onClick={() => moveRow(group, index, -1)}
+									>
+										<ArrowUp size={14} aria-hidden="true" />
 									</Button>
-									<Button size="small" type="text" onClick={() => moveRow(group, index, 1)}>
-										↓
+									<Button
+										size="small"
+										type="text"
+										aria-label={t('common.moveDown')}
+										onClick={() => moveRow(group, index, 1)}
+									>
+										<ArrowDown size={14} aria-hidden="true" />
 									</Button>
 									<Popconfirm
 										title={t('friends.removeConfirm')}
 										onConfirm={() => removeRow(group, index)}
 									>
-										<Button size="small" type="text" danger>
-											×
+										<Button size="small" type="text" danger aria-label={t('common.remove')}>
+											<X size={14} aria-hidden="true" />
 										</Button>
 									</Popconfirm>
 								</Space>

@@ -95,7 +95,7 @@ export default function AccountSettingsPage() {
 			) : null}
 			<Panel title={t('account.title')}>
 				<Form layout="vertical">
-					<Form.Item label={t('account.usernameLabel')} tooltip={t('account.usernameHint')}>
+					<Form.Item label={t('account.usernameLabel')}>
 						<Input
 							value={draft}
 							maxLength={64}
@@ -103,7 +103,9 @@ export default function AccountSettingsPage() {
 							aria-label={t('account.usernameLabel')}
 						/>
 					</Form.Item>
-					<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+					{/* One persistent hint instead of a tooltip plus a repeated line:
+						visible to keyboard and screen-reader users alike. */}
+					<Typography.Text type="secondary" className="text-caption">
 						{t('account.usernameHint')}
 					</Typography.Text>
 				</Form>

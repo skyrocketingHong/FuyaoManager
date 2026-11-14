@@ -46,12 +46,12 @@ export default function ThemesCatalogPage() {
 		{
 			title: t('themes.themeColumn'),
 			render: (_, theme) => (
-				<>
-					<div>{theme.name ?? theme.themeId}</div>
-					<Typography.Text className="version-text" type="secondary" style={{ fontSize: 12 }}>
-						{theme.themeId} @ {theme.version}
-					</Typography.Text>
-				</>
+					<>
+						<div>{theme.name ?? theme.themeId}</div>
+						<Typography.Text className="version-text text-caption" type="secondary">
+							{theme.themeId} @ {theme.version}
+						</Typography.Text>
+					</>
 			)
 		},
 		{
@@ -73,17 +73,17 @@ export default function ThemesCatalogPage() {
 				</span>
 			)
 		},
-		{
-			title: t('themes.requirementsColumn'),
-			render: (_, theme) => (
-				<Typography.Text type="secondary" style={{ fontSize: 12 }}>
-					{(theme.outputs?.urlConventions ?? []).join(', ') || '—'}
-					{(theme.outputs?.requiredArtifacts ?? []).length > 0
-						? ` · ${t('themes.artifacts')}: ${(theme.outputs?.requiredArtifacts ?? []).join(', ')}`
-						: ''}
-				</Typography.Text>
-			)
-		},
+			{
+				title: t('themes.requirementsColumn'),
+				render: (_, theme) => (
+					<Typography.Text type="secondary" className="text-caption">
+						{(theme.outputs?.urlConventions ?? []).join(', ') || '—'}
+						{(theme.outputs?.requiredArtifacts ?? []).length > 0
+							? ` · ${t('themes.artifacts')}: ${(theme.outputs?.requiredArtifacts ?? []).join(', ')}`
+							: ''}
+					</Typography.Text>
+				)
+			},
 		{
 			title: t('themes.configColumn'),
 			width: 120,
@@ -120,7 +120,7 @@ export default function ThemesCatalogPage() {
 				<TablePanel
 					tools={
 						<Tooltip title={t('themes.registerHint')}>
-							<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+							<Typography.Text type="secondary" className="version-text text-caption">
 								{t('themes.registerHintShort')}
 							</Typography.Text>
 						</Tooltip>

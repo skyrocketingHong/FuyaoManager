@@ -6,11 +6,13 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Input, Modal, Popconfirm, Select, Space, Tag, Upload, message } from 'antd';
+import { Alert, Button, Empty, Input, Modal, Popconfirm, Select, Space, Upload, message } from 'antd';
 import type { UploadFile } from 'antd';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader, PageTabs } from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
+import StatusTag from '../../components/StatusTag';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import PageLoading from '../../components/PageLoading';
 import { TablePanel } from '../../components/Panel';
@@ -431,7 +433,7 @@ export default function AlbumsPage() {
 					{doc === null ? (
 						<PageLoading spec="section" />
 					) : doc.photos.length === 0 ? (
-						<p>{t('albums.empty')}</p>
+						<Empty description={t('albums.empty')} />
 					) : (
 						<DataTable<AlbumPhotoEntry>
 							rowKey="filename"
@@ -449,7 +451,7 @@ export default function AlbumsPage() {
 									render: (_, photo) => (
 										<>
 											<div>{photo.title || photo.filename}</div>
-											<span style={{ fontSize: 12, opacity: 0.65 }}>{photo.path}</span>
+											<span className="subtle">{photo.path}</span>
 										</>
 									)
 								},
@@ -464,12 +466,13 @@ export default function AlbumsPage() {
 									width: 90,
 									render: (_, photo) =>
 										photo.alt ? (
-											<Tag color="green">{t('albums.hasAlt')}</Tag>
+											<StatusTag kind="success">{t('albums.hasAlt')}</StatusTag>
 										) : (
-											<Tag>{t('albums.noAlt')}</Tag>
+											<StatusTag kind="neutral">{t('albums.noAlt')}</StatusTag>
 										)
 								},
 								{
+									title: t('admin.actions'),
 									width: 220,
 									render: (_, photo, i) => (
 										<Space>
@@ -478,11 +481,21 @@ export default function AlbumsPage() {
 											</Button>
 											{editable ? (
 												<>
-													<Button size="small" type="text" onClick={() => move(i, -1)}>
-														↑
+													<Button
+														size="small"
+														type="text"
+														aria-label={t('common.moveUp')}
+														onClick={() => move(i, -1)}
+													>
+														<ArrowUp size={14} aria-hidden="true" />
 													</Button>
-													<Button size="small" type="text" onClick={() => move(i, 1)}>
-														↓
+													<Button
+														size="small"
+														type="text"
+														aria-label={t('common.moveDown')}
+														onClick={() => move(i, 1)}
+													>
+														<ArrowDown size={14} aria-hidden="true" />
 													</Button>
 													<Popconfirm
 														title={t('albums.detachConfirm')}
@@ -516,22 +529,22 @@ export default function AlbumsPage() {
 				okText={t('common.save')}
 				destroyOnClose
 			>
-				<label style={{ display: 'block', marginBottom: 8 }}>
-					<span style={{ display: 'block', fontSize: 12 }}>{t('albums.fieldTitle')}</span>
+				<label className="field">
+					<span className="field-label">{t('albums.fieldTitle')}</span>
 					<Input
 						value={editValues.title}
 						onChange={(e) => setEditValues((v) => ({ ...v, title: e.target.value }))}
 					/>
 				</label>
-				<label style={{ display: 'block', marginBottom: 8 }}>
-					<span style={{ display: 'block', fontSize: 12 }}>{t('albums.fieldDescription')}</span>
+				<label className="field">
+					<span className="field-label">{t('albums.fieldDescription')}</span>
 					<Input
 						value={editValues.description}
 						onChange={(e) => setEditValues((v) => ({ ...v, description: e.target.value }))}
 					/>
 				</label>
-				<label style={{ display: 'block' }}>
-					<span style={{ display: 'block', fontSize: 12 }}>{t('albums.fieldAlt')}</span>
+				<label className="field">
+					<span className="field-label">{t('albums.fieldAlt')}</span>
 					<Input
 						value={editValues.alt}
 						onChange={(e) => setEditValues((v) => ({ ...v, alt: e.target.value }))}

@@ -409,7 +409,7 @@ function CaddySiteEditor({ siteId }: { siteId: string }) {
 									},
 									{ title: t('admin.createdAt'), dataIndex: 'createdAt', render: timeText },
 									{
-										title: t('caddy.safeSettings'),
+										title: t('caddy.settingsColumn'),
 										render: (_, item) => (
 											<Space orientation="vertical" size={0}>
 												{options.map((option) => (

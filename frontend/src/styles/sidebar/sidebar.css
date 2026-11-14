@@ -201,7 +201,7 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
-	gap: 9px;
+	gap: var(--space-2);
 	flex: 0 0 auto;
 	margin: var(--space-3) var(--sidebar-gutter) var(--space-4);
 	color: var(--muted-foreground);
@@ -223,7 +223,7 @@
 		)
 		1;
 	min-width: 0;
-	font-size: 11px;
+	font-size: var(--text-caption);
 	line-height: 1.5;
 }
 .version-line code {

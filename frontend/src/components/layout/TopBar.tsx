@@ -56,19 +56,27 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 						/>
 					</Tooltip>
 					{user && (
-						<Dropdown
-							trigger={['click']}
-							menu={{
-								items: [
-									{ key: 'identity', label: user.displayName || user.username, disabled: true },
-									{
-										key: 'binding',
-										label: t(
-											session.passkeyBound ? 'account.passkeyBound' : 'account.passkeyUnbound'
-										),
-										disabled: true
-									},
-									{ type: 'divider' },
+					<Dropdown
+						trigger={['click']}
+						menu={{
+							items: [
+								// Identity lines are plain group captions, not disabled menu
+								// items: screen readers must not announce them as "disabled".
+								{
+									key: 'identity',
+									type: 'group',
+									label: user.displayName || user.username,
+									children: []
+								},
+								{
+									key: 'binding',
+									type: 'group',
+									label: t(
+										session.passkeyBound ? 'account.passkeyBound' : 'account.passkeyUnbound'
+									),
+									children: []
+								},
+								{ type: 'divider' },
 									{
 										key: 'appearance',
 										label: t('nav.appearance'),
@@ -89,7 +97,7 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 								]
 							}}
 						>
-							<Button className="user-button" aria-label={user.username} title={user.username}>
+							<Button className="user-button" aria-label={user.username}>
 								<span className="avatar" aria-hidden="true">
 									{Array.from(user.displayName || user.username)[0]}
 								</span>

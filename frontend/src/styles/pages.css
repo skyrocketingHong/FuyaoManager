@@ -3,8 +3,8 @@
    General visual rules (panel anatomy, table header/cell density, control
    density, button reset) are ported from the robot platform's
    styles/shared/{panel,forms,controls}.css (read-only reference), adapted
-   to this console's tokens: --surface-high maps to --surface, --font-body
-   maps to --text-body; no device business, no 16:9 stage grid. */
+   to this console's tokens; surface colors come from the antd theme tokens
+   (Table.headerBg, Table.rowHoverBg) instead of duplicated CSS. */
 
 .page-stack {
 	display: flex;
@@ -95,8 +95,13 @@
 .subtle,
 .section-caption {
 	color: var(--muted-foreground);
-	font-size: 12px;
+	font-size: var(--text-caption);
 	line-height: 1.6;
+}
+
+/* Size-only caption for text that keeps its own color (danger, links). */
+.text-caption {
+	font-size: var(--text-caption);
 }
 
 /* Panel: the standard card surface. */
@@ -171,9 +176,6 @@
 /* TablePanel: the table is the only content surface — no extra card. The
    border lives on the .ant-table-wrapper alone; the inner .ant-table stays
    transparent, so the surface is drawn exactly once. */
-.table-panel {
-	background: transparent;
-}
 .panel.table-panel {
 	background: transparent;
 	border: 0;
@@ -225,10 +227,10 @@
 }
 
 /* Table density: compact header and cell metrics shared by every list page
-   (ported from the reference forms.css). */
+   (ported from the reference forms.css). Header and hover backgrounds come
+   from the antd Table tokens. */
 .ant-table-thead > tr > th {
 	height: 32px;
-	background: var(--surface);
 	color: var(--muted-foreground);
 	padding: 4px 12px;
 	font-size: var(--text-secondary);
@@ -242,10 +244,6 @@
 	overflow-wrap: anywhere;
 }
 
-.ant-table-row:hover > .ant-table-cell {
-	background: var(--surface);
-}
-
 .ant-empty-description,
 .ant-table-placeholder .ant-table-cell {
 	color: var(--muted-foreground);
@@ -256,14 +254,14 @@
 }
 
 /* Control density: inputs and selects share one comfortable height with the
-   reference console; affix wrappers keep a single border. */
+   reference console; affix wrappers keep a single border. Borders come from
+   the antd colorBorder token so hover/focus states keep working. */
 .ant-input,
 .ant-select-selector {
 	font-size: var(--text-body);
 	min-height: max(44px, calc(1.5em + 12px));
 	height: auto;
 	line-height: 1.5;
-	border-color: var(--control-border);
 	border-radius: var(--radius);
 	background: var(--card);
 	color: var(--foreground);
@@ -344,15 +342,6 @@
 	height: 16px;
 }
 
-/* Dropdown overlays share the Select shadow so floating layers read at one
-   elevation. */
-.ant-dropdown .ant-dropdown-menu {
-	box-shadow:
-		0 6px 16px rgba(0, 0, 0, 0.08),
-		0 3px 6px -4px rgba(0, 0, 0, 0.12),
-		0 9px 28px 8px rgba(0, 0, 0, 0.05);
-}
-
 /* Form reading width: editors keep a comfortable line length while list
    pages use the full workspace. */
 .form-narrow {
@@ -363,7 +352,7 @@
    conflicts, field validation. */
 .feedback {
 	border-radius: var(--radius);
-	padding: 9px 13px;
+	padding: var(--space-2) var(--space-4);
 	font-size: var(--text-body);
 }
 
@@ -383,11 +372,6 @@
 	color: var(--status-info);
 	background: color-mix(in srgb, var(--status-info) 7%, transparent);
 	border: 1px solid color-mix(in srgb, var(--status-info) 25%, transparent);
-}
-
-/* The top bar's segmented page tabs. */
-.topbar-tabs .ant-segmented {
-	background: var(--muted);
 }
 
 /* Dense key/value rows used by overview and detail surfaces. */

@@ -17,7 +17,7 @@
 	grid-template-columns: auto minmax(0, 1fr) auto;
 	grid-template-areas: 'nav main session';
 	align-items: start;
-	min-height: 44px;
+	min-height: var(--topbar-height);
 	flex: 0 0 auto;
 	padding-block: 6px;
 	padding-inline: var(--space-4);

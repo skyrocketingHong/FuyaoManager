@@ -545,7 +545,10 @@ describe('BuildsPage generation guards', () => {
 		mountAt(SITE_A);
 		await waitFor(() => expect(findButton(zh['builds.create'] as string)).toBeDefined());
 
-		await confirmPopconfirm(zh['builds.create'] as string, 0);
+		// The create button has no confirmation gate anymore.
+		await act(async () => {
+			fireEvent.click(findButtonNth(zh['builds.create'] as string, 0));
+		});
 		await act(async () => {
 			navigateRef?.(`/sites/${SITE_B}/builds`);
 		});

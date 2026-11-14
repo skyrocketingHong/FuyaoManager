@@ -23,6 +23,28 @@ import { siteWorkspace } from '../../lib/navigation/workspace';
 
 const terminalStatus = new Set(['succeeded', 'failed']);
 
+/** Readable names for the documented build stages; unknown stages stay raw. */
+const buildStageKeys: Record<string, MessageKey> = {
+	'capability-check': 'builds.failureStage.capability-check',
+	'theme-lookup': 'builds.failureStage.theme-lookup',
+	'theme-changed': 'builds.failureStage.theme-changed',
+	'theme-root': 'builds.failureStage.theme-root',
+	'theme-source-changed': 'builds.failureStage.theme-source-changed',
+	'theme-manifest': 'builds.failureStage.theme-manifest',
+	workspace: 'builds.failureStage.workspace',
+	snapshot: 'builds.failureStage.snapshot',
+	prepare: 'builds.failureStage.prepare',
+	build: 'builds.failureStage.build',
+	harvest: 'builds.failureStage.harvest',
+	interrupted: 'builds.failureStage.interrupted',
+	internal: 'builds.failureStage.internal'
+};
+
+function buildStageLabel(stage: string): string {
+	const key = buildStageKeys[stage];
+	return key ? t(key) : stage;
+}
+
 export default function BuildsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
@@ -233,16 +255,11 @@ export default function BuildsPage() {
 
 	const editable = site !== null && canEditSite(site) && siteWorkspace(site).buildable;
 
+	// No confirmation gate: a build is non-destructive and cheap to run.
 	const createButton = (
-		<Popconfirm
-			title={t('builds.create')}
-			onConfirm={() => void handleCreate()}
-			disabled={!editable}
-		>
-			<Button type="primary" loading={creating} disabled={!editable}>
-				<Trans text={t('builds.create')} />
-			</Button>
-		</Popconfirm>
+		<Button type="primary" loading={creating} disabled={!editable} onClick={() => void handleCreate()}>
+			<Trans text={t('builds.create')} />
+		</Button>
 	);
 	const headerActive = usePageHeader({ actions: createButton });
 
@@ -272,16 +289,16 @@ export default function BuildsPage() {
 						rowKey="id"
 						dataSource={builds}
 						pagination={false}
-						columns={[
-							{
-								title: 'ID',
-								dataIndex: 'id',
-								render: (id: string) => (
-									<Typography.Text copyable code>
-										{id.slice(0, 8)}
-									</Typography.Text>
-								)
-							},
+							columns={[
+								{
+									title: t('builds.idColumn'),
+									dataIndex: 'id',
+									render: (id: string) => (
+										<Typography.Text copyable code>
+											{id.slice(0, 8)}
+										</Typography.Text>
+									)
+								},
 							{
 								title: t('builds.status'),
 								dataIndex: 'status',
@@ -317,7 +334,7 @@ export default function BuildsPage() {
 								title: t('builds.inputDigests'),
 								render: (_, record) =>
 									record.inputDigests ? (
-										<Typography.Text type="secondary" style={{ fontSize: 12 }}>
+										<Typography.Text type="secondary" className="text-caption">
 											{String(
 												(record.inputDigests as Record<string, string>).contentDigest ?? ''
 											).slice(7, 19)}
@@ -326,11 +343,12 @@ export default function BuildsPage() {
 									) : null
 							},
 							{
+								title: t('admin.actions'),
 								render: (_, record) => (
 									<Space>
 										{record.failure ? (
 											<Typography.Text type="danger">
-												{t('builds.failureStage')}: {record.failure.stage}
+												{t('builds.failureStage')}: {buildStageLabel(record.failure.stage)}
 											</Typography.Text>
 										) : null}
 										{record.status === 'succeeded' ? (
