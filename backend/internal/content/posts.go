@@ -68,10 +68,27 @@ var postDateLayouts = []string{
 // instead of letting the parser roll them over. Values without an offset
 // (date-only and naive datetimes) and date-only values are interpreted as
 // UTC so every comparison happens on one clock; values with an offset keep
-// their actual point in time. The original string is never rewritten.
+// their actual point in time. The original string is never rewritten. An
+// explicit numeric offset is range-checked on the input string because the
+// generic-layout parse accepts an offset hour of 24 and an offset minute of
+// 60; Z, date-only, and naive values carry no offset and skip the check.
 func parsePostDate(value string) (time.Time, error) {
 	if !dateTimePattern.MatchString(value) {
 		return time.Time{}, errors.New("must be an ISO date or datetime")
+	}
+	// The pattern pins an optional offset to the tail as ±HH:mm, so the last
+	// six bytes identify an explicit numeric offset; hour and minute ranges
+	// (00–23 / 00–59) hold for both signs and every time-of-day shape.
+	if len(value) >= 6 {
+		tail := value[len(value)-6:]
+		if (tail[0] == '+' || tail[0] == '-') && tail[3] == ':' {
+			if hh := tail[1:3]; hh > "23" {
+				return time.Time{}, fmt.Errorf("timezone offset %s out of range", tail)
+			}
+			if mm := tail[4:6]; mm > "59" {
+				return time.Time{}, fmt.Errorf("timezone offset %s out of range", tail)
+			}
+		}
 	}
 	var parsed time.Time
 	var lastErr error

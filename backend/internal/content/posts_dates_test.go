@@ -27,6 +27,9 @@ func TestParsePostDate(t *testing.T) {
 		"2026-11-12T10:30:45-05:00":     "2026-11-12T15:30:45Z",
 		"2026-11-12T10:30:45.25Z":       "2026-11-12T10:30:45.25Z",
 		"2026-11-12T10:30:45.123456789": "2026-11-12T10:30:45.123456789Z",
+		"2026-11-12T10:30:45+23:59":     "2026-11-11T10:31:45Z",
+		"2026-11-12T10:30:45-23:59":     "2026-11-13T10:29:45Z",
+		"2026-11-12T10:00-00:59":        "2026-11-12T10:59:00Z",
 	}
 	for value, want := range valid {
 		got, err := parsePostDate(value)
@@ -38,22 +41,28 @@ func TestParsePostDate(t *testing.T) {
 		}
 	}
 	invalid := []string{
-		"2023-02-29",             // not a leap year
-		"2026-02-30",             // February has 28 days
-		"2026-04-31",             // April has 30 days
-		"2026-13-01",             // month 13
-		"2026-00-10",             // month 0
-		"2026-01-00",             // day 0
-		"2026-01-32",             // day 32
-		"2026-11-12T24:00",       // hour 24
-		"2026-11-12T10:60",       // minute 60
-		"2026-11-12T10:00:60",    // second 60
-		"2026-11-12T10:00+25:00", // offset hour 25
-		"2026-11-12T10:00+00:99", // offset minute 99
-		"2026-1-2",               // single-digit fields
-		"2026/01/02",             // wrong separator
-		"",                       // empty
-		"not a date",             // prose
+		"2023-02-29",                   // not a leap year
+		"2026-02-30",                   // February has 28 days
+		"2026-04-31",                   // April has 30 days
+		"2026-13-01",                   // month 13
+		"2026-00-10",                   // month 0
+		"2026-01-00",                   // day 0
+		"2026-01-32",                   // day 32
+		"2026-11-12T24:00",             // hour 24
+		"2026-11-12T10:60",             // minute 60
+		"2026-11-12T10:00:60",          // second 60
+		"2026-11-12T10:00+25:00",       // offset hour 25
+		"2026-11-12T10:00+00:99",       // offset minute 99
+		"2026-11-12T10:00+24:00",       // offset hour 24 (generic parse accepts it)
+		"2026-11-12T10:00-24:00",       // negative offset hour 24
+		"2026-11-12T10:00+00:60",       // offset minute 60
+		"2026-11-12T10:00-00:60",       // negative offset minute 60
+		"2026-11-12T10:00:45+24:00",    // with seconds
+		"2026-11-12T10:00:45.25+00:60", // with fractional seconds
+		"2026-1-2",                     // single-digit fields
+		"2026/01/02",                   // wrong separator
+		"",                             // empty
+		"not a date",                   // prose
 	}
 	for _, value := range invalid {
 		if _, err := parsePostDate(value); err == nil {
@@ -207,6 +216,58 @@ func TestListPostsOrdersValidBeforeInvalidAndPaginates(t *testing.T) {
 	}
 	if strings.TrimSuffix(strings.ToLower(filepath.Base(page2[0].Path)), ".md") != "a" || strings.TrimSuffix(strings.ToLower(filepath.Base(page2[1].Path)), ".md") != "f" {
 		t.Fatalf("second page must hold the trailing invalid entries: %+v", page2)
+	}
+}
+
+// TestSavePostRejectsOutOfRangeOffsets proves an impossible offset in date
+// or lastmod fails the save with the stored bytes untouched, while a post
+// carrying an invalid offset in history still lists — after every valid
+// date — with an unchanged total.
+func TestSavePostRejectsOutOfRangeOffsets(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	original := []byte("---\ntitle: base\nslug: d\ndate: 2026-01-02T10:00Z\nlastmod: 2026-01-03T09:00+08:00\ndraft: true\n---\nbody\n")
+	if _, err := s.WriteFile(id, RootContent, "posts/tech/d.md", original); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.GetPost(id, "tech/d.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	next := Post{Category: "tech", Slug: "d", Title: "updated", Date: "2026-11-12T10:00+24:00", Draft: false, Body: "b"}
+	if _, err := s.SavePost(id, next, current.Digest); err == nil {
+		t.Fatal("an out-of-range date offset must fail the save")
+	}
+	next.Lastmod = "2026-11-12T10:00-00:60"
+	next.Date = "2026-11-12T10:00Z"
+	if _, err := s.SavePost(id, next, current.Digest); err == nil {
+		t.Fatal("an out-of-range lastmod offset must fail the save")
+	}
+	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/d.md")
+	if err != nil || afterDigest != current.Digest || string(after) != string(original) {
+		t.Fatalf("rejected saves must not touch the stored file: %v %s", err, afterDigest)
+	}
+
+	// History keeps a post with an invalid offset; it lists after every
+	// valid date with the total unchanged.
+	seedPost(t, s, id, "bad", "2026-11-12T10:00+24:00")
+	seedPost(t, s, id, "good", "2026-11-10")
+	posts, total, err := s.ListPosts(id, "", 1, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 3 {
+		t.Fatalf("invalid-offset history must still list: total %d", total)
+	}
+	// Order: the saved post (latest valid), the older valid post, then the
+	// invalid-offset entry last.
+	base := func(p Post) string {
+		return strings.TrimSuffix(strings.ToLower(filepath.Base(p.Path)), ".md")
+	}
+	// Order: good (November) is later than the saved post (January); the
+	// invalid-offset entry lands last.
+	if base(posts[0]) != "good" || base(posts[1]) != "d" || base(posts[2]) != "bad" {
+		t.Fatalf("invalid-offset history must sort after every valid date: %+v", posts)
 	}
 }
 

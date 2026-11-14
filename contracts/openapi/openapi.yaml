@@ -4967,10 +4967,12 @@ components:
           description: |
             Post date. Accepted shapes: `YYYY-MM-DD`, `YYYY-MM-DDTHH:mm`,
             with optional seconds and fractional seconds, and any of those
-            with a `Z` or `±HH:mm` offset. Impossible calendar dates, hours,
-            minutes, seconds, or offsets are rejected instead of rolled
-            over. Values without an offset sort as UTC; the submitted string
-            is stored verbatim and never rewritten.
+            with a `Z` or `±HH:mm` offset (date-only values take no offset).
+            Impossible calendar dates, hours, minutes, seconds, or offsets
+            are rejected instead of rolled over; offsets range within
+            `±23:59` at most (hours 00-23, minutes 00-59). Values without an
+            offset sort as UTC; the submitted string is stored verbatim and
+            never rewritten.
         lastmod:
           type: string
           description: |
