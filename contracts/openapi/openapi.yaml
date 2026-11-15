@@ -1798,8 +1798,8 @@ paths:
       description: |
         Aggregates the posts tree for editor assistance: first-level physical
         directories (with their post counts and `_index.md` display titles),
-        the frontmatter category and tag vocabularies (counted once per
-        post), and the total post count. Drafts and posts with invalid dates
+        registered and frontmatter category and tag vocabularies (counted
+        once per post), and the total post count. Drafts and posts with invalid dates
         count; broken files fail the read instead of being skipped. The
         taxonomy follows the site's posts source: shared content reads the
         platform library with `canEdit=false`.
@@ -1826,6 +1826,140 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/posts/directories/{slug}:
+    get:
+      operationId: getPostDirectory
+      tags: [Content]
+      summary: Read a blog directory title
+      description: Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Directory title and current digest.
+          headers:
+            ETag:
+              description: Quoted digest for a subsequent If-Match update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDirectoryDocument'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putPostDirectory
+      tags: [Content]
+      summary: Create or update a blog directory title
+      description: Updates the index title and preserves its other YAML fields and Markdown body.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostDirectoryUpdate'
+      responses:
+        '200':
+          description: Saved directory and its new digest.
+          headers:
+            ETag:
+              description: Quoted digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDirectoryDocument'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/posts/vocabulary:
+    get:
+      operationId: getPostVocabulary
+      tags: [Content]
+      summary: Read the registered blog vocabulary
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Registered categories and tags for the resolved posts source.
+          headers:
+            ETag:
+              description: Quoted digest for a subsequent If-Match update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVocabulary'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: putPostVocabulary
+      tags: [Content]
+      summary: Update the registered blog vocabulary
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostVocabularyUpdate'
+      responses:
+        '200':
+          description: Saved vocabulary and its new digest.
+          headers:
+            ETag:
+              description: Quoted digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVocabulary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
         default:
           $ref: '#/components/responses/Problem'
 
@@ -3524,6 +3658,134 @@ paths:
                 $ref: '#/components/schemas/Problem'
         default:
           $ref: '#/components/responses/Problem'
+
+  /api/v1/content/posts/directories/{slug}:
+    get:
+      operationId: platformGetPostDirectory
+      tags: [Content]
+      summary: Read a blog directory title
+      description: Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Directory title and current digest.
+          headers:
+            ETag:
+              description: Quoted digest for a subsequent If-Match update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDirectoryDocument'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: platformPutPostDirectory
+      tags: [Content]
+      summary: Create or update a blog directory title
+      description: Updates the index title and preserves its other YAML fields and Markdown body.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostDirectoryUpdate'
+      responses:
+        '200':
+          description: Saved directory and its new digest.
+          headers:
+            ETag:
+              description: Quoted digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostDirectoryDocument'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/content/posts/vocabulary:
+    get:
+      operationId: platformGetPostVocabulary
+      tags: [Platform content]
+      summary: Read the platform blog vocabulary
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Registered categories and tags.
+          headers:
+            ETag:
+              description: Quoted digest for a subsequent If-Match update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVocabulary'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    put:
+      operationId: platformPutPostVocabulary
+      tags: [Platform content]
+      summary: Update the platform blog vocabulary
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostVocabularyUpdate'
+      responses:
+        '200':
+          description: Saved vocabulary and its new digest.
+          headers:
+            ETag:
+              description: Quoted digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostVocabulary'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        default:
+          $ref: '#/components/responses/Problem'
+      x-required-platform-role: admin
 
   /api/v1/content/posts/{postPath}:
     get:
@@ -5248,6 +5510,20 @@ components:
           type: string
         postCount:
           type: integer
+    PostDirectoryUpdate:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1 }
+    PostDirectoryDocument:
+      type: object
+      required: [slug, title, digest, canEdit]
+      properties:
+        slug: { type: string }
+        title: { type: string }
+        digest: { type: string }
+        canEdit: { type: boolean }
     TaxonomyTerm:
       type: object
       required: [name, postCount]
@@ -5276,6 +5552,31 @@ components:
           type: integer
         canEdit:
           type: boolean
+    PostVocabularyUpdate:
+      type: object
+      additionalProperties: false
+      required: [version, categories, tags]
+      properties:
+        version: { type: integer, enum: [1] }
+        categories:
+          type: array
+          items: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+    PostVocabulary:
+      type: object
+      required: [version, categories, tags, digest, canEdit]
+      properties:
+        version: { type: integer, enum: [1] }
+        categories:
+          type: array
+          items: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        digest: { type: string }
+        canEdit: { type: boolean }
     PostList:
       type: object
       required: [posts, total]

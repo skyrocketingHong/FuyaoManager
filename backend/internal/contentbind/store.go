@@ -67,6 +67,38 @@ func (s *Store) GetPostTaxonomy(id uuid.UUID) (content.PostTaxonomy, error) {
 	}
 	return t.GetPostTaxonomy(k)
 }
+
+func (s *Store) GetPostVocabulary(id uuid.UUID) (content.PostVocabulary, string, error) {
+	t, k, e := s.target(id, "posts", false)
+	if e != nil {
+		return content.PostVocabulary{}, "", e
+	}
+	return t.GetPostVocabulary(k)
+}
+
+func (s *Store) SavePostVocabulary(id uuid.UUID, doc content.PostVocabulary, digest string) (content.PostVocabulary, string, error) {
+	t, k, e := s.target(id, "posts", true)
+	if e != nil {
+		return content.PostVocabulary{}, "", e
+	}
+	return t.SavePostVocabulary(k, doc, digest)
+}
+
+func (s *Store) GetPostDirectory(id uuid.UUID, slug string) (content.PostDirectoryDocument, string, error) {
+	t, k, e := s.target(id, "posts", false)
+	if e != nil {
+		return content.PostDirectoryDocument{}, "", e
+	}
+	return t.GetPostDirectory(k, slug)
+}
+
+func (s *Store) SavePostDirectory(id uuid.UUID, slug, title, digest string) (content.PostDirectoryDocument, string, error) {
+	t, k, e := s.target(id, "posts", true)
+	if e != nil {
+		return content.PostDirectoryDocument{}, "", e
+	}
+	return t.SavePostDirectory(k, slug, title, digest)
+}
 func (s *Store) GetPost(id uuid.UUID, path string) (content.Post, error) {
 	t, k, e := s.target(id, "posts", false)
 	if e != nil {

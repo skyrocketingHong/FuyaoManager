@@ -91,6 +91,21 @@ func TestMaterializeFreezesEachSelectedCategoryAndKeepsSiteConfiguration(t *test
 	}
 }
 
+func TestMaterializeExcludesPrivatePostVocabulary(t *testing.T) {
+	id := uuid.New()
+	local := bindingFixture(t, id, "local", 1)
+	if _, _, err := local.SavePostVocabulary(id, content.PostVocabulary{Version: 1, Categories: []string{}, Tags: []string{"private-unused"}}, content.Digest(nil)); err != nil {
+		t.Fatal(err)
+	}
+	root, _, _, err := Materialize(local, nil, id, store.IndependentSources(), filepath.Join(t.TempDir(), "snapshot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".post-vocabulary.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("editing vocabulary leaked into build input: %v", err)
+	}
+}
+
 func TestMaterializeRejectsSymlinksAndRemovesPartialInput(t *testing.T) {
 	for _, where := range []string{"local-content", "local-config", "platform-posts", "platform-assets", "content-root"} {
 		t.Run(where, func(t *testing.T) {

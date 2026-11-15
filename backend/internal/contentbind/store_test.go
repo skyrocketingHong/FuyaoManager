@@ -51,6 +51,34 @@ func bindingFixture(t *testing.T, id uuid.UUID, label string, photos int) *conte
 	return s
 }
 
+func TestPostVocabularyFollowsPostsSource(t *testing.T) {
+	id := uuid.New()
+	local := bindingFixture(t, id, "local", 0)
+	library := bindingFixture(t, content.PlatformScopeID, "library", 0)
+	if _, _, err := local.SavePostVocabulary(id, content.PostVocabulary{Version: 1, Categories: []string{}, Tags: []string{"local"}}, content.Digest(nil)); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := library.SavePostVocabulary(content.PlatformScopeID, content.PostVocabulary{Version: 1, Categories: []string{}, Tags: []string{"platform"}}, content.Digest(nil)); err != nil {
+		t.Fatal(err)
+	}
+	sources := store.IndependentSources()
+	bound := &Store{Store: local, Platform: library, Resolve: func(context.Context, uuid.UUID) (store.ContentSourceRecord, error) {
+		return store.ContentSourceRecord{Sources: sources}, nil
+	}}
+	doc, _, err := bound.GetPostVocabulary(id)
+	if err != nil || len(doc.Tags) != 1 || doc.Tags[0] != "local" {
+		t.Fatalf("independent source: %+v %v", doc, err)
+	}
+	sources.Posts = "platform"
+	doc, _, err = bound.GetPostVocabulary(id)
+	if err != nil || len(doc.Tags) != 1 || doc.Tags[0] != "platform" {
+		t.Fatalf("platform source: %+v %v", doc, err)
+	}
+	if _, _, err := bound.SavePostVocabulary(id, doc, ""); !errors.Is(err, content.ErrShared) {
+		t.Fatalf("shared write: %v", err)
+	}
+}
+
 // TestStoreGetPostTaxonomyFollowsPostsSource proves the taxonomy read is
 // explicitly bound to the posts source: an independent site reads its own
 // directories and a platform-sourced site reads the library — never the
@@ -160,6 +188,10 @@ func TestStoreRejectsEverySharedWriteBeforeTouchingContent(t *testing.T) {
 	upload := &unreadableUpload{}
 	editCalled := false
 	cases := map[string]func() error{
+		"post vocabulary": func() error {
+			_, _, err := bound.SavePostVocabulary(id, content.PostVocabulary{Version: 1}, "stale")
+			return err
+		},
 		"create post": func() error { _, err := bound.CreatePost(id, content.Post{}); return err },
 		"save post":   func() error { _, err := bound.SavePost(id, content.Post{}, "stale"); return err },
 		"delete post": func() error { return bound.DeletePost(id, "tech/source.md", "stale") },

@@ -12,11 +12,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// PostTaxonomy aggregates the blog directory structure and the frontmatter
-// category/tag vocabulary of one content scope. Physical directories and
-// frontmatter categories are separate views: a directory is a path on disk,
-// a category is a value inside the article frontmatter, and neither feeds
-// the other.
+// PostTaxonomy aggregates the blog directory structure, registered terms,
+// and frontmatter category/tag usages of one content scope. Physical
+// directories and categories remain separate views.
 type PostTaxonomy struct {
 	Directories []PostDirectory `json:"directories"`
 	Categories  []TaxonomyTerm  `json:"categories"`
@@ -48,17 +46,21 @@ type TaxonomyTerm struct {
 // with the site-relative path instead of producing a seemingly complete
 // success. The current store and scope are the read boundary: nothing
 // outside the jailed posts tree is read, symlinked entries are skipped, and
-// the contentbind binding decides which scope a caller may see (HTTP wiring
-// comes later and must bind per posts source).
+// the contentbind binding decides which scope a caller may see.
 func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	tax := PostTaxonomy{
 		Directories: []PostDirectory{},
 		Categories:  []TaxonomyTerm{},
 		Tags:        []TaxonomyTerm{},
 	}
+	vocabulary, _, err := s.GetPostVocabulary(scopeID)
+	if err != nil {
+		return PostTaxonomy{}, err
+	}
 	root, err := resolve(s.ContentRoot(scopeID), "posts")
 	if errors.Is(err, ErrNotFound) {
 		// No posts tree yet: an empty vocabulary is a real state.
+		mergePostVocabulary(&tax, vocabulary)
 		return tax, nil
 	}
 	if err != nil {
@@ -70,6 +72,9 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	tagCounts := map[string]int{}
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
+			if path == root && errors.Is(walkErr, fs.ErrNotExist) {
+				return nil
+			}
 			return walkErr
 		}
 		// Symlinks never cross the read boundary: linked files are skipped
@@ -153,7 +158,27 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	for _, name := range sortedTaxonomyNames(tagCounts) {
 		tax.Tags = append(tax.Tags, TaxonomyTerm{Name: name, PostCount: tagCounts[name]})
 	}
+	mergePostVocabulary(&tax, vocabulary)
 	return tax, nil
+}
+
+func mergePostVocabulary(tax *PostTaxonomy, vocabulary PostVocabulary) {
+	merge := func(current []TaxonomyTerm, names []string) []TaxonomyTerm {
+		seen := make(map[string]bool, len(current))
+		for _, term := range current {
+			seen[term.Name] = true
+		}
+		for _, name := range names {
+			if !seen[name] {
+				current = append(current, TaxonomyTerm{Name: name})
+				seen[name] = true
+			}
+		}
+		sort.Slice(current, func(i, j int) bool { return current[i].Name < current[j].Name })
+		return current
+	}
+	tax.Categories = merge(tax.Categories, vocabulary.Categories)
+	tax.Tags = merge(tax.Tags, vocabulary.Tags)
 }
 
 // indexTitle reads only the title from a directory's _index.md — no post

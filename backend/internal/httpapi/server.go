@@ -94,6 +94,10 @@ type EdgeManager interface {
 type ContentStore interface {
 	ListPosts(siteID uuid.UUID, query string, page, pageSize int) ([]content.Post, int, error)
 	GetPostTaxonomy(siteID uuid.UUID) (content.PostTaxonomy, error)
+	GetPostVocabulary(siteID uuid.UUID) (content.PostVocabulary, string, error)
+	SavePostVocabulary(siteID uuid.UUID, doc content.PostVocabulary, expectedDigest string) (content.PostVocabulary, string, error)
+	GetPostDirectory(siteID uuid.UUID, slug string) (content.PostDirectoryDocument, string, error)
+	SavePostDirectory(siteID uuid.UUID, slug, title, expectedDigest string) (content.PostDirectoryDocument, string, error)
 	GetPost(siteID uuid.UUID, rel string) (content.Post, error)
 	CreatePost(siteID uuid.UUID, post content.Post) (content.Post, error)
 	SavePost(siteID uuid.UUID, post content.Post, expectedDigest string) (content.Post, error)
@@ -230,6 +234,10 @@ func (a *API) routes() []routeSpec {
 		// links, and the visual site configuration the builds consume).
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts", "listPosts", a.requireFullScope(a.contentRoute(a.handleListPosts))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/taxonomy", "getPostsTaxonomy", a.requireFullScope(a.contentRoute(a.handleGetPostsTaxonomy))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts/vocabulary", "getPostVocabulary", a.requireFullScope(a.contentRoute(a.handleGetPostVocabulary))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/posts/vocabulary", "putPostVocabulary", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPostVocabulary)))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/posts/directories/{slug}", "getPostDirectory", a.requireFullScope(a.contentRoute(a.handleGetPostDirectory))},
+		{http.MethodPut, "/api/v1/sites/{siteId}/posts/directories/{slug}", "putPostDirectory", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPostDirectory)))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/posts", "createPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleCreatePost)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/{postPath}", "getPost", a.requireFullScope(a.contentRoute(a.handleGetPost))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/posts/{postPath}", "putPost", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPost)))},

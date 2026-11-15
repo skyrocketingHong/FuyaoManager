@@ -935,14 +935,56 @@ export interface paths {
          * Read the site's blog taxonomy
          * @description Aggregates the posts tree for editor assistance: first-level physical
          *     directories (with their post counts and `_index.md` display titles),
-         *     the frontmatter category and tag vocabularies (counted once per
-         *     post), and the total post count. Drafts and posts with invalid dates
+         *     registered and frontmatter category and tag vocabularies (counted
+         *     once per post), and the total post count. Drafts and posts with invalid dates
          *     count; broken files fail the read instead of being skipped. The
          *     taxonomy follows the site's posts source: shared content reads the
          *     platform library with `canEdit=false`.
          */
         get: operations["getPostsTaxonomy"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/posts/directories/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a blog directory title
+         * @description Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+         */
+        get: operations["getPostDirectory"];
+        /**
+         * Create or update a blog directory title
+         * @description Updates the index title and preserves its other YAML fields and Markdown body.
+         */
+        put: operations["putPostDirectory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/posts/vocabulary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the registered blog vocabulary */
+        get: operations["getPostVocabulary"];
+        /** Update the registered blog vocabulary */
+        put: operations["putPostVocabulary"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1543,6 +1585,48 @@ export interface paths {
          */
         get: operations["platformGetPostsTaxonomy"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/directories/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a blog directory title
+         * @description Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+         */
+        get: operations["platformGetPostDirectory"];
+        /**
+         * Create or update a blog directory title
+         * @description Updates the index title and preserves its other YAML fields and Markdown body.
+         */
+        put: operations["platformPutPostDirectory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/vocabulary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the platform blog vocabulary */
+        get: operations["platformGetPostVocabulary"];
+        /** Update the platform blog vocabulary */
+        put: operations["platformPutPostVocabulary"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2319,6 +2403,15 @@ export interface components {
             title: string;
             postCount: number;
         };
+        PostDirectoryUpdate: {
+            title: string;
+        };
+        PostDirectoryDocument: {
+            slug: string;
+            title: string;
+            digest: string;
+            canEdit: boolean;
+        };
         TaxonomyTerm: {
             name: string;
             postCount: number;
@@ -2328,6 +2421,20 @@ export interface components {
             categories: components["schemas"]["TaxonomyTerm"][];
             tags: components["schemas"]["TaxonomyTerm"][];
             postCount: number;
+            canEdit: boolean;
+        };
+        PostVocabularyUpdate: {
+            /** @enum {integer} */
+            version: 1;
+            categories: string[];
+            tags: string[];
+        };
+        PostVocabulary: {
+            /** @enum {integer} */
+            version: 1;
+            categories: string[];
+            tags: string[];
+            digest: string;
             canEdit: boolean;
         };
         PostList: {
@@ -4682,6 +4789,153 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getPostDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Directory title and current digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for a subsequent If-Match update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDirectoryDocument"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    putPostDirectory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostDirectoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Saved directory and its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDirectoryDocument"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPostVocabulary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered categories and tags for the resolved posts source. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for a subsequent If-Match update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostVocabulary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    putPostVocabulary: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostVocabularyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Saved vocabulary and its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostVocabulary"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getPost: {
         parameters: {
             query?: never;
@@ -6345,6 +6599,142 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetPostDirectory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Directory title and current digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for a subsequent If-Match update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDirectoryDocument"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutPostDirectory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostDirectoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description Saved directory and its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostDirectoryDocument"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetPostVocabulary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registered categories and tags. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for a subsequent If-Match update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostVocabulary"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformPutPostVocabulary: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostVocabularyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Saved vocabulary and its new digest. */
+            200: {
+                headers: {
+                    /** @description Quoted digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostVocabulary"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
             default: components["responses"]["Problem"];
         };
     };

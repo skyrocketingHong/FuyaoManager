@@ -85,6 +85,10 @@ func (a *API) platformContentRoutes() []routeSpec {
 	return []routeSpec{
 		{"GET", "/api/v1/content/posts", "platformListPosts", read((*API).handleListPosts)},
 		{"GET", "/api/v1/content/posts/taxonomy", "platformGetPostsTaxonomy", read((*API).handleGetPostsTaxonomy)},
+		{"GET", "/api/v1/content/posts/vocabulary", "platformGetPostVocabulary", read((*API).handleGetPostVocabulary)},
+		{"PUT", "/api/v1/content/posts/vocabulary", "platformPutPostVocabulary", write((*API).handlePutPostVocabulary)},
+		{"GET", "/api/v1/content/posts/directories/{slug}", "platformGetPostDirectory", read((*API).handleGetPostDirectory)},
+		{"PUT", "/api/v1/content/posts/directories/{slug}", "platformPutPostDirectory", write((*API).handlePutPostDirectory)},
 		{"POST", "/api/v1/content/posts", "platformCreatePost", write((*API).handleCreatePost)},
 		{"GET", "/api/v1/content/posts/{postPath}", "platformGetPost", read((*API).handleGetPost)},
 		{"PUT", "/api/v1/content/posts/{postPath}", "platformPutPost", write((*API).handlePutPost)},

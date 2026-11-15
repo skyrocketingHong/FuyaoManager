@@ -75,6 +75,80 @@ func (a *API) handleGetPostsTaxonomy(w http.ResponseWriter, r *http.Request, aut
 	})
 }
 
+func (a *API) handleGetPostVocabulary(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, false)
+	if !ok {
+		return
+	}
+	doc, digest, err := a.content.GetPostVocabulary(target.ID)
+	if err != nil {
+		writeContentError(w, err, "Failed to read the post vocabulary.")
+		return
+	}
+	w.Header().Set("ETag", `"`+digest+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"version": doc.Version, "categories": doc.Categories, "tags": doc.Tags, "digest": digest, "canEdit": target.CanEdit})
+}
+
+func (a *API) handlePutPostVocabulary(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, true)
+	if !ok {
+		return
+	}
+	var doc content.PostVocabulary
+	if !decodeJSON(w, r, &doc, false) {
+		return
+	}
+	expected, err := requireDigestIfMatch(w, r)
+	if err != nil {
+		return
+	}
+	saved, digest, err := a.content.SavePostVocabulary(target.ID, doc, expected)
+	if err != nil {
+		writeContentError(w, err, "Failed to save the post vocabulary.")
+		return
+	}
+	w.Header().Set("ETag", `"`+digest+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"version": saved.Version, "categories": saved.Categories, "tags": saved.Tags, "digest": digest, "canEdit": target.CanEdit})
+}
+
+func (a *API) handleGetPostDirectory(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, false)
+	if !ok {
+		return
+	}
+	doc, digest, err := a.content.GetPostDirectory(target.ID, r.PathValue("slug"))
+	if err != nil {
+		writeContentError(w, err, "Failed to read the post directory.")
+		return
+	}
+	w.Header().Set("ETag", `"`+digest+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"slug": doc.Slug, "title": doc.Title, "digest": digest, "canEdit": target.CanEdit})
+}
+
+func (a *API) handlePutPostDirectory(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, true)
+	if !ok {
+		return
+	}
+	var body struct {
+		Title string `json:"title"`
+	}
+	if !decodeJSON(w, r, &body, false) {
+		return
+	}
+	expected, err := requireDigestIfMatch(w, r)
+	if err != nil {
+		return
+	}
+	doc, digest, err := a.content.SavePostDirectory(target.ID, r.PathValue("slug"), body.Title, expected)
+	if err != nil {
+		writeContentError(w, err, "Failed to save the post directory.")
+		return
+	}
+	w.Header().Set("ETag", `"`+digest+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"slug": doc.Slug, "title": doc.Title, "digest": digest, "canEdit": target.CanEdit})
+}
+
 // handleCreatePost writes a new markdown post.
 func (a *API) handleCreatePost(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	rec, ok := a.contentTarget(w, r, auth, true)
