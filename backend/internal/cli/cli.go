@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildinfo"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/caddymanage"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/config"
@@ -55,6 +56,8 @@ func Main(args []string) int {
 
 	var err error
 	switch args[0] {
+	case "version":
+		err = json.NewEncoder(os.Stdout).Encode(buildinfo.Current())
 	case "migrate":
 		err = runMigrate(ctx)
 	case "sync-caddy":
@@ -96,6 +99,7 @@ func usage(f *os.File) {
 	fmt.Fprint(f, `Usage: fuyao-admin <command> [flags]
 
 Commands:
+  version                 Print the product version and exact build commit as JSON.
   sync-caddy --username X  Register the real Caddy inventory without changing website files.
   import-content          Copy real website data into the platform library and an independent site workspace.
   migrate                 Apply pending SQL migrations and exit.
@@ -478,6 +482,7 @@ func runServe(ctx context.Context) error {
 		}
 	}
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
+		UpdaterSocket:          os.Getenv("FUYAO_ADMIN_UPDATER_SOCKET"),
 		CaddyReadCmd:           caddyCommand,
 		CaddyControl:           control,
 		CaddyManagementEnabled: cfg.CaddyManagementEnabled,

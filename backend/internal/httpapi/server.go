@@ -36,6 +36,7 @@ const (
 
 // Config carries the HTTP-facing runtime configuration.
 type Config struct {
+	UpdaterSocket          string
 	CaddyReadCmd           []string
 	CaddyControl           func(context.Context, caddymanage.Request) (caddymanage.Result, error)
 	CaddyManagementEnabled bool
@@ -154,6 +155,9 @@ type routeSpec struct {
 // authenticated routes additionally require the CSRF header.
 func (a *API) routes() []routeSpec {
 	routes := []routeSpec{
+		{http.MethodGet, "/api/v1/version", "getApplicationVersion", a.handleApplicationVersion},
+		{http.MethodGet, "/api/v1/admin/updates", "getPlatformUpdates", a.requireFullScope(a.adminRoute(a.handlePlatformUpdates))},
+		{http.MethodPost, "/api/v1/admin/updates", "managePlatformUpdates", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleUpdateAction)))},
 		{http.MethodGet, "/{previewHost}/{path...}", "getPreviewWrapper", a.handlePreviewWrapper},
 		{http.MethodGet, "/api/v1/openapi", "getOpenAPI", a.requireFullScope(a.handleOpenAPI)},
 		{http.MethodPost, "/api/v1/admin/caddy/sync", "syncCaddySites", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleSyncCaddy)))},

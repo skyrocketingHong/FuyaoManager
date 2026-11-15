@@ -66,6 +66,7 @@ const navIcons: Record<string, LucideIcon> = {
 	appearance: Palette,
 	users: UsersRound,
 	logs: ScrollText,
+	updates: Rocket,
 	'site.posts': FileText,
 	'site.friends': Link2,
 	'site.albums': Images,

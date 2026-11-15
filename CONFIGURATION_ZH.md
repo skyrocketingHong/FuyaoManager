@@ -2,6 +2,8 @@
 
 # 配置参考
 
+应用更新可配置 `FUYAO_ADMIN_UPDATER_SOCKET` Unix socket 路径；未安装独立管理器时留空。生产使用 `/run/fuyao-manager-updater/control.sock`，root 持有的仓库和安装设置见 [CI 构建与更新](./docs/CI_UPDATES_ZH.md)。
+
 全部配置经环境变量驱动。`backend/config.example.env` 是本地开发模板；`deploy/fuyao-admin/config.example.env` 是服务器模板。真实 DSN 与密钥绝不入库。
 
 ## 服务

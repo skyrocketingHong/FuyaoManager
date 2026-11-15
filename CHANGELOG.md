@@ -7,6 +7,19 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.7.0 - 2026-11-15
+
+### Added
+
+- GitHub CI release bundles containing the Linux application, frontend and independent update supervisor, with exact commit/run identity and per-file SHA-256 verification.
+- Administrator platform updates page: check successful builds, deploy a selected version, switch main/dev channels, configure automatic updates and pinning, restore the previous verified program, and follow persistent task receipts and logs.
+- Root-owned systemd update supervisor, fixed Unix-socket proxy, database/configuration backup before activation, running-commit health checks, failure rollback and interrupted-switch recovery.
+- One version synchronization command for npm manifests and the default Go build version; optional real-theme integration remains independently selectable.
+
+### Changed
+
+- Production application updates consume CI-built packages instead of compiling source on the server. Automatic activation requires an unchanged database schema.
+
 ## 0.6.1 - 2026-11-14
 
 ### Changed

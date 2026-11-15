@@ -1,0 +1,23 @@
+[Unit]
+Description=FuyaoManager independent GitHub update supervisor
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=root
+Group=fuyao-admin
+UMask=0022
+WorkingDirectory=/srv/fuyao-admin
+ExecStart=/srv/fuyao-admin/updater/fuyao-manager-updater /srv/fuyao-admin/etc/updater.json
+Restart=always
+RestartSec=3
+RuntimeDirectory=fuyao-manager-updater
+RuntimeDirectoryMode=0750
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+ReadWritePaths=/srv/fuyao-admin
+
+[Install]
+WantedBy=multi-user.target

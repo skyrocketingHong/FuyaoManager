@@ -33,8 +33,10 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 ├── README_ZH.md               # Simplified Chinese entry
 ├── LICENSE                    # AGPL-3.0-only
 ├── package.json               # root convenience scripts (frontend owns its lockfile)
+├── scripts/                   # package-release.py and set-version.mjs
 ├── backend/                   # Go management backend
 │   ├── cmd/fuyao-admin/       # CLI: migrate / serve / init-admin / login-code /
+│   ├── cmd/fuyao-manager-updater/ # independent root-owned GitHub update supervisor
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
 │   │                          # sync-caddy / import-content
@@ -43,6 +45,8 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── cmd/fuyao-caddy-register/ # root-only equivalent source registration/publication policy
 │   ├── internal/
 │   │   ├── cli/               # command wiring + serve composition
+│   │   ├── buildinfo/         # exact product, commit and build-time identity
+│   │   ├── platformupdate/    # GitHub artifacts, task journal, activation and recovery
 │   │   ├── config/            # environment loading and validation
 │   │   ├── db/                # pool setup + SQL migrations (0001-0019)
 │   │   ├── model/             # shared records
@@ -76,6 +80,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 ├── frontend/                  # React + antd 6 console (own package-lock.json)
 │   ├── src/lib/api/           # typed management/admin clients + generated schema.d.ts
 │   ├── src/lib/admin/         # cancellable queries, mutation guards, audit labels
+│   ├── src/lib/updates/       # account-scoped maintenance reads and mutations
 │   ├── src/lib/sites/         # site business modules (race-safe detail, editors)
 │   ├── src/lib/themes/        # theme-selection store (catalog, If-Match, 412)
 │   ├── src/lib/editing/       # EditableDoc state machine + unsaved-changes guard
@@ -106,6 +111,7 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │                             # branding), public Caddy vhost template (caddy/)
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # iteration ledger (bilingual)
+    ├── CI_UPDATES.md / CI_UPDATES_ZH.md    # CI packaging and supervised updates
     ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
     ├── CONTENT_WORKSPACES.md / CONTENT_WORKSPACES_ZH.md
     ├── SOURCE_MIGRATION.md                 # extraction record + commit map pointer

@@ -2,10 +2,23 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - 'contracts/**'
+      - 'scripts/**'
+      - 'deploy/fuyao-admin/**'
+      - 'package.json'
+      - 'LICENSE'
+      - '.github/workflows/ci.yml'
   pull_request:
   workflow_dispatch:
     inputs:
+      theme-integration:
+        description: 'Also run the optional real external-theme integration'
+        type: boolean
+        default: false
       theme-ref:
         description: 'FuyaoHomepage ref for the external-theme integration job'
         required: false
@@ -13,6 +26,9 @@ on:
 
 permissions:
   contents: read
+
+env:
+  TZ: Asia/Shanghai
 
 jobs:
   backend:
@@ -35,10 +51,10 @@ jobs:
     env:
       FUYAO_ADMIN_TEST_DSN: postgresql://fuyao_test@localhost:5432/fuyao_mvp_test?sslmode=disable
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.27'
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
       - name: gofmt
         working-directory: backend
@@ -55,8 +71,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -75,10 +91,52 @@ jobs:
         run: npm run check
       - name: vitest
         working-directory: frontend
-        run: npm test
+        run: npm test -- --maxWorkers=2
       - name: build
         working-directory: frontend
         run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist
+          retention-days: 7
+
+  package:
+    if: github.event_name != 'pull_request' && (github.ref_name == 'main' || github.ref_name == 'dev')
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist
+      - name: Build immutable Linux release
+        run: python3 scripts/package-release.py --output .fuyao/ci-package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: fuyao-manager-linux-amd64
+          path: .fuyao/ci-package/*
+          retention-days: 30
+      - name: Publish immutable CI build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          version="$(python3 -c 'import json; print(json.load(open("package.json"))["version"])')"
+          gh release create "$tag" .fuyao/ci-package/* \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "${version} · ${GITHUB_REF_NAME} · ${GITHUB_SHA:0:8}" \
+            --notes "FuyaoManager ${version}. CI build for ${GITHUB_REF_NAME}, commit ${GITHUB_SHA}. / ${GITHUB_REF_NAME} 通道构建，提交 ${GITHUB_SHA}。"
 
   # Real external-theme integration: checks out the first theme (FuyaoHomepage)
   # at a pinned ref, installs its dependencies, and runs the Go suite with
@@ -86,7 +144,7 @@ jobs:
   # Manual (workflow_dispatch) until the theme repository carries the split
   # on its default branch.
   backend-theme-integration:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && inputs.theme-integration
     runs-on: ubuntu-latest
     timeout-minutes: 45
     services:
@@ -107,17 +165,17 @@ jobs:
       FUYAO_ADMIN_TEST_DSN: postgresql://fuyao_test@localhost:5432/fuyao_mvp_test?sslmode=disable
       FUYAO_TEST_THEME_ROOT: ${{ github.workspace }}/theme/site
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: skyrocketingHong/FuyaoHomepage
           ref: ${{ github.event.inputs.theme-ref || 'main' }}
           path: theme
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.27'
+          go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm

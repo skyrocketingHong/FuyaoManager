@@ -25,6 +25,8 @@ platform development history preserved; see
 
 ## Features
 
+- **CI builds and web updates**: GitHub Actions publishes verified Linux application bundles. An independent systemd supervisor handles server-side downloads, checked deployments, channels, pinning, automatic updates and failed-activation rollback. Administrators manage updates and durable task receipts from the console. See [CI builds and updates](./docs/CI_UPDATES.md).
+
 - **Platform content and website workspaces**: shared blogs, albums, places
   and friends; independent per-site source selection, theme configuration,
   frozen builds, previews and registered Caddy publication. See

@@ -1,0 +1,8 @@
+{
+	"repository": "skyrocketingHong/FuyaoManager",
+	"root": "/srv/fuyao-admin",
+	"socket": "/run/fuyao-manager-updater/control.sock",
+	"group": "fuyao-admin",
+	"healthUrl": "http://127.0.0.1:8787/api/v1/version",
+	"prepareCommand": "/usr/local/libexec/fuyao-manager-prepare"
+}

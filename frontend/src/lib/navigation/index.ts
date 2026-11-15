@@ -21,6 +21,14 @@ export interface NavItem {
 }
 
 export const navItems: readonly NavItem[] = [
+	{
+		id: 'updates',
+		path: '/updates',
+		scope: 'platform',
+		group: 'administration',
+		titleKey: 'nav.updates',
+		adminOnly: true
+	},
 	...(['posts', 'albums', 'footprints', 'friends'] as const).map((resource) => ({
 		id: `content.${resource}`,
 		path: `/content/${resource}`,

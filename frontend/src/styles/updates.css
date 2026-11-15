@@ -1,0 +1,57 @@
+/* Maintenance control rows follow robot-platform's platform-controls layout. */
+.updates-page code {
+	overflow-wrap: anywhere;
+}
+.updates-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 24px;
+	margin-block: 16px;
+}
+.updates-controls label {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.updates-controls .ant-select {
+	min-width: 168px;
+}
+.updates-version-picker,
+.updates-token {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+.updates-version-picker > .ant-select {
+	flex: 1 1 300px;
+	min-width: 0;
+}
+.updates-token > label {
+	flex-basis: 100%;
+}
+.updates-token > .ant-input-affix-wrapper {
+	flex: 1 1 260px;
+	min-width: 0;
+}
+.updates-logs {
+	margin: 0;
+	padding-inline-start: 24px;
+	max-height: 320px;
+	overflow: auto;
+	overflow-wrap: anywhere;
+}
+.updates-page .ant-descriptions-item-content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+	.updates-controls {
+		align-items: stretch;
+		flex-direction: column;
+	}
+	.updates-controls label {
+		justify-content: space-between;
+	}
+}

@@ -49,6 +49,8 @@ servers:
     description: Local development server (loopback binding only)
 
 tags:
+  - name: Updates
+    description: Independent CI build distribution and application update supervision.
   - name: Auth
     description: WebAuthn enrollment and login ceremonies.
   - name: Account
@@ -74,6 +76,76 @@ security:
   - sessionCookie: []
 
 paths:
+  /api/v1/version:
+    get:
+      operationId: getApplicationVersion
+      summary: Read the exact running application build
+      tags: [Updates]
+      security: []
+      responses:
+        '200':
+          description: Running build identity
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version, commit, builtAt]
+                properties:
+                  version: { type: string }
+                  commit: { type: string }
+                  builtAt: { type: string }
+  /api/v1/admin/updates:
+    get:
+      operationId: getPlatformUpdates
+      summary: Read the independent platform updater and task receipt
+      tags: [Updates]
+      security:
+        - sessionCookie: []
+      x-permissions: [platform-admin]
+      responses:
+        '200':
+          description: Updater state; enabled false when unconfigured
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUpdateStatus' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
+    post:
+      operationId: managePlatformUpdates
+      summary: Check, configure or admit an asynchronous application update
+      description: |
+        Full platform administrator, Origin and CSRF are required. Check reads
+        successful CI builds; deploy must name a checked commit and run ID.
+        A successful response records admission, not completed deployment.
+        Poll GET for the durable task result after service interruption.
+        Repository, installation paths and commands are operator-only settings.
+      tags: [Updates]
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      x-permissions: [platform-admin]
+      parameters:
+        - in: header
+          name: X-CSRF-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformUpdateAction' }
+      responses:
+        '200':
+          description: Check result, saved setting or accepted task
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformUpdateStatus' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '503': { $ref: '#/components/responses/Problem' }
   /{previewHost}/{path...}:
     get:
       operationId: getPreviewWrapper
@@ -4369,6 +4441,95 @@ components:
             $ref: '#/components/schemas/Problem'
 
   schemas:
+    PlatformUpdateVersion:
+      type: object
+      required: [version, commit, runId, attempt, branch, createdAt, url]
+      properties:
+        version: { type: string }
+        commit: { type: string }
+        runId: { type: integer, format: int64 }
+        attempt: { type: integer }
+        branch: { type: string }
+        createdAt: { type: string }
+        url: { type: string }
+    PlatformUpdateTask:
+      type: object
+      required: [id, status, phase, commit, startedAt]
+      properties:
+        id: { type: string }
+        status:
+          type: string
+          enum: [running, succeeded, failed, rolled_back, recovery_required]
+        phase: { type: string }
+        commit: { type: string }
+        startedAt: { type: string }
+        finishedAt: { type: string }
+        error: { type: string }
+    PlatformUpdateStatus:
+      type: object
+      required:
+        [
+          enabled,
+          repository,
+          channel,
+          auto,
+          pinned,
+          checking,
+          updating,
+          tokenSet,
+          managerCommit,
+          current,
+          previous,
+          versions,
+          task,
+          lastCheck,
+          lastError,
+          logs
+        ]
+      properties:
+        enabled: { type: boolean }
+        repository: { type: string }
+        channel: { type: string }
+        auto: { type: boolean }
+        pinned: { type: boolean }
+        checking: { type: boolean }
+        updating: { type: boolean }
+        tokenSet: { type: boolean }
+        managerCommit: { type: string }
+        current: { $ref: '#/components/schemas/PlatformUpdateVersion' }
+        previous:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformUpdateVersion'
+            - enum: [null]
+        versions:
+          type: array
+          items: { $ref: '#/components/schemas/PlatformUpdateVersion' }
+        task:
+          oneOf:
+            - $ref: '#/components/schemas/PlatformUpdateTask'
+            - enum: [null]
+        lastCheck: { type: string }
+        lastError: { type: string }
+        logs:
+          type: array
+          items: { type: string }
+    PlatformUpdateAction:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [check, update, deploy, rollback, channel, auto, pin, token]
+        runId: { type: integer, format: int64, minimum: 1 }
+        commit: { type: string, pattern: '^[a-f0-9]{40}$' }
+        channel: { type: string, enum: [main, dev] }
+        on: { type: boolean }
+        token:
+          type: string
+          maxLength: 512
+          writeOnly: true
+          description: Optional GitHub read token. Empty clears it. Never returned or audited.
     CaddySite:
       type: object
       required:
@@ -4820,6 +4981,8 @@ components:
           description: One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, username_taken, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
           enum:
             - unauthenticated
+            - update_unavailable
+            - update_rejected
             - preview_closed
             - caddy_unavailable
             - caddy_invalid

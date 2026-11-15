@@ -2,6 +2,11 @@ English | [简体中文](./CONFIGURATION_ZH.md)
 
 # Configuration Reference
 
+Application updates use the optional `FUYAO_ADMIN_UPDATER_SOCKET` Unix-socket
+path. Leave it unset without the independent supervisor. Production uses
+`/run/fuyao-manager-updater/control.sock`; root-owned repository and installation
+settings are described in [CI builds and updates](./docs/CI_UPDATES.md).
+
 All configuration is environment-driven. `backend/config.example.env` is
 the local-development template; `deploy/fuyao-admin/config.example.env` is
 the server template. Real DSNs and secrets never enter the repository.

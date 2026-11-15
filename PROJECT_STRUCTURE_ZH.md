@@ -27,8 +27,10 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 ├── README_ZH.md               # 简体中文入口
 ├── LICENSE                    # AGPL-3.0-only
 ├── package.json               # 根便捷脚本（前端持有独立锁文件）
+├── scripts/                   # package-release.py 构包与 set-version.mjs 版本同步
 ├── backend/                   # Go 管理后端
 │   ├── cmd/fuyao-admin/       # CLI：migrate / serve / init-admin / login-code /
+│   ├── cmd/fuyao-manager-updater/ # 独立且由 root 持有的 GitHub 更新管理器
 │   │                          # revoke-sessions / bootstrap-admin / create-site /
 │   │                          # validate-theme / register-theme
 │   │                          # sync-caddy / import-content
@@ -37,6 +39,8 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │   ├── cmd/fuyao-caddy-register/ # 仅root登记等价源配置和发布策略
 │   ├── internal/
 │   │   ├── cli/               # 命令接线 + serve 组装
+│   │   ├── buildinfo/         # 产品版本、完整提交和构建时间
+│   │   ├── platformupdate/    # GitHub 产物、任务日志、激活与中断恢复
 │   │   ├── config/            # 环境变量加载与校验
 │   │   ├── db/                # 连接池 + SQL 迁移（0001-0019）
 │   │   ├── model/             # 共享记录
@@ -69,6 +73,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 ├── frontend/                  # React + antd 6 管理台（独立 package-lock.json）
 │   ├── src/lib/api/           # 管理业务与管理员客户端 + 生成的 schema.d.ts
 │   ├── src/lib/admin/         # 可取消查询、变更请求守卫、审计操作文案
+│   ├── src/lib/updates/       # 按账号隔离的维护读取与写操作
 │   ├── src/lib/sites/         # 站点业务模块（防竞态详情、编辑器）
 │   ├── src/lib/themes/        # 主题选择存储（目录、If-Match、412）
 │   ├── src/lib/editing/       # EditableDoc 状态机 + 未保存离开保护
@@ -97,6 +102,7 @@ FuyaoManager 是 2026-11-12 从 FuyaoHomepage 拆分出的站点与内容管理�
 │                             # favicon.svg）、公网 Caddy vhost 模板（caddy/）
 └── docs/
     ├── ROADMAP.md / ROADMAP_ZH.md          # 迭代台账（双语）
+    ├── CI_UPDATES.md / CI_UPDATES_ZH.md    # CI 构包与独立更新管理器
     ├── CADDY_INTEGRATION.md / CADDY_INTEGRATION_ZH.md
     ├── CONTENT_WORKSPACES.md / CONTENT_WORKSPACES_ZH.md
     ├── SOURCE_MIGRATION.md                 # 拆分记录 + 提交映射指针

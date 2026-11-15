@@ -19,6 +19,7 @@ import AccountSettingsPage from './pages/AccountSettingsPage';
 import AppearancePage from './pages/AppearancePage';
 import UsersPage from './pages/UsersPage';
 import LogsPage from './pages/LogsPage';
+import UpdatesPage from './pages/UpdatesPage';
 import SitesPage from './pages/SitesPage';
 import ThemesCatalogPage from './pages/ThemesCatalogPage';
 import SiteOverviewPage from './pages/sites/SiteOverviewPage';
@@ -61,7 +62,8 @@ const pageByNavId: Record<string, ComponentType> = {
 	account: AccountSettingsPage,
 	appearance: AppearancePage,
 	users: UsersPage,
-	logs: LogsPage
+	logs: LogsPage,
+	updates: UpdatesPage
 };
 
 type Status = ReturnType<typeof sessionSnapshot>['status'];

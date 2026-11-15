@@ -4,6 +4,48 @@
  */
 
 export interface paths {
+    "/api/v1/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the exact running application build */
+        get: operations["getApplicationVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the independent platform updater and task receipt */
+        get: operations["getPlatformUpdates"];
+        put?: never;
+        /**
+         * Check, configure or admit an asynchronous application update
+         * @description Full platform administrator, Origin and CSRF are required. Check reads
+         *     successful CI builds; deploy must name a checked commit and run ID.
+         *     A successful response records admission, not completed deployment.
+         *     Poll GET for the durable task result after service interruption.
+         *     Repository, installation paths and commands are operator-only settings.
+         */
+        post: operations["managePlatformUpdates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/{previewHost}/{path...}": {
         parameters: {
             query?: never;
@@ -1770,6 +1812,56 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        PlatformUpdateVersion: {
+            version: string;
+            commit: string;
+            /** Format: int64 */
+            runId: number;
+            attempt: number;
+            branch: string;
+            createdAt: string;
+            url: string;
+        };
+        PlatformUpdateTask: {
+            id: string;
+            /** @enum {string} */
+            status: "running" | "succeeded" | "failed" | "rolled_back" | "recovery_required";
+            phase: string;
+            commit: string;
+            startedAt: string;
+            finishedAt?: string;
+            error?: string;
+        };
+        PlatformUpdateStatus: {
+            enabled: boolean;
+            repository: string;
+            channel: string;
+            auto: boolean;
+            pinned: boolean;
+            checking: boolean;
+            updating: boolean;
+            tokenSet: boolean;
+            managerCommit: string;
+            current: components["schemas"]["PlatformUpdateVersion"];
+            previous: components["schemas"]["PlatformUpdateVersion"] | null;
+            versions: components["schemas"]["PlatformUpdateVersion"][];
+            task: components["schemas"]["PlatformUpdateTask"] | null;
+            lastCheck: string;
+            lastError: string;
+            logs: string[];
+        };
+        PlatformUpdateAction: {
+            /** @enum {string} */
+            action: "check" | "update" | "deploy" | "rollback" | "channel" | "auto" | "pin" | "token";
+            /** Format: int64 */
+            runId?: number;
+            commit?: string;
+            /** @enum {string} */
+            channel?: "main" | "dev";
+            on?: boolean;
+            /** @description Optional GitHub read token. Empty clears it. Never returned or audited. */
+            token?: string;
+        };
         CaddySite: {
             /** Format: uuid */
             siteId: string;
@@ -2109,7 +2201,7 @@ export interface components {
              * @description One of unauthenticated, csrf_token_invalid, origin_rejected, forbidden, not_found, invalid_site_id, invalid_permit, permit_used, permit_expired, bootstrap_closed, challenge_invalid, credential_rejected, validation_error, invalid_json, invalid_if_match, precondition_required, precondition_failed, request_too_large, unsupported_media_type, theme_not_found, invalid_theme_config, theme_contracts_unavailable, no_theme_selected, build_not_found, build_not_succeeded, build_runner_unavailable, preview_unavailable, publish_unavailable, deployment_disabled, username_taken, build_not_publishable, release_build_conflict, release_not_found, release_not_rollbackable, no_live_release, invalid_id, internal_error.
              * @enum {string}
              */
-            code: "unauthenticated" | "preview_closed" | "caddy_unavailable" | "caddy_invalid" | "catalog_unavailable" | "site_kind_mismatch" | "last_admin" | "last_owner" | "last_passkey" | "self_management" | "account_conflict" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "deployment_disabled" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "username_taken" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "edge_unavailable" | "deployment_disabled" | "username_taken" | "internal_error";
+            code: "unauthenticated" | "update_unavailable" | "update_rejected" | "preview_closed" | "caddy_unavailable" | "caddy_invalid" | "catalog_unavailable" | "site_kind_mismatch" | "last_admin" | "last_owner" | "last_passkey" | "self_management" | "account_conflict" | "csrf_token_invalid" | "origin_rejected" | "forbidden" | "not_found" | "invalid_site_id" | "invalid_permit" | "permit_used" | "permit_expired" | "bootstrap_closed" | "challenge_invalid" | "credential_rejected" | "validation_error" | "invalid_json" | "invalid_if_match" | "precondition_required" | "precondition_failed" | "request_too_large" | "unsupported_media_type" | "theme_not_found" | "invalid_theme_config" | "theme_contracts_unavailable" | "no_theme_selected" | "invalid_id" | "preview_unavailable" | "build_runner_unavailable" | "build_not_succeeded" | "build_not_found" | "publish_unavailable" | "deployment_disabled" | "build_not_publishable" | "release_build_conflict" | "release_not_found" | "release_not_rollbackable" | "no_live_release" | "invalid_code" | "username_taken" | "code_used" | "code_expired" | "code_locked" | "code_purpose_mismatch" | "rate_limited" | "slug_taken" | "provisioning_unavailable" | "passkey_unavailable" | "edge_apply_failed" | "content_unavailable" | "content_exists" | "invalid_content_path" | "photo_in_use" | "reference_scan_failed" | "edge_unavailable" | "deployment_disabled" | "username_taken" | "internal_error";
             detail?: string;
         };
         /** @description The full body of PATCH /api/v1/account/profile — the target is always the caller's own account. */
@@ -2901,6 +2993,84 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getApplicationVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Running build identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version: string;
+                        commit: string;
+                        builtAt: string;
+                    };
+                };
+            };
+        };
+    };
+    getPlatformUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updater state; enabled false when unconfigured */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUpdateStatus"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    managePlatformUpdates: {
+        parameters: {
+            query?: never;
+            header: {
+                "X-CSRF-Token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformUpdateAction"];
+            };
+        };
+        responses: {
+            /** @description Check result, saved setting or accepted task */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUpdateStatus"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     getPreviewWrapper: {
         parameters: {
             query: {
