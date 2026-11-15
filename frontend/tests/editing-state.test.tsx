@@ -107,6 +107,12 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+async function loadedArticleTitle(): Promise<HTMLInputElement> {
+	const input = (await screen.findByLabelText(t('posts.fieldTitle'))) as HTMLInputElement;
+	await waitFor(() => expect(input.value).toBe('Original title'));
+	return input;
+}
+
 function mount(element: React.ReactElement, section: string, siteId = site.siteId) {
 	const router = createMemoryRouter(
 		[
@@ -169,7 +175,7 @@ describe('editing state (R5)', () => {
 		await screen.findByText('Original title');
 		fireEvent.click(button(t('posts.edit')));
 
-		const title = await screen.findByDisplayValue('Original title');
+		const title = await loadedArticleTitle();
 		fireEvent.change(title, { target: { value: 'Local unsaved title' } });
 		fireEvent.click(button(t('common.save')));
 		await waitFor(() => expect(api.putPost).toHaveBeenCalledTimes(1));
@@ -201,7 +207,7 @@ describe('editing state (R5)', () => {
 		mount(<PostsPage />, 'posts');
 		await screen.findByText('Original title');
 		fireEvent.click(button(t('posts.edit')));
-		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+		fireEvent.change(await loadedArticleTitle(), {
 			target: { value: 'Local title' }
 		});
 		fireEvent.click(button(t('common.save')));
@@ -233,7 +239,7 @@ describe('editing state (R5)', () => {
 		mount(<PostsPage />, 'posts');
 		await screen.findByText('Original title');
 		fireEvent.click(button(t('posts.edit')));
-		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+		fireEvent.change(await loadedArticleTitle(), {
 			target: { value: 'Discard me' }
 		});
 		fireEvent.click(button(t('common.save')));
@@ -269,7 +275,7 @@ describe('editing state (R5)', () => {
 		mount(<PostsPage />, 'posts');
 		await screen.findByText('Original title');
 		fireEvent.click(button(t('posts.edit')));
-		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+		fireEvent.change(await loadedArticleTitle(), {
 			target: { value: 'Discard me' }
 		});
 		fireEvent.click(button(t('common.save')));
@@ -306,7 +312,7 @@ describe('editing state (R5)', () => {
 		await screen.findByText('Original title');
 		fireEvent.click(button(t('posts.edit')));
 
-		const title = await screen.findByDisplayValue('Original title');
+		const title = await loadedArticleTitle();
 		await waitFor(() => expect((title as HTMLInputElement).disabled).toBe(true));
 		expect(button(t('common.save')).disabled).toBe(true);
 	});

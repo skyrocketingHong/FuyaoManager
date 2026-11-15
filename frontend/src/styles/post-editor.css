@@ -9,6 +9,23 @@
 	flex-wrap: wrap;
 	gap: var(--space-2);
 }
+.post-editor-title.ant-input {
+	width: min(32rem, 100%);
+	min-width: 12rem;
+	max-width: 100%;
+}
+.post-markdown-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-3);
+}
+.post-markdown-toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+}
 .post-editor-form {
 	display: flex;
 	flex-direction: column;
@@ -44,6 +61,7 @@
 	display: none;
 }
 .post-editor-source,
+.post-editor-source .ant-form-item-row,
 .post-editor-source .ant-form-item-control,
 .post-editor-source .ant-form-item-control-input,
 .post-editor-source .ant-form-item-control-input-content {
@@ -53,8 +71,14 @@
 	min-width: 0;
 	min-height: 0;
 }
+.post-editor-source .ant-form-item-row,
+.post-editor-source .ant-form-item-control {
+	width: 100%;
+	max-width: 100%;
+}
 .post-editor-source textarea {
 	flex: 1 1 auto;
+	width: 100%;
 	min-height: 18rem;
 	resize: vertical;
 	font-family: var(--font-mono);

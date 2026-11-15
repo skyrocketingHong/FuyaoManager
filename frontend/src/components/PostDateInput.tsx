@@ -90,8 +90,11 @@ export default function PostDateInput({
 				}}
 			/>
 			{parts?.zone ? (
-				<span className="post-date-zone" title={t('posts.timezone')}>
-					{parts.zone}
+				<span
+					className="post-date-zone"
+					title={parts.zone === 'Z' ? t('posts.utcTimezone') : t('posts.timezone')}
+				>
+					{parts.zone === 'Z' ? 'UTC' : `UTC${parts.zone}`}
 				</span>
 			) : null}
 		</div>

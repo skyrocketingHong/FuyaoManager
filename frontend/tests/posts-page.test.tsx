@@ -410,6 +410,43 @@ describe('PostsPage', () => {
 		);
 	});
 
+	it('edits the title in the top slot and inserts Markdown around the selected text', async () => {
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		const title = (await screen.findByLabelText('Title')) as HTMLInputElement;
+		await waitFor(() => expect(title.value).toBe('Hello'));
+		expect(title.closest('.post-editor-form')).toBeNull();
+		const body = screen.getByLabelText('Body (Markdown)') as HTMLTextAreaElement;
+		fireEvent.change(body, { target: { value: 'Hello world' } });
+		body.setSelectionRange(0, 5);
+		fireEvent.mouseDown(screen.getByRole('button', { name: 'Bold' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+		expect(body.value).toBe('**Hello** world');
+		fireEvent.change(title, { target: { value: 'Updated title' } });
+		expect(title.value).toBe('Updated title');
+	});
+
+	it('uses the save time for an unchanged last-modified field', async () => {
+		vi.mocked(management.putPost).mockImplementationOnce(async (_target, _path, submitted) => ({
+			post: { ...samplePost, ...submitted },
+			etag: '"new-etag"'
+		}));
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		const title = (await screen.findByLabelText('Title')) as HTMLInputElement;
+		await waitFor(() => expect(title.value).toBe('Hello'));
+		fireEvent.change(title, { target: { value: 'Changed' } });
+		const before = Date.now();
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(management.putPost).toHaveBeenCalledTimes(1));
+		const lastmod = vi.mocked(management.putPost).mock.calls[0][2].lastmod!;
+		expect(lastmod.endsWith('Z')).toBe(true);
+		expect(Date.parse(lastmod)).toBeGreaterThanOrEqual(before);
+		expect(Date.parse(lastmod)).toBeLessThanOrEqual(Date.now());
+	});
+
 	it('keeps edits made during saving and uses the returned digest on the next save', async () => {
 		let finish!: (result: { post: typeof samplePost; etag: string }) => void;
 		vi.mocked(management.putPost).mockImplementationOnce(

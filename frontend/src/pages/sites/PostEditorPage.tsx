@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useRef, useState } from 'react';
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useDeferredValue,
+	useEffect,
+	useId,
+	useRef,
+	useState
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
@@ -14,11 +23,13 @@ import {
 	message
 } from 'antd';
 import { ArrowLeft } from 'lucide-react';
+import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { PageTabs, usePageHeader } from '../../components/PageHeader';
 import { useContentScope } from '../../components/ContentScopeProvider';
 import PostDateInput, { isValidPostDate } from '../../components/PostDateInput';
 import PageLoading from '../../components/PageLoading';
 import StatusTag from '../../components/StatusTag';
+import MarkdownToolbar from '../../features/posts/MarkdownToolbar';
 import {
 	createPost,
 	getPost,
@@ -119,6 +130,9 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	const navigate = useNavigate();
 	const basePath = siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
 	const [form] = Form.useForm<PostForm>();
+	const bodyRef = useRef<TextAreaRef>(null);
+	const bodyId = useId();
+	const [titleInvalid, setTitleInvalid] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
 	const [site, setSite] = useState<Site | null>(null);
 	const [editing, setEditing] = useState<Post | null>(null);
@@ -198,6 +212,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 		setDigest('');
 		setSaving(false);
 		setConflict(false);
+		setTitleInvalid(false);
 		touched.current = new Set();
 		setErrorKey(null);
 		createdPath.current = null;
@@ -238,7 +253,11 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	async function save(values: PostForm) {
 		if (!target || !editable || saving) return;
 		const epoch = editorEpoch.current;
-		const submitted = toBody(values);
+		const original = toBody(values);
+		const submitted = {
+			...original,
+			lastmod: touched.current.has('lastmod') ? original.lastmod : new Date().toISOString()
+		};
 		const knownTags = new Set([
 			...(baseline?.tags ?? []),
 			...(taxonomy?.tags ?? []).map((term) => term.name)
@@ -258,25 +277,20 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 				: await createPost(target, submitted);
 			if (epoch !== editorEpoch.current) return;
 			const current = form.getFieldsValue(true) as PostForm;
-			const unchanged = JSON.stringify(toBody(current)) === JSON.stringify(submitted);
 			const savedForm = toForm(saved);
+			const newerFields = (Object.keys(current) as (keyof PostForm)[]).filter(
+				(key) => JSON.stringify(current[key]) !== JSON.stringify((original as PostForm)[key])
+			);
+			const next = { ...savedForm };
+			for (const field of newerFields) Object.assign(next, { [field]: current[field] });
 			setEditing(saved);
 			setDigest(nextEtag);
 			setBaseline(savedForm);
 			setConflict(false);
-			if (unchanged) {
-				form.setFieldsValue(savedForm);
-				setDraft(savedForm);
-				touched.current = new Set();
-			} else {
-				setDraft(current);
-				touched.current = new Set(
-					(Object.keys(current) as (keyof PostForm)[]).filter(
-						(key) => JSON.stringify(current[key]) !== JSON.stringify((submitted as PostForm)[key])
-					)
-				);
-				void messageApi.info(t('posts.newerEditsKept'));
-			}
+			form.setFieldsValue(next);
+			setDraft(next);
+			touched.current = new Set(newerFields);
+			if (newerFields.length) void messageApi.info(t('posts.newerEditsKept'));
 			if (!editing) createdPath.current = saved.path;
 			void messageApi.success(t('posts.saved'));
 			if (newTags.length || newCategories.length) {
@@ -337,9 +351,23 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			<Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate(basePath)}>
 				{t('posts.back')}
 			</Button>
-			<Typography.Text strong>
-				{draft?.title || t(mode === 'new' ? 'posts.newTitle' : 'posts.editTitle')}
-			</Typography.Text>
+			<Input
+				className="post-editor-title"
+				aria-label={t('posts.fieldTitle')}
+				aria-required="true"
+				aria-invalid={titleInvalid}
+				placeholder={t('posts.fieldTitle')}
+				status={titleInvalid ? 'error' : undefined}
+				value={draft?.title ?? ''}
+				disabled={!editable || !baseline}
+				maxLength={300}
+				onChange={(event) => {
+					form.setFieldsValue({ title: event.target.value });
+					setDraft(form.getFieldsValue(true) as PostForm);
+					touched.current.add('title');
+					setTitleInvalid(false);
+				}}
+			/>
 			{baseline ? (
 				<StatusTag kind={dirty || !editing ? 'warning' : 'success'}>
 					{t(dirty || !editing ? 'posts.unsaved' : 'posts.savedStatus')}
@@ -426,6 +454,12 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 				style={baseline ? undefined : { display: 'none' }}
 				disabled={!editable}
 				onFinish={(values) => void save({ ...form.getFieldsValue(true), ...values } as PostForm)}
+				onFinishFailed={({ errorFields }) => {
+					if (errorFields.some((field) => field.name[0] === 'title')) {
+						setTitleInvalid(true);
+						void messageApi.warning(t('posts.titleRequired'));
+					}
+				}}
 				onValuesChange={(changed) => {
 					setDraft(form.getFieldsValue(true) as PostForm);
 					touched.current = new Set([
@@ -434,18 +468,35 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 					]);
 				}}
 			>
+				<Form.Item
+					name="title"
+					hidden
+					rules={[{ required: true, whitespace: true, message: t('posts.titleRequired') }]}
+				>
+					<Input />
+				</Form.Item>
 				<div className="post-editor-layout">
 					<section className="post-editor-writing">
-						<Form.Item
-							name="title"
-							label={t('posts.fieldTitle')}
-							rules={[{ required: true, whitespace: true, message: t('posts.titleRequired') }]}
-						>
-							<Input maxLength={300} />
-						</Form.Item>
+						<MarkdownToolbar
+							value={draft?.body ?? ''}
+							disabled={!editable || !baseline || view === 'preview'}
+							controls={bodyId}
+							textarea={() => bodyRef.current?.resizableTextArea?.textArea ?? null}
+							onEmptyToc={() => void messageApi.info(t('posts.tocEmpty'))}
+							onChange={(body) => {
+								form.setFieldsValue({ body });
+								setDraft(form.getFieldsValue(true) as PostForm);
+								touched.current.add('body');
+							}}
+						/>
 						<div className={`post-editor-body post-editor-body--${view}`}>
-							<Form.Item name="body" label={t('posts.fieldBody')} className="post-editor-source">
-								<Input.TextArea spellCheck />
+							<Form.Item
+								name="body"
+								label={t('posts.fieldBody')}
+								htmlFor={bodyId}
+								className="post-editor-source"
+							>
+								<Input.TextArea id={bodyId} ref={bodyRef} spellCheck />
 							</Form.Item>
 							<section className="post-editor-preview" aria-label={t('posts.preview')}>
 								{previewBody ? (
