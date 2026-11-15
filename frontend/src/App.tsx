@@ -33,6 +33,7 @@ import PostsPage from './pages/content/posts/PostsPage';
 import PostEditorPage from './pages/content/posts/PostEditorPage';
 import PostVocabularyPage from './pages/content/posts/PostVocabularyPage';
 import PostMediaPage from './pages/content/posts/PostMediaPage';
+import { LegacyPostVocabularyRedirect } from './features/posts/PostWorkspaceTabs';
 import FriendsPage from './pages/content/FriendsPage';
 import SiteConfigPage from './pages/sites/SiteConfigPage';
 import AlbumsPage from './pages/content/AlbumsPage';
@@ -47,7 +48,9 @@ const pageByNavId: Record<string, ComponentType> = {
 	'content.posts': PostsPage,
 	'content.posts.new': () => <PostEditorPage mode="new" />,
 	'content.posts.edit': () => <PostEditorPage mode="edit" />,
-	'content.posts.vocabulary': PostVocabularyPage,
+	'content.posts.vocabulary': LegacyPostVocabularyRedirect,
+	'content.posts.categories': () => <PostVocabularyPage kind="categories" />,
+	'content.posts.tags': () => <PostVocabularyPage kind="tags" />,
 	'content.posts.media': PostMediaPage,
 	'content.albums': AlbumsPage,
 	'content.footprints': FootprintsPage,
@@ -64,7 +67,9 @@ const pageByNavId: Record<string, ComponentType> = {
 	'site.posts': PostsPage,
 	'site.posts.new': () => <PostEditorPage mode="new" />,
 	'site.posts.edit': () => <PostEditorPage mode="edit" />,
-	'site.posts.vocabulary': PostVocabularyPage,
+	'site.posts.vocabulary': LegacyPostVocabularyRedirect,
+	'site.posts.categories': () => <PostVocabularyPage kind="categories" />,
+	'site.posts.tags': () => <PostVocabularyPage kind="tags" />,
 	'site.posts.media': PostMediaPage,
 	'site.friends': FriendsPage,
 	'site.albums': AlbumsPage,

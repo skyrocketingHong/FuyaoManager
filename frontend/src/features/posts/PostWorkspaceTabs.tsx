@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageTabs } from '../../components/PageHeader';
 import { t } from '../../lib/i18n';
 
@@ -6,6 +6,13 @@ export type PostWorkspaceSection = 'posts' | 'categories' | 'tags' | 'media';
 
 export function postWorkspacePath(siteId?: string): string {
 	return siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
+}
+
+export function LegacyPostVocabularyRedirect() {
+	const { siteId } = useParams<{ siteId: string }>();
+	const [params] = useSearchParams();
+	const section = params.get('view') === 'tags' ? 'tags' : 'categories';
+	return <Navigate to={`${postWorkspacePath(siteId)}/${section}`} replace />;
 }
 
 export default function PostWorkspaceTabs({ current }: { current: PostWorkspaceSection }) {
@@ -25,7 +32,7 @@ export default function PostWorkspaceTabs({ current }: { current: PostWorkspaceS
 			onChange={(value) => {
 				if (value === 'posts') navigate(base);
 				else if (value === 'media') navigate(`${base}/media`);
-				else navigate(`${base}/vocabulary?view=${value}`);
+				else navigate(`${base}/${value}`);
 			}}
 		/>
 	);

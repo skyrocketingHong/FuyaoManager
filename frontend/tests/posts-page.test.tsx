@@ -137,7 +137,8 @@ function mountPosts() {
 				children: [
 					{ index: true, element: <PostsPage /> },
 					{ path: 'new', element: <PostEditorPage mode="new" /> },
-					{ path: 'vocabulary', element: <PostVocabularyPage /> },
+					{ path: 'categories', element: <PostVocabularyPage kind="categories" /> },
+					{ path: 'tags', element: <PostVocabularyPage kind="tags" /> },
 					{ path: 'media', element: <PostMediaPage /> },
 					{ path: ':postPath/edit', element: <PostEditorPage mode="edit" /> }
 				]
@@ -554,13 +555,15 @@ describe('PostsPage', () => {
 			categoryGroups,
 			tags: [{ name: 'Go', postCount: 1 }]
 		});
-		mountPosts();
+		const { router } = mountPosts();
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/categories`));
 		expect(await screen.findByText('技术')).toBeDefined();
 		expect(screen.queryByRole('button', { name: 'Import existing terms' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add to vocabulary' })).toBeNull();
 		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
+		await waitFor(() => expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/tags`));
 		expect(await screen.findByText('Go')).toBeDefined();
 		fireEvent.change(screen.getByLabelText('Enter a tag'), { target: { value: 'Go' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Add' }));

@@ -56,6 +56,15 @@ export const navItems: readonly NavItem[] = [
 		menu: false,
 		parentId: 'content.posts'
 	},
+	...(['categories', 'tags'] as const).map((kind) => ({
+		id: `content.posts.${kind}`,
+		path: `/content/posts/${kind}`,
+		scope: 'platform' as const,
+		group: 'content' as const,
+		titleKey: `taxonomy.${kind}` as MessageKey,
+		menu: false,
+		parentId: 'content.posts'
+	})),
 	{
 		id: 'content.posts.media',
 		path: '/content/posts/media',
@@ -168,6 +177,15 @@ export const navItems: readonly NavItem[] = [
 		menu: false,
 		parentId: 'site.posts'
 	},
+	...(['categories', 'tags'] as const).map((kind) => ({
+		id: `site.posts.${kind}`,
+		path: `/sites/:siteId/posts/${kind}`,
+		scope: 'site' as const,
+		group: 'content' as const,
+		titleKey: `taxonomy.${kind}` as MessageKey,
+		menu: false,
+		parentId: 'site.posts'
+	})),
 	{
 		id: 'site.posts.media',
 		path: '/sites/:siteId/posts/media',

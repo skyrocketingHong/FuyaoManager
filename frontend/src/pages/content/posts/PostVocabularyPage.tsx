@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Input, Modal, Popconfirm, Space, message } from 'antd';
 import { useContentScope } from '../../../components/ContentScopeProvider';
 import DataTable from '../../../components/DataTable';
@@ -54,9 +53,7 @@ function fallbackGroups(taxonomy: PostTaxonomy): CategoryGroup[] {
 	return rows;
 }
 
-export default function PostVocabularyPage() {
-	const [params] = useSearchParams();
-	const kind = params.get('view') === 'tags' ? 'tags' : 'categories';
+export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tags' }) {
 	const scope = useContentScope();
 	const target = scope.target;
 	const [messageApi, contextHolder] = message.useMessage();

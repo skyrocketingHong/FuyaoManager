@@ -60,12 +60,14 @@ vi.mock('../src/lib/sites/site-list', () => ({
 const getSite = vi.fn();
 const getPost = vi.fn();
 const getPostTaxonomy = vi.fn();
+const getPostVocabulary = vi.fn();
 const listPostMedia = vi.fn();
 const apiRequest = vi.fn();
 vi.mock('../src/lib/api/management', () => ({
 	getSite: (...args: unknown[]) => getSite(...args),
 	getPost: (...args: unknown[]) => getPost(...args),
 	getPostTaxonomy: (...args: unknown[]) => getPostTaxonomy(...args),
+	getPostVocabulary: (...args: unknown[]) => getPostVocabulary(...args),
 	listPostMedia: (...args: unknown[]) => listPostMedia(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
@@ -160,6 +162,10 @@ beforeEach(() => {
 		postCount: 0,
 		canEdit: true
 	});
+	getPostVocabulary.mockResolvedValue({
+		vocabulary: { version: 1, categories: [], tags: [], canEdit: true, digest: 'sha256:' + 'a'.repeat(64) },
+		etag: '"vocabulary"'
+	});
 	getPost.mockResolvedValue({
 		post: {
 			path: 'tech/hello.md',
@@ -244,11 +250,11 @@ function authenticated() {
 
 function renderAt(path: string) {
 	const router = createMemoryRouter([{ path: '*', element: <App /> }], { initialEntries: [path] });
-	return render(
+	return { ...render(
 		<ConfigProvider>
 			<RouterProvider router={router} />
 		</ConfigProvider>
-	);
+	), router };
 }
 
 describe('guards', () => {
@@ -285,6 +291,18 @@ describe('guards', () => {
 
 describe('deep links and menu selection', () => {
 	beforeEach(() => authenticated());
+
+	it.each([
+		['/content/posts/vocabulary?view=categories', '/content/posts/categories'],
+		['/content/posts/vocabulary?view=tags', '/content/posts/tags'],
+		['/sites/abc/posts/vocabulary?view=categories', '/sites/abc/posts/categories'],
+		['/sites/abc/posts/vocabulary?view=tags', '/sites/abc/posts/tags']
+	])('redirects the legacy taxonomy URL to its route', async (legacy, expected) => {
+		const { router } = renderAt(legacy);
+		await waitFor(() => expect(router.state.location.pathname).toBe(expected));
+		await waitFor(() => expect(getPostVocabulary).toHaveBeenCalled());
+		expect(router.state.location.search).toBe('');
+	});
 
 	it('renders the real post editor inside the site shell and retries a failed read', async () => {
 		getPost.mockRejectedValueOnce(new Error('offline'));
