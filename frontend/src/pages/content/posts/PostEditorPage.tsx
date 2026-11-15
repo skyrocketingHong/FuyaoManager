@@ -30,6 +30,7 @@ import PostDateInput, { isValidPostDate } from '../../../features/posts/PostDate
 import PageLoading from '../../../components/PageLoading';
 import StatusTag from '../../../components/StatusTag';
 import MarkdownToolbar from '../../../features/posts/MarkdownToolbar';
+import { useMarkdownSync } from '../../../features/posts/useMarkdownSync';
 import {
 	createPost,
 	getPost,
@@ -125,11 +126,15 @@ async function registerNewTerms(target: ContentTarget, tags: string[]) {
 export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	const { siteId, postPath } = useParams<{ siteId: string; postPath: string }>();
 	const scope = useContentScope();
+	const editorIdentity = `${scope.key}:${postPath ?? 'new'}`;
 	const target = scope.target;
 	const navigate = useNavigate();
 	const basePath = siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
 	const [form] = Form.useForm<PostForm>();
 	const bodyRef = useRef<TextAreaRef>(null);
+	const previewRef = useRef<HTMLElement>(null);
+	const previewCursorRef = useRef<HTMLSpanElement>(null);
+	const bodyTextarea = useCallback(() => bodyRef.current?.resizableTextArea?.textArea ?? null, []);
 	const bodyId = useId();
 	const [titleInvalid, setTitleInvalid] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
@@ -153,6 +158,14 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	const createdPath = useRef<string | null>(null);
 	const dirty = !!baseline && !!draft && !sameForm(baseline, draft);
 	const previewBody = useDeferredValue(draft?.body ?? '');
+	useMarkdownSync({
+		textarea: bodyTextarea,
+		preview: previewRef,
+		cursor: previewCursorRef,
+		source: draft?.body ?? '',
+		rendered: previewBody,
+		enabled: view === 'split' && !!baseline
+	});
 	const editable =
 		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
 	useUnsavedGuard(dirty || saving);
@@ -481,10 +494,11 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 				<div className="post-editor-layout">
 					<section className="post-editor-writing">
 						<MarkdownToolbar
+							key={editorIdentity}
 							value={draft?.body ?? ''}
 							disabled={!editable || !baseline || view === 'preview'}
 							controls={bodyId}
-							textarea={() => bodyRef.current?.resizableTextArea?.textArea ?? null}
+							textarea={bodyTextarea}
 							onEmptyToc={() => void messageApi.info(t('posts.tocEmpty'))}
 							onChange={(body) => {
 								form.setFieldsValue({ body });
@@ -499,9 +513,10 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 								htmlFor={bodyId}
 								className="post-editor-source"
 							>
-								<Input.TextArea id={bodyId} ref={bodyRef} spellCheck />
+								<Input.TextArea key={editorIdentity} id={bodyId} ref={bodyRef} spellCheck />
 							</Form.Item>
-							<section className="post-editor-preview" aria-label={t('posts.preview')}>
+							<section ref={previewRef} className="post-editor-preview" aria-label={t('posts.preview')}>
+								<span ref={previewCursorRef} className="post-preview-cursor" hidden aria-hidden="true" />
 								{previewBody ? (
 									<Suspense fallback={<PageLoading spec="section" />}>
 										<MarkdownPreview

@@ -2,7 +2,7 @@ import { useId, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { PluggableList } from 'unified';
-import { remarkPreviewHeadings } from './markdown';
+import { remarkPreviewHeadings, remarkSourcePositions } from './markdown';
 
 export default function MarkdownPreview({
 	source,
@@ -14,7 +14,7 @@ export default function MarkdownPreview({
 	const root = useRef<HTMLDivElement>(null);
 	const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
 	const plugins = useMemo<PluggableList>(
-		() => [remarkGfm, [remarkPreviewHeadings, { prefix: `post-preview-${id}` }]],
+		() => [remarkGfm, [remarkPreviewHeadings, { prefix: `post-preview-${id}` }], remarkSourcePositions],
 		[id]
 	);
 	return (

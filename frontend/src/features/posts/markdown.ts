@@ -46,6 +46,39 @@ export function remarkPreviewHeadings(options: { prefix: string }) {
 	};
 }
 
+/** Retain source positions on rendered blocks and text for editor synchronization. */
+export function remarkSourcePositions() {
+	return (tree: Root) => {
+		type Positioned = {
+			type: string;
+			children?: unknown[];
+			position?: { start: { offset?: number }; end: { offset?: number } };
+			data?: { hName?: string; hProperties?: Record<string, unknown> };
+		};
+		const blocks = new Set(['heading', 'paragraph', 'listItem', 'code', 'thematicBreak', 'tableRow', 'image']);
+		const text = new Set(['text', 'inlineCode', 'code', 'image']);
+		function visit(node: Positioned) {
+			const start = node.position?.start.offset;
+			const end = node.position?.end.offset;
+			if (start !== undefined && end !== undefined && (blocks.has(node.type) || text.has(node.type))) {
+				node.data ??= {};
+				if (node.type === 'text') node.data.hName = 'span';
+				node.data.hProperties = {
+					...node.data.hProperties,
+					'data-source-start': start,
+					'data-source-end': end,
+					...(blocks.has(node.type) ? { 'data-source-block': '' } : {}),
+					...(text.has(node.type) ? { 'data-source-text': '' } : {})
+				};
+			}
+			for (const child of node.children ?? []) {
+				if (child && typeof child === 'object' && 'type' in child) visit(child as Positioned);
+			}
+		}
+		visit(tree);
+	};
+}
+
 /** Build links with the same github-slugger rules used by the published theme. */
 export function buildTableOfContents(source: string, maxDepth: number): string {
 	const tree = unified().use(remarkParse).use(remarkGfm).parse(source);
