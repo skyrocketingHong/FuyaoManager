@@ -156,6 +156,12 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	const taxonomyEpoch = useRef(0);
 	const taxonomyController = useRef<AbortController | null>(null);
 	const createdPath = useRef<string | null>(null);
+	const updateBody = useCallback((body: string) => {
+		form.setFieldsValue({ body });
+		setDraft(form.getFieldsValue(true) as PostForm);
+		touched.current.add('body');
+	}, [form]);
+	const emptyToc = useCallback(() => void messageApi.info(t('posts.tocEmpty')), [messageApi]);
 	const dirty = !!baseline && !!draft && !sameForm(baseline, draft);
 	const previewBody = useDeferredValue(draft?.body ?? '');
 	useMarkdownSync({
@@ -493,19 +499,15 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 				</Form.Item>
 				<div className="post-editor-layout">
 					<section className="post-editor-writing">
-						<MarkdownToolbar
+						{baseline ? <MarkdownToolbar
 							key={editorIdentity}
 							value={draft?.body ?? ''}
 							disabled={!editable || !baseline || view === 'preview'}
 							controls={bodyId}
 							textarea={bodyTextarea}
-							onEmptyToc={() => void messageApi.info(t('posts.tocEmpty'))}
-							onChange={(body) => {
-								form.setFieldsValue({ body });
-								setDraft(form.getFieldsValue(true) as PostForm);
-								touched.current.add('body');
-							}}
-						/>
+							onEmptyToc={emptyToc}
+							onChange={updateBody}
+						/> : null}
 						<div className={`post-editor-body post-editor-body--${view}`}>
 							<Form.Item
 								name="body"

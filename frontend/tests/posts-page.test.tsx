@@ -145,7 +145,7 @@ function mountPosts() {
 		],
 		{ initialEntries: ['/sites/11111111-1111-1111-1111-111111111111/posts'] }
 	);
-	return render(<RouterProvider router={router} />);
+	return { ...render(<RouterProvider router={router} />), router };
 }
 
 describe('PostsPage', () => {
@@ -347,7 +347,7 @@ describe('PostsPage', () => {
 			postCount: 5,
 			canEdit: true
 		});
-		mountPosts();
+		const { router } = mountPosts();
 		await screen.findByText('Hello');
 		const taxonomyCallsBefore = vi.mocked(management.getPostTaxonomy).mock.calls.length;
 
@@ -402,6 +402,9 @@ describe('PostsPage', () => {
 			expect(vi.mocked(management.getPostTaxonomy).mock.calls.length).toBeGreaterThan(
 				taxonomyCallsBefore
 			)
+		);
+		await waitFor(() =>
+			expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/tech%2Fhello.md/edit`)
 		);
 		await waitFor(() =>
 			expect(management.getPost).toHaveBeenCalledWith(ownerSite.siteId, 'tech/hello.md')

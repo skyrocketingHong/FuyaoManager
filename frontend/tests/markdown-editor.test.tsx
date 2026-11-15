@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { useCallback, useRef, useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MarkdownPreview from '../src/features/posts/MarkdownPreview';
 import MarkdownToolbar from '../src/features/posts/MarkdownToolbar';
 import { markdownCommand } from '../src/features/posts/markdownCommands';
@@ -102,6 +102,9 @@ it('exposes all heading levels directly and groups the table of contents control
 	const toc = screen.getByRole('button', { name: 'Insert table of contents' });
 	const depth = screen.getByRole('combobox', { name: 'Table of contents depth' });
 	expect(toc.closest('.post-toc-controls')).toBe(depth.closest('.post-toc-controls'));
+	act(() => setLocale('zh-CN'));
+	expect(screen.getByRole('button', { name: '1 级标题' })).toBeDefined();
+	expect(body.value).toBe('###### hello');
 });
 
 it('locates the caret inside a fenced code block independently of its language label', () => {

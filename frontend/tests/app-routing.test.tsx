@@ -289,6 +289,7 @@ describe('deep links and menu selection', () => {
 	it('renders the real post editor inside the site shell and retries a failed read', async () => {
 		getPost.mockRejectedValueOnce(new Error('offline'));
 		renderAt('/sites/abc/posts/tech%2Fhello.md/edit');
+		await waitFor(() => expect(getPost).toHaveBeenCalledWith('abc', 'tech/hello.md'));
 		const retry = await screen.findByRole('button', {
 			name: (name) => name.replace(/\s/g, '') === zh['common.retry']
 		});

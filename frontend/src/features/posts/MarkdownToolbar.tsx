@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { Button, Select } from 'antd';
 import {
 	Bold, Code, Code2, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
@@ -6,7 +6,7 @@ import {
 	Link2, List, ListChecks, ListOrdered, ListTree, Minus, Quote, Redo2,
 	Strikethrough, Table2, Undo2, type LucideIcon
 } from 'lucide-react';
-import { t } from '../../lib/i18n';
+import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
 import { markdownCommand, type MarkdownCommand } from './markdownCommands';
 
 type HistoryCommand = 'undo' | 'redo';
@@ -18,7 +18,7 @@ type ToolbarCommand = {
 	heading?: number;
 };
 
-export default function MarkdownToolbar({ value, disabled, textarea, onChange, onEmptyToc, controls }: {
+function MarkdownToolbar({ value, disabled, textarea, onChange, onEmptyToc, controls }: {
 	value: string;
 	disabled: boolean;
 	textarea: () => HTMLTextAreaElement | null;
@@ -26,6 +26,7 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 	onEmptyToc: () => void;
 	controls: string;
 }) {
+	useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const [depth, setDepth] = useState(3);
 	const [focused, setFocused] = useState(0);
 	const root = useRef<HTMLDivElement>(null);
@@ -149,3 +150,5 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 		</div>
 	);
 }
+
+export default memo(MarkdownToolbar);
