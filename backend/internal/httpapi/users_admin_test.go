@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -239,12 +240,33 @@ func TestAdminAPIFiltersAndValidation(t *testing.T) {
 	if page.Total != 2 || len(page.Users) != 1 {
 		t.Fatalf("pagination failed: %s", raw)
 	}
+	for _, test := range []struct{ order, first, second string }{
+		{"asc", "filter-one", "filter-two"},
+		{"desc", "filter-two", "filter-one"},
+	} {
+		for index, expected := range []string{test.first, test.second} {
+			_, raw = adminRequest(t, admin, "GET", fmt.Sprintf("/api/v1/admin/users?q=filter-&pageSize=1&page=%d&sort=username&order=%s", index+1, test.order), nil, 200)
+			decodeJSONBody(t, raw, &page)
+			if len(page.Users) != 1 || page.Users[0].Username != expected {
+				t.Fatalf("sorted account page: %s", raw)
+			}
+		}
+	}
+	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/audit?sort=operation&order=asc&pageSize=1", nil, 200)
+	var sortedAudit store.AuditPage
+	decodeJSONBody(t, raw, &sortedAudit)
+	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/audit?sort=operation&order=desc&pageSize=1", nil, 200)
+	var reverseAudit store.AuditPage
+	decodeJSONBody(t, raw, &reverseAudit)
+	if len(sortedAudit.Entries) != 1 || len(reverseAudit.Entries) != 1 || sortedAudit.Entries[0].Operation > reverseAudit.Entries[0].Operation {
+		t.Fatalf("audit sorting failed: %+v %+v", sortedAudit, reverseAudit)
+	}
 	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/users?q=%25", nil, 200)
 	decodeJSONBody(t, raw, &page)
 	if page.Total != 0 {
 		t.Fatal("literal LIKE search became a wildcard")
 	}
-	for _, path := range []string{"/api/v1/admin/users?page=0", "/api/v1/admin/users?status=other", "/api/v1/admin/users?pageSize=201", "/api/v1/admin/audit?outcome=other", "/api/v1/admin/audit?from=wrong", "/api/v1/admin/audit?from=2027-01-01T00:00:00Z&until=2026-01-01T00:00:00Z"} {
+	for _, path := range []string{"/api/v1/admin/users?page=0", "/api/v1/admin/users?status=other", "/api/v1/admin/users?pageSize=201", "/api/v1/admin/users?sort=username", "/api/v1/admin/users?sort=unknown&order=asc", "/api/v1/admin/audit?sort=operation&order=bad", "/api/v1/admin/audit?outcome=other", "/api/v1/admin/audit?from=wrong", "/api/v1/admin/audit?from=2027-01-01T00:00:00Z&until=2026-01-01T00:00:00Z"} {
 		adminRequest(t, admin, "GET", path, nil, 400)
 	}
 	_, raw = adminRequest(t, admin, "GET", "/api/v1/admin/audit?q=%25", nil, 200)

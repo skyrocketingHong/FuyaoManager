@@ -16,6 +16,7 @@ import { t, type MessageKey } from '../lib/i18n';
 import { useAdminMutation, useAdminQuery } from '../lib/admin/requests';
 import { timeText } from '../lib/admin/presentation';
 import * as service from '../lib/api/admin';
+import { selectedTableSort, sortColumn, type TableSort } from '../lib/table-sort';
 
 export default function UsersPage() {
 	const { modal } = App.useApp();
@@ -27,7 +28,8 @@ export default function UsersPage() {
 	const [status, setStatus] = useState('');
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(50);
-	const queryString = service.queryString({ q, role, status, page, pageSize });
+	const [ordering, setOrdering] = useState<TableSort>();
+	const queryString = service.queryString({ q, role, status, page, pageSize, sort: ordering?.field, order: ordering?.direction });
 	const load = useCallback(
 		(signal: AbortSignal) => service.listUsers(queryString, signal),
 		[queryString]
@@ -192,11 +194,18 @@ export default function UsersPage() {
 				query.data && (
 					<TablePanel className="fill-height">
 						<DataTable<service.AdminUser>
+							manualSorting
 							scroll={{ x: 'max-content' }}
 							styles={{ content: { overflowY: 'auto' } }}
 							rowKey="id"
 							dataSource={query.data.users}
 							loading={query.loading}
+							onChange={(_, __, sorter, extra) => {
+								if (extra.action === 'sort') {
+									setOrdering(selectedTableSort(sorter));
+									setPage(1);
+								}
+							}}
 							locale={{
 								emptyText: (
 									<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('admin.noUsers')} />
@@ -213,10 +222,11 @@ export default function UsersPage() {
 								}
 							}}
 							columns={[
-								{ title: t('admin.username'), dataIndex: 'username' },
-								{ title: t('admin.displayName'), dataIndex: 'displayName' },
+								{ title: t('admin.username'), dataIndex: 'username', ...sortColumn('username', ordering) },
+								{ title: t('admin.displayName'), dataIndex: 'displayName', ...sortColumn('displayName', ordering) },
 								{
 									title: t('admin.platformRole'),
+									...sortColumn('platformRole', ordering),
 									dataIndex: 'platformRole',
 									render: (value: service.AdminUser['platformRole']) => (
 										<StatusTag kind={value === 'admin' ? 'info' : 'neutral'}>
@@ -226,6 +236,7 @@ export default function UsersPage() {
 								},
 								{
 									title: t('admin.status'),
+									...sortColumn('status', ordering),
 									dataIndex: 'status',
 									render: (value: service.AdminUser['status']) => (
 										<StatusTag kind={value === 'active' ? 'success' : 'neutral'}>
@@ -233,7 +244,7 @@ export default function UsersPage() {
 										</StatusTag>
 									)
 								},
-								{ title: t('admin.createdAt'), dataIndex: 'createdAt', render: timeText },
+								{ title: t('admin.createdAt'), dataIndex: 'createdAt', render: timeText, ...sortColumn('createdAt', ordering) },
 								{
 									title: t('admin.actions'),
 									render: (_, user) => (

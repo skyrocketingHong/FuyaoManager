@@ -253,6 +253,7 @@ export default function SitesPage() {
 							columns={[
 								{
 									title: t('caddy.kind'),
+									sorter: (a, b) => (a.kind ?? 'theme').localeCompare(b.kind ?? 'theme'),
 									render: (_, site) =>
 										(site.kind ?? 'theme') === 'theme'
 											? t('nav.theme')

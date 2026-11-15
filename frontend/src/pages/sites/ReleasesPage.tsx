@@ -397,6 +397,7 @@ export default function ReleasesPage() {
 								columns={[
 									{
 										title: t('releases.buildColumn'),
+										dataIndex: 'buildId',
 										render: (_, record) => (
 											<Typography.Text className="version-text">
 												{record.buildId.slice(0, 8)}
@@ -405,6 +406,7 @@ export default function ReleasesPage() {
 									},
 									{
 										title: t('releases.themeColumn'),
+										dataIndex: ['theme', 'themeId'],
 										render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
 									},
 									{
@@ -422,6 +424,7 @@ export default function ReleasesPage() {
 									},
 									{
 										title: t('releases.reasons'),
+										dataIndex: 'reasons',
 										render: (_, record) => record.reasons.join(', ')
 									},
 									{

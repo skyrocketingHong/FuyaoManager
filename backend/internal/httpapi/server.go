@@ -92,7 +92,7 @@ type EdgeManager interface {
 // the frozen-snapshot builds consume. content.Store implements it; nil
 // disables the content endpoints (503).
 type ContentStore interface {
-	ListPosts(siteID uuid.UUID, query string, page, pageSize int) ([]content.Post, int, error)
+	ListPosts(siteID uuid.UUID, query string, page, pageSize int, order ...content.PostSort) ([]content.Post, int, error)
 	GetPostTaxonomy(siteID uuid.UUID) (content.PostTaxonomy, error)
 	GetPostVocabulary(siteID uuid.UUID) (content.PostVocabulary, string, error)
 	SavePostVocabulary(siteID uuid.UUID, doc content.PostVocabulary, expectedDigest string) (content.PostVocabulary, string, error)

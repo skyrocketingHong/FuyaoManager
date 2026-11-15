@@ -99,13 +99,32 @@ func pagination(w http.ResponseWriter, r *http.Request) (page, size int, ok bool
 	return page, size, true
 }
 
+func validListSort(field, order string, allowed ...string) bool {
+	if field == "" && order == "" {
+		return true
+	}
+	if order != "asc" && order != "desc" {
+		return false
+	}
+	for _, candidate := range allowed {
+		if field == candidate {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *API) handleListAudit(w http.ResponseWriter, r *http.Request, _ store.AuthSession) {
 	page, size, ok := pagination(w, r)
 	if !ok {
 		return
 	}
 	query := r.URL.Query()
-	filter := store.AuditQuery{Page: page, PageSize: size, Search: query.Get("q"), Actor: query.Get("actor"), Operation: query.Get("operation"), Outcome: query.Get("outcome")}
+	filter := store.AuditQuery{Page: page, PageSize: size, Search: query.Get("q"), Actor: query.Get("actor"), Operation: query.Get("operation"), Outcome: query.Get("outcome"), Sort: query.Get("sort"), Order: query.Get("order")}
+	if !validListSort(filter.Sort, filter.Order, "createdAt", "actorName", "operation", "resourceId", "outcome", "peerIp") {
+		writeProblem(w, 400, "validation_error", "Unknown sort field or direction.")
+		return
+	}
 	for _, value := range []string{filter.Search, filter.Actor, filter.Operation} {
 		if utf8.RuneCountInString(value) > 128 {
 			writeProblem(w, 400, "validation_error", "The search value is too long.")

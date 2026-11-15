@@ -330,6 +330,13 @@ paths:
         - $ref: '#/components/parameters/AdminPage'
         - $ref: '#/components/parameters/AdminPageSize'
         - $ref: '#/components/parameters/AdminSearch'
+        - name: sort
+          in: query
+          description: Sort field; supply together with order. Sorting precedes pagination.
+          schema: { type: string, enum: [username, displayName, platformRole, status, createdAt] }
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc] }
         - name: role
           in: query
           schema: { type: string, enum: [admin, member] }
@@ -594,6 +601,13 @@ paths:
         - $ref: '#/components/parameters/AdminPage'
         - $ref: '#/components/parameters/AdminPageSize'
         - $ref: '#/components/parameters/AdminSearch'
+        - name: sort
+          in: query
+          description: Sort field; supply together with order. Sorting precedes pagination.
+          schema: { type: string, enum: [createdAt, actorName, operation, resourceId, outcome, peerIp] }
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc] }
         - name: actor
           in: query
           schema: { type: string, maxLength: 128 }
@@ -611,7 +625,7 @@ paths:
           schema: { type: string, format: date-time }
       responses:
         '200':
-          description: Audit page in descending timestamp and UUID order.
+          description: Audit page, defaulting to descending timestamp and UUID order.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuditPage' }
@@ -1698,6 +1712,14 @@ paths:
           in: query
           required: false
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          description: Sort field; omit with order to use newest first.
+          schema: { type: string, enum: [title, status, date, tags] }
+        - name: order
+          in: query
+          description: Required when sort is present.
+          schema: { type: string, enum: [asc, desc] }
       responses:
         '200':
           description: Page of posts plus the total count.
@@ -3640,6 +3662,14 @@ paths:
           in: query
           required: false
           schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+        - name: sort
+          in: query
+          description: Sort field; omit with order to use newest first.
+          schema: { type: string, enum: [title, status, date, tags] }
+        - name: order
+          in: query
+          description: Required when sort is present.
+          schema: { type: string, enum: [asc, desc] }
       responses:
         '200':
           description: Page of posts plus the total count.
@@ -6000,7 +6030,7 @@ components:
             totalPhotos: { type: integer }
             years:
               type: array
-              items: { type: string }
+              items: { type: integer }
             devices:
               type: array
         digest: { type: string }

@@ -2655,7 +2655,7 @@ export interface components {
                 schemaVersion: number;
                 generatedAt?: string;
                 totalPhotos: number;
-                years: string[];
+                years: number[];
                 devices: unknown[];
             };
             digest: string;
@@ -3542,6 +3542,9 @@ export interface operations {
                 pageSize?: components["parameters"]["AdminPageSize"];
                 /** @description Literal substring; LIKE metacharacters have no special meaning. */
                 q?: components["parameters"]["AdminSearch"];
+                /** @description Sort field; supply together with order. Sorting precedes pagination. */
+                sort?: "username" | "displayName" | "platformRole" | "status" | "createdAt";
+                order?: "asc" | "desc";
                 role?: "admin" | "member";
                 /** @description Deleted accounts are excluded unless this is explicitly deleted. */
                 status?: "active" | "disabled" | "pending" | "deleted";
@@ -3834,6 +3837,9 @@ export interface operations {
                 pageSize?: components["parameters"]["AdminPageSize"];
                 /** @description Literal substring; LIKE metacharacters have no special meaning. */
                 q?: components["parameters"]["AdminSearch"];
+                /** @description Sort field; supply together with order. Sorting precedes pagination. */
+                sort?: "createdAt" | "actorName" | "operation" | "resourceId" | "outcome" | "peerIp";
+                order?: "asc" | "desc";
                 actor?: string;
                 operation?: string;
                 outcome?: "success" | "failure";
@@ -3846,7 +3852,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Audit page in descending timestamp and UUID order. */
+            /** @description Audit page, defaulting to descending timestamp and UUID order. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4752,6 +4758,10 @@ export interface operations {
                 query?: string;
                 page?: number;
                 pageSize?: number;
+                /** @description Sort field; omit with order to use newest first. */
+                sort?: "title" | "status" | "date" | "tags";
+                /** @description Required when sort is present. */
+                order?: "asc" | "desc";
             };
             header?: never;
             path: {
@@ -6681,6 +6691,10 @@ export interface operations {
                 query?: string;
                 page?: number;
                 pageSize?: number;
+                /** @description Sort field; omit with order to use newest first. */
+                sort?: "title" | "status" | "date" | "tags";
+                /** @description Required when sort is present. */
+                order?: "asc" | "desc";
             };
             header?: never;
             path?: never;

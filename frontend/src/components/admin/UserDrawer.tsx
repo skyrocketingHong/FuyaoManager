@@ -252,6 +252,7 @@ export default function UserDrawer({
 									{ title: t('site.name'), dataIndex: 'name' },
 									{
 										title: t('sidebar.role'),
+										dataIndex: 'role',
 										render: (_, site) => (
 											<Select
 												aria-label={`${t('admin.sites')} ${site.name}`}
@@ -287,6 +288,7 @@ export default function UserDrawer({
 									},
 									{
 										title: 'RP',
+										dataIndex: 'rpId',
 										render: (_, key) => (
 											<Space orientation="vertical" size={4}>
 												<code>{key.rpId}</code>

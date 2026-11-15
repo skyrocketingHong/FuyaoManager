@@ -327,3 +327,35 @@ func TestListPostsSortingIsTimezoneIndependent(t *testing.T) {
 		}
 	}
 }
+
+func TestListPostsSortsAcrossPagesAndRestoresDefault(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	for _, post := range []Post{
+		{Category: "tech", Slug: "a", Title: "Zulu", Date: "2026-01-01", Draft: false, Tags: []string{"z"}},
+		{Category: "tech", Slug: "b", Title: "Alpha", Date: "2026-03-01", Draft: true, Tags: []string{"a"}},
+		{Category: "tech", Slug: "c", Title: "Middle", Date: "2026-02-01", Draft: false, Tags: []string{"m"}},
+	} {
+		if _, err := s.CreatePost(id, post); err != nil {
+			t.Fatal(err)
+		}
+	}
+	first, total, err := s.ListPosts(id, "", 1, 2, PostSort{Field: "title", Direction: "asc"})
+	if err != nil || total != 3 || first[0].Title != "Alpha" || first[1].Title != "Middle" {
+		t.Fatalf("first page: %+v %d %v", first, total, err)
+	}
+	second, _, err := s.ListPosts(id, "", 2, 2, PostSort{Field: "title", Direction: "asc"})
+	if err != nil || len(second) != 1 || second[0].Title != "Zulu" {
+		t.Fatalf("second page: %+v %v", second, err)
+	}
+	descending, _, err := s.ListPosts(id, "", 1, 3, PostSort{Field: "title", Direction: "desc"})
+	if err != nil || descending[0].Title != "Zulu" {
+		t.Fatalf("descending: %+v %v", descending, err)
+	}
+	defaults, _, err := s.ListPosts(id, "", 1, 3, PostSort{})
+	if err != nil || defaults[0].Title != "Alpha" {
+		t.Fatalf("default order: %+v %v", defaults, err)
+	}
+	if _, _, err := s.ListPosts(id, "", 1, 3, PostSort{Field: "title; DROP TABLE posts", Direction: "asc"}); err == nil {
+		t.Fatal("invalid sort accepted")
+	}
+}

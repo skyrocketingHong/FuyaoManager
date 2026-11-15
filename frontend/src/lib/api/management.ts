@@ -393,15 +393,18 @@ export async function putPostVocabulary(
 	return { vocabulary: result.data, etag: result.etag };
 }
 
+export type PostListSort = { field: 'title' | 'status' | 'date' | 'tags'; direction: 'asc' | 'desc' };
+
 export async function listPosts(
 	siteId: ContentTarget,
 	query: string,
 	page: number,
-	pageSize: number
+	pageSize: number,
+	order?: PostListSort
 ): Promise<PostList> {
 	const { data } = await api<PostList>(
 		'GET',
-		`${contentResourcePath(siteId, 'posts')}?query=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}`
+		`${contentResourcePath(siteId, 'posts')}?query=${encodeURIComponent(query)}&page=${page}&pageSize=${pageSize}${order ? `&sort=${order.field}&order=${order.direction}` : ''}`
 	);
 	return data;
 }

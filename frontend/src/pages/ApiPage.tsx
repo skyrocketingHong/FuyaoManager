@@ -1,6 +1,7 @@
 // Layout and component calls from robot-platform/features/api/ApiPage.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Collapse, Input, Select, Table } from 'antd';
+import { Alert, Button, Collapse, Input, Select } from 'antd';
+import DataTable from '../components/DataTable';
 import { TablePanel, Tag } from '../components/Widgets';
 import PageLoading from '../components/PageLoading';
 import { usePageHeader } from '../components/PageHeader';
@@ -290,7 +291,7 @@ export default function ApiPage() {
 												{operation.parameters.length === 0 ? (
 													<p className="subtle">{t('api.noParameters')}</p>
 												) : (
-													<Table
+													<DataTable
 														size="small"
 														pagination={false}
 														rowKey={(parameter) => `${parameter.in}:${parameter.name}`}

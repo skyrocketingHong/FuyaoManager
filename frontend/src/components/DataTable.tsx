@@ -1,60 +1,46 @@
-import type { HTMLAttributes, Key, ReactNode } from 'react';
 import { Table, type TableProps } from 'antd';
 
-interface MatrixTableProps {
-	heads: string[];
-	rows: ReactNode[][];
-	empty?: ReactNode;
-	rowProps?: (index: number) => HTMLAttributes<HTMLTableRowElement>;
-	columnWidths?: (number | string | undefined)[];
-	className?: string;
-	minWidth?: number;
-	rowKeys?: Key[];
-	pagination?: TableProps<ReactNode[]>['pagination'];
-	styles?: TableProps<ReactNode[]>['styles'];
+type SortableTableProps<Row extends object> = TableProps<Row> & { manualSorting?: boolean };
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+export function compareTableValues(left: unknown, right: unknown): number {
+	if (left === null || left === undefined) return right === null || right === undefined ? 0 : 1;
+	if (right === null || right === undefined) return -1;
+	if (typeof left === 'number' && typeof right === 'number') return left - right;
+	if (typeof left === 'boolean' && typeof right === 'boolean') return Number(left) - Number(right);
+	const a = Array.isArray(left) ? left.join(', ') : String(left);
+	const b = Array.isArray(right) ? right.join(', ') : String(right);
+	if (/^\d{4}-\d{2}-\d{2}T/.test(a) && /^\d{4}-\d{2}-\d{2}T/.test(b)) {
+		const first = Date.parse(a); const second = Date.parse(b);
+		if (!Number.isNaN(first) && !Number.isNaN(second)) return first - second;
+	}
+	return collator.compare(a, b);
+}
+
+function indexedValue(row: object, dataIndex: string | number | readonly (string | number)[]): unknown {
+	const path = Array.isArray(dataIndex) ? dataIndex : [dataIndex];
+	return path.reduce<unknown>((value, key) => value && typeof value === 'object' ? (value as Record<string | number, unknown>)[key] : undefined, row);
+}
+
+function sortableColumns<Row extends object>(columns: NonNullable<TableProps<Row>['columns']>): NonNullable<TableProps<Row>['columns']> {
+	return columns.map((column) => {
+		if ('children' in column && column.children) return { ...column, children: sortableColumns(column.children) };
+		if (!('dataIndex' in column) || column.dataIndex === undefined || column.sorter !== undefined) return column;
+		const index = column.dataIndex as string | number | readonly (string | number)[];
+		return { ...column, sorter: (left: Row, right: Row) => compareTableValues(indexedValue(left, index), indexedValue(right, index)) };
+	});
 }
 
 // robot-platform's Widgets.DataTable uses small tables and a shared surface.
 // Keep the manager's typed rows, stable keys, sorting, and server pagination.
-export default function DataTable<Row extends object>(props: TableProps<Row> | MatrixTableProps) {
-	if ('heads' in props) {
-		const {
-			heads,
-			rows,
-			empty,
-			rowProps,
-			columnWidths,
-			className = '',
-			minWidth,
-			rowKeys,
-			styles,
-			pagination = false
-		} = props;
-		const keys = new Map(rows.map((row, index) => [row, rowKeys?.[index] ?? String(index)]));
-		return (
-			<Table<ReactNode[]>
-				className={`data-table ${className}`.trim()}
-				size="small"
-				pagination={pagination}
-				styles={styles}
-				locale={{ emptyText: empty }}
-				columns={heads.map((head, column) => ({
-					title: head,
-					width: columnWidths?.[column],
-					render: (_, record) => record[column]
-				}))}
-				dataSource={rows}
-				rowKey={(record) => keys.get(record)!}
-				onRow={(_, index) => (rowProps ? rowProps(index ?? 0) : {})}
-				scroll={minWidth ? { x: minWidth } : undefined}
-			/>
-		);
-	}
-	const { className, ...tableProps } = props;
+export default function DataTable<Row extends object>(props: SortableTableProps<Row>) {
+	const { className, manualSorting = false, columns, ...tableProps } = props;
 	return (
 		<Table<Row>
 			size="small"
 			{...tableProps}
+			sortDirections={['ascend', 'descend']}
+			columns={columns && !manualSorting ? sortableColumns(columns) : columns}
 			className={['data-table', className].filter(Boolean).join(' ')}
 		/>
 	);

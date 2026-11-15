@@ -9,6 +9,7 @@ import { useAdminQuery } from '../lib/admin/requests';
 import { auditLabels, changeValueText, operationText } from '../lib/admin/presentation';
 import { t } from '../lib/i18n';
 import { listAudit, queryString, type AuditEvent } from '../lib/api/admin';
+import { selectedTableSort, sortColumn, type TableSort } from '../lib/table-sort';
 import '../styles/logs.css';
 
 function recordDetail(event: AuditEvent) {
@@ -76,6 +77,7 @@ export default function LogsPage() {
 	const [range, setRange] = useState<ComponentProps<typeof DatePicker.RangePicker>['value']>(null);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(50);
+	const [ordering, setOrdering] = useState<TableSort>();
 	useEffect(() => {
 		if (search === q && actorInput === actor) return;
 		const timer = setTimeout(() => {
@@ -92,6 +94,8 @@ export default function LogsPage() {
 		outcome,
 		page,
 		pageSize,
+		sort: ordering?.field,
+		order: ordering?.direction,
 		from: range?.[0]?.toISOString(),
 		until: range?.[1]?.toISOString()
 	});
@@ -202,28 +206,20 @@ export default function LogsPage() {
 					action={<ActionButton onClick={query.reload}>{t('common.retry')}</ActionButton>}
 				/>
 			)}
-			<DataTable
+			<DataTable<AuditEvent>
 				className="operation-logs-table"
+				manualSorting
 				styles={{ content: { overflowY: 'auto' } }}
-				minWidth={1540}
-				columnWidths={[164, 140, 160, 190, 100, undefined, 175]}
-				heads={[
-					t('audit.time'),
-					t('audit.actor'),
-					t('audit.operation'),
-					t('audit.target'),
-					t('audit.outcome'),
-					t('audit.recordDetail'),
-					t('audit.peer')
-				]}
-				empty={
-					query.loading ? (
-						<PageLoading spec="section" label={t('common.loading')} />
-					) : (
-						t('audit.empty')
-					)
-				}
-				rowKeys={entries.map((event) => event.id)}
+				scroll={{ x: 1540 }}
+				rowKey="id"
+				dataSource={entries}
+				locale={{ emptyText: query.loading ? <PageLoading spec="section" label={t('common.loading')} /> : t('audit.empty') }}
+				onChange={(_, __, sorter, extra) => {
+					if (extra.action === 'sort') {
+						setOrdering(selectedTableSort(sorter));
+						setPage(1);
+					}
+				}}
 				pagination={{
 					current: page,
 					pageSize,
@@ -231,22 +227,18 @@ export default function LogsPage() {
 					showSizeChanger: false,
 					onChange: (next) => setPage(next)
 				}}
-				rows={entries.map((event) => [
-					timeText(event.createdAt),
-					<VersionText>{event.actorName || t('audit.anonymous')}</VersionText>,
-					<span className="log-operation">{operationText(event.operation)}</span>,
-					<Space orientation="vertical" size={0}>
-						{event.details?.targetUsername && (
-							<VersionText>{event.details.targetUsername}</VersionText>
-						)}
+				columns={[
+					{ title: t('audit.time'), dataIndex: 'createdAt', width: 164, ...sortColumn('createdAt', ordering), render: timeText },
+					{ title: t('audit.actor'), dataIndex: 'actorName', width: 140, ...sortColumn('actorName', ordering), render: (value: string) => <VersionText>{value || t('audit.anonymous')}</VersionText> },
+					{ title: t('audit.operation'), dataIndex: 'operation', width: 160, ...sortColumn('operation', ordering), render: (value: string) => <span className="log-operation">{operationText(value)}</span> },
+					{ title: t('audit.target'), width: 190, ...sortColumn('resourceId', ordering), render: (_, event) => <Space orientation="vertical" size={0}>
+						{event.details?.targetUsername && <VersionText>{event.details.targetUsername}</VersionText>}
 						<VersionText>{event.resourceId || t('admin.never')}</VersionText>
-					</Space>,
-					<Tag tone={event.outcome === 'success' ? 'success' : 'danger'}>
-						{t(event.outcome === 'success' ? 'audit.success' : 'audit.failure')}
-					</Tag>,
-					recordDetail(event),
-					<VersionText className="log-address">{event.peerIp || t('admin.never')}</VersionText>
-				])}
+					</Space> },
+					{ title: t('audit.outcome'), dataIndex: 'outcome', width: 100, ...sortColumn('outcome', ordering), render: (value: string) => <Tag tone={value === 'success' ? 'success' : 'danger'}>{t(value === 'success' ? 'audit.success' : 'audit.failure')}</Tag> },
+					{ title: t('audit.recordDetail'), render: (_, event) => recordDetail(event) },
+					{ title: t('audit.peer'), dataIndex: 'peerIp', width: 175, ...sortColumn('peerIp', ordering), render: (value: string) => <VersionText className="log-address">{value || t('admin.never')}</VersionText> }
+				]}
 			/>
 		</TablePanel></div>
 	);

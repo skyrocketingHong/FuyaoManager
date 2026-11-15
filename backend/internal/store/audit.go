@@ -118,6 +118,7 @@ func commitAudited(ctx context.Context, tx pgx.Tx, actorID, targetID uuid.UUID, 
 type AuditQuery struct {
 	Page, PageSize                    int
 	Operation, Outcome, Actor, Search string
+	Sort, Order                       string
 	From, Until                       *time.Time
 }
 type AuditPage struct {
@@ -148,7 +149,20 @@ func (s *Store) ListAudit(ctx context.Context, query AuditQuery) (AuditPage, err
 	if err := s.Pool.QueryRow(ctx, `SELECT count(*) FROM audit_events`+auditFilter, args...).Scan(&out.Total); err != nil {
 		return out, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT id,created_at,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome,details FROM audit_events`+auditFilter+` ORDER BY created_at DESC,id DESC LIMIT $7 OFFSET $8`, append(args, query.PageSize, (query.Page-1)*query.PageSize)...)
+	rows, err := s.Pool.Query(ctx, `SELECT id,created_at,actor_id,actor_name,operation,resource_id,site_id,method,route,peer_ip,status,outcome,details FROM audit_events`+auditFilter+` ORDER BY
+ CASE WHEN $9::text = 'createdAt' AND $10::text = 'asc' THEN created_at END ASC,
+ CASE WHEN ($9::text = 'createdAt' AND $10::text = 'desc') OR $9::text = '' THEN created_at END DESC,
+ CASE WHEN $9::text = 'actorName' AND $10::text = 'asc' THEN actor_name END ASC,
+ CASE WHEN $9::text = 'actorName' AND $10::text = 'desc' THEN actor_name END DESC,
+ CASE WHEN $9::text = 'operation' AND $10::text = 'asc' THEN operation END ASC,
+ CASE WHEN $9::text = 'operation' AND $10::text = 'desc' THEN operation END DESC,
+ CASE WHEN $9::text = 'resourceId' AND $10::text = 'asc' THEN resource_id END ASC,
+ CASE WHEN $9::text = 'resourceId' AND $10::text = 'desc' THEN resource_id END DESC,
+ CASE WHEN $9::text = 'outcome' AND $10::text = 'asc' THEN outcome END ASC,
+ CASE WHEN $9::text = 'outcome' AND $10::text = 'desc' THEN outcome END DESC,
+ CASE WHEN $9::text = 'peerIp' AND $10::text = 'asc' THEN peer_ip END ASC,
+ CASE WHEN $9::text = 'peerIp' AND $10::text = 'desc' THEN peer_ip END DESC,
+ id DESC LIMIT $7 OFFSET $8`, append(args, query.PageSize, (query.Page-1)*query.PageSize, query.Sort, query.Order)...)
 	if err != nil {
 		return out, err
 	}

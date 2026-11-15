@@ -47,12 +47,12 @@ func (s *Store) RequireContentWrite(ctx context.Context, id uuid.UUID, category 
 	}
 	return nil
 }
-func (s *Store) ListPosts(id uuid.UUID, q string, p, n int) ([]content.Post, int, error) {
+func (s *Store) ListPosts(id uuid.UUID, q string, p, n int, order ...content.PostSort) ([]content.Post, int, error) {
 	t, k, e := s.target(id, "posts", false)
 	if e != nil {
 		return nil, 0, e
 	}
-	return t.ListPosts(k, q, p, n)
+	return t.ListPosts(k, q, p, n, order...)
 }
 
 // GetPostTaxonomy forwards the blog taxonomy read to the scope bound to

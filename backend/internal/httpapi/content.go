@@ -46,7 +46,12 @@ func (a *API) handleListPosts(w http.ResponseWriter, r *http.Request, auth store
 	if pageSize > 100 {
 		pageSize = 100
 	}
-	posts, total, err := a.content.ListPosts(siteID, r.URL.Query().Get("query"), page, pageSize)
+	order := content.PostSort{Field: r.URL.Query().Get("sort"), Direction: r.URL.Query().Get("order")}
+	if !content.ValidPostSort(order) {
+		writeProblem(w, http.StatusBadRequest, "validation_error", "Invalid post sorting.")
+		return
+	}
+	posts, total, err := a.content.ListPosts(siteID, r.URL.Query().Get("query"), page, pageSize, order)
 	if err != nil {
 		writeContentError(w, err, "Failed to list posts.")
 		return

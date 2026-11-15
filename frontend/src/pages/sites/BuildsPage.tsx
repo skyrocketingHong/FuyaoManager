@@ -321,6 +321,7 @@ export default function BuildsPage() {
 							},
 							{
 								title: t('releases.themeColumn'),
+								dataIndex: ['theme', 'themeId'],
 								render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
 							},
 							{

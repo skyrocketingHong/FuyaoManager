@@ -387,10 +387,37 @@ func unknownFrontmatter(raw []byte) ([]*yaml.Node, error) {
 	return unknown, nil
 }
 
-// ListPosts scans the site's posts tree (one category nesting level),
-// sorted by date descending. query filters title/slug/category/tags
-// case-insensitively; pagination is 1-based.
-func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int) (posts []Post, total int, err error) {
+type PostSort struct {
+	Field     string
+	Direction string
+}
+
+func ValidPostSort(order PostSort) bool {
+	if order.Field == "" && order.Direction == "" {
+		return true
+	}
+	if order.Direction != "asc" && order.Direction != "desc" {
+		return false
+	}
+	switch order.Field {
+	case "title", "status", "date", "tags":
+		return true
+	}
+	return false
+}
+
+// ListPosts scans one category level, with stable ordering before pagination.
+func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, ordering ...PostSort) (posts []Post, total int, err error) {
+	order := PostSort{}
+	if len(ordering) > 0 {
+		order = ordering[0]
+	}
+	if !ValidPostSort(order) {
+		return nil, 0, fieldError("sort", "invalid post sorting")
+	}
+	if order.Field == "" {
+		order = PostSort{Field: "date", Direction: "desc"}
+	}
 	root, err := resolve(s.ContentRoot(siteID), "posts")
 	if err != nil {
 		return nil, 0, err
@@ -438,10 +465,7 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int) (p
 	if err != nil {
 		return nil, 0, err
 	}
-	// Sort by the shared date parser: valid dates descend by their actual
-	// point in time (naive values on UTC), invalid historical dates land
-	// after every valid one, and ties — or two invalid dates — break by
-	// path. History is never filtered out for a bad date.
+	// Dates compare by their actual instant; invalid history remains last.
 	dated := make([]datedPost, 0, len(all))
 	for _, p := range all {
 		at, err := parsePostDate(p.Date)
@@ -453,14 +477,33 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int) (p
 	}
 	sort.SliceStable(dated, func(i, j int) bool {
 		a, b := dated[i], dated[j]
-		if a.valid && b.valid {
-			if !a.at.Equal(b.at) {
-				return a.at.After(b.at)
+		comparison := 0
+		switch order.Field {
+		case "date":
+			if a.valid != b.valid {
+				return a.valid
 			}
-			return a.post.Path < b.post.Path
+			if a.valid && b.valid {
+				comparison = a.at.Compare(b.at)
+			}
+		case "title":
+			comparison = strings.Compare(strings.ToLower(a.post.Title), strings.ToLower(b.post.Title))
+		case "tags":
+			comparison = strings.Compare(strings.ToLower(strings.Join(a.post.Tags, "\x00")), strings.ToLower(strings.Join(b.post.Tags, "\x00")))
+		case "status":
+			if a.post.Draft != b.post.Draft {
+				if a.post.Draft {
+					comparison = 1
+				} else {
+					comparison = -1
+				}
+			}
 		}
-		if a.valid != b.valid {
-			return a.valid
+		if comparison != 0 {
+			if order.Direction == "asc" {
+				return comparison < 0
+			}
+			return comparison > 0
 		}
 		return a.post.Path < b.post.Path
 	})

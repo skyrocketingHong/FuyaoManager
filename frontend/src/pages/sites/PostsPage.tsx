@@ -15,6 +15,7 @@ import {
 	getSite,
 	listPosts,
 	type Post,
+	type PostListSort,
 	type Site
 } from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
@@ -31,6 +32,7 @@ export default function PostsPage() {
 	const [total, setTotal] = useState(0);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(20);
+	const [ordering, setOrdering] = useState<PostListSort>();
 	const [query, setQuery] = useState('');
 	const [search, setSearch] = useState('');
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -42,7 +44,7 @@ export default function PostsPage() {
 	const loadingRef = useRef(false);
 
 	const refresh = useCallback(
-		async (pageArg: number, queryArg: string, sizeArg: number, replace: boolean) => {
+		async (pageArg: number, queryArg: string, sizeArg: number, replace: boolean, order?: PostListSort) => {
 			if (!target) return;
 			if (!replace && loadingRef.current) return;
 			const current = ++epoch.current;
@@ -57,7 +59,7 @@ export default function PostsPage() {
 				if (content) content.scrollTop = 0;
 			}
 			try {
-				const result = await listPosts(target, queryArg, pageArg, sizeArg);
+				const result = order ? await listPosts(target, queryArg, pageArg, sizeArg, order) : await listPosts(target, queryArg, pageArg, sizeArg);
 				if (current !== epoch.current) return;
 				setPosts((previous) => {
 					if (replace) return result.posts;
@@ -93,6 +95,7 @@ export default function PostsPage() {
 		setPosts(null);
 		setErrorKey(null);
 		setPage(1);
+		setOrdering(undefined);
 		setQuery('');
 		setSearch('');
 		let active = true;
@@ -115,8 +118,8 @@ export default function PostsPage() {
 	const hasMore = page * pageSize < total;
 	const loadMore = useCallback(() => {
 		if (!hasMore || loading || errorKey) return;
-		void refresh(page + 1, query, pageSize, false);
-	}, [hasMore, loading, errorKey, page, query, pageSize, refresh]);
+		void refresh(page + 1, query, pageSize, false, ordering);
+	}, [hasMore, loading, errorKey, page, query, pageSize, ordering, refresh]);
 
 	useEffect(() => {
 		if (
@@ -146,7 +149,7 @@ export default function PostsPage() {
 			const { etag } = await getPost(target, post.path);
 			if (currentScope !== scopeEpoch.current) return;
 			await deletePost(target, post.path, etag);
-			if (currentScope === scopeEpoch.current) await refresh(1, query, pageSize, true);
+			if (currentScope === scopeEpoch.current) await refresh(1, query, pageSize, true, ordering);
 		} catch (err) {
 			if (currentScope !== scopeEpoch.current) return;
 			const key = apiErrorKey(err);
@@ -167,7 +170,7 @@ export default function PostsPage() {
 				onChange={(event) => setSearch(event.target.value)}
 				onSearch={(value) => {
 					setQuery(value);
-					void refresh(1, value, pageSize, true);
+					void refresh(1, value, pageSize, true, ordering);
 				}}
 			/>
 			<Select
@@ -175,7 +178,7 @@ export default function PostsPage() {
 				value={pageSize}
 				onChange={(value) => {
 					setPageSize(value);
-					void refresh(1, query, value, true);
+					void refresh(1, query, value, true, ordering);
 				}}
 				options={[10, 20, 50, 100].map((value) => ({
 					value,
@@ -214,7 +217,7 @@ export default function PostsPage() {
 					showIcon
 					title={t(errorKey)}
 					action={
-						<Button onClick={() => void refresh(failedPage, query, pageSize, failedPage === 1)}>
+						<Button onClick={() => void refresh(failedPage, query, pageSize, failedPage === 1, ordering)}>
 							{t('common.retry')}
 						</Button>
 					}
@@ -223,13 +226,27 @@ export default function PostsPage() {
 			<TablePanel className="fill-height">
 				<DataTable<Post>
 					className="posts-table"
+					manualSorting
 					rowKey="path"
 					dataSource={posts ?? []}
 					loading={loading && posts === null}
 					pagination={false}
+					onChange={(_, __, sorter, extra) => {
+						if (extra.action !== 'sort') return;
+						const selected = Array.isArray(sorter) ? sorter[0] : sorter;
+						const field = selected?.columnKey as PostListSort['field'] | undefined;
+						const next = field && selected.order
+							? { field, direction: selected.order === 'ascend' ? 'asc' as const : 'desc' as const }
+							: undefined;
+						setOrdering(next);
+						void refresh(1, query, pageSize, true, next);
+					}}
 					columns={[
 						{
 							title: t('posts.titleColumn'),
+							key: 'title',
+							sorter: true,
+							sortOrder: ordering?.field === 'title' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
 							render: (_, post) => (
 								<>
 									<div>{post.title}</div>
@@ -241,6 +258,9 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.draftColumn'),
+							key: 'status',
+							sorter: true,
+							sortOrder: ordering?.field === 'status' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
 							dataIndex: 'draft',
 							width: 90,
 							render: (isDraft: boolean) =>
@@ -252,6 +272,9 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.dateColumn'),
+							key: 'date',
+							sorter: true,
+							sortOrder: ordering?.field === 'date' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
 							dataIndex: 'date',
 							width: 170,
 							render: (_, post) => (
@@ -262,6 +285,9 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.tagsColumn'),
+							key: 'tags',
+							sorter: true,
+							sortOrder: ordering?.field === 'tags' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
 							dataIndex: 'tags',
 							render: (tags: string[]) => (
 								<span className="panel-tags">

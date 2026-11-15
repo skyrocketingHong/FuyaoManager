@@ -45,6 +45,7 @@ export default function ThemesCatalogPage() {
 	const columns: ColumnsType<Theme> = [
 		{
 			title: t('themes.themeColumn'),
+			sorter: (a, b) => (a.name ?? a.themeId).localeCompare(b.name ?? b.themeId),
 			render: (_, theme) => (
 					<>
 						<div>{theme.name ?? theme.themeId}</div>
@@ -86,6 +87,7 @@ export default function ThemesCatalogPage() {
 			},
 		{
 			title: t('themes.configColumn'),
+			sorter: (a, b) => Number(Boolean(a.configSchema)) - Number(Boolean(b.configSchema)),
 			width: 120,
 			render: (_, theme) =>
 				theme.configSchema ? (

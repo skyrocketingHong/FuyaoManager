@@ -271,6 +271,21 @@ describe('PostsPage', () => {
 		expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
 	});
 
+	it('sorts the complete article list and preserves the order while loading more', async () => {
+		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 25 });
+		mountPosts();
+		await screen.findByText('Hello');
+		const title = screen.getByRole('columnheader', { name: /Title/ });
+		fireEvent.click(title);
+		await waitFor(() => expect(management.listPosts).toHaveBeenLastCalledWith(expect.anything(), '', 1, 20, { field: 'title', direction: 'asc' }));
+		fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+		await waitFor(() => expect(management.listPosts).toHaveBeenLastCalledWith(expect.anything(), '', 2, 20, { field: 'title', direction: 'asc' }));
+		fireEvent.click(title);
+		await waitFor(() => expect(management.listPosts).toHaveBeenLastCalledWith(expect.anything(), '', 1, 20, { field: 'title', direction: 'desc' }));
+		fireEvent.click(title);
+		await waitFor(() => expect(management.listPosts).toHaveBeenLastCalledWith(expect.anything(), '', 1, 20));
+	});
+
 	it('loads the next batch when the last article enters the viewport', async () => {
 		let trigger: IntersectionObserverCallback | undefined;
 		const observe = vi.fn();

@@ -19,6 +19,7 @@ type UserAdminQuery struct {
 	PlatformRole   string // empty = any
 	Status         string // empty = any
 	Search         string // substring of username or display name
+	Sort, Order    string
 	IncludeDeleted bool
 }
 
@@ -51,7 +52,18 @@ const listAdminPageSQL = `
    AND ($3::text IS NULL OR status = $3::text)
    AND ($4::text IS NULL OR username ILIKE $4::text
         OR display_name ILIKE $4::text)
- ORDER BY created_at DESC, username LIMIT $5 OFFSET $6`
+ ORDER BY
+ CASE WHEN $7::text = 'username' AND $8::text = 'asc' THEN username END ASC,
+ CASE WHEN $7::text = 'username' AND $8::text = 'desc' THEN username END DESC,
+ CASE WHEN $7::text = 'displayName' AND $8::text = 'asc' THEN display_name END ASC,
+ CASE WHEN $7::text = 'displayName' AND $8::text = 'desc' THEN display_name END DESC,
+ CASE WHEN $7::text = 'platformRole' AND $8::text = 'asc' THEN platform_role END ASC,
+ CASE WHEN $7::text = 'platformRole' AND $8::text = 'desc' THEN platform_role END DESC,
+ CASE WHEN $7::text = 'status' AND $8::text = 'asc' THEN status END ASC,
+ CASE WHEN $7::text = 'status' AND $8::text = 'desc' THEN status END DESC,
+ CASE WHEN $7::text = 'createdAt' AND $8::text = 'asc' THEN created_at END ASC,
+ CASE WHEN ($7::text = 'createdAt' AND $8::text = 'desc') OR $7::text = '' THEN created_at END DESC,
+ username ASC, id ASC LIMIT $5 OFFSET $6`
 
 // ListForAdmin returns one filtered, paged page of accounts plus the total
 // count. Read-only; the caller's admin status is enforced by the HTTP layer.
@@ -70,7 +82,7 @@ func (s *UserStore) ListForAdmin(ctx context.Context, q UserAdminQuery) (UserAdm
 		return UserAdminPage{}, err
 	}
 
-	args = append(args, size, (page-1)*size)
+	args = append(args, size, (page-1)*size, q.Sort, q.Order)
 	rows, err := s.pool.Query(ctx, listAdminPageSQL, args...)
 	if err != nil {
 		return UserAdminPage{}, err

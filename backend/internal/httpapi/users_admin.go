@@ -77,7 +77,11 @@ func (a *API) handleListUsers(w http.ResponseWriter, r *http.Request, _ store.Au
 		return
 	}
 	query := r.URL.Query()
-	filter := store.UserAdminQuery{Page: page, PageSize: size, PlatformRole: query.Get("role"), Status: query.Get("status"), Search: query.Get("q")}
+	filter := store.UserAdminQuery{Page: page, PageSize: size, PlatformRole: query.Get("role"), Status: query.Get("status"), Search: query.Get("q"), Sort: query.Get("sort"), Order: query.Get("order")}
+	if !validListSort(filter.Sort, filter.Order, "username", "displayName", "platformRole", "status", "createdAt") {
+		writeProblem(w, 400, "validation_error", "Unknown sort field or direction.")
+		return
+	}
 	if filter.PlatformRole != "" && filter.PlatformRole != model.PlatformRoleAdmin && filter.PlatformRole != model.PlatformRoleMember {
 		writeProblem(w, 400, "validation_error", "Unknown platform role.")
 		return

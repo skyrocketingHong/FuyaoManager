@@ -11,7 +11,7 @@ import type { UploadFile } from 'antd';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader, PageTabs } from '../../components/PageHeader';
-import DataTable from '../../components/DataTable';
+import DataTable, { compareTableValues } from '../../components/DataTable';
 import StatusTag from '../../components/StatusTag';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import PageLoading from '../../components/PageLoading';
@@ -205,9 +205,11 @@ export default function AlbumsPage() {
 		setEditing(null);
 	}
 
-	function move(indexOf: number, delta: -1 | 1) {
+	function move(filename: string, delta: -1 | 1) {
 		mutateDoc((photos) => {
 			const next = [...photos];
+			const indexOf = next.findIndex((photo) => photo.filename === filename);
+			if (indexOf < 0) return next;
 			const target = indexOf + delta;
 			if (target < 0 || target >= next.length) return next;
 			[next[indexOf], next[target]] = [next[target], next[indexOf]];
@@ -449,6 +451,7 @@ export default function AlbumsPage() {
 							columns={[
 								{
 									title: t('albums.photoColumn'),
+									sorter: (a, b) => compareTableValues(a.title || a.filename, b.title || b.filename),
 									render: (_, photo) => (
 										<>
 											<div>{photo.title || photo.filename}</div>
@@ -464,6 +467,7 @@ export default function AlbumsPage() {
 								},
 								{
 									title: t('albums.altColumn'),
+									dataIndex: 'alt',
 									width: 90,
 									render: (_, photo) =>
 										photo.alt ? (
@@ -475,7 +479,7 @@ export default function AlbumsPage() {
 								{
 									title: t('admin.actions'),
 									width: 220,
-									render: (_, photo, i) => (
+									render: (_, photo) => (
 										<Space>
 											<Button size="small" onClick={() => openEditor(photo)}>
 												{t('posts.edit')}
@@ -486,7 +490,7 @@ export default function AlbumsPage() {
 														size="small"
 														type="text"
 														aria-label={t('common.moveUp')}
-														onClick={() => move(i, -1)}
+														onClick={() => move(photo.filename, -1)}
 													>
 														<ArrowUp size={14} aria-hidden="true" />
 													</Button>
@@ -494,7 +498,7 @@ export default function AlbumsPage() {
 														size="small"
 														type="text"
 														aria-label={t('common.moveDown')}
-														onClick={() => move(i, 1)}
+														onClick={() => move(photo.filename, 1)}
 													>
 														<ArrowDown size={14} aria-hidden="true" />
 													</Button>

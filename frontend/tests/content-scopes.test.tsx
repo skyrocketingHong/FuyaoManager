@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { ContentScopeProvider } from '../src/components/ContentScopeProvider';
@@ -57,6 +57,8 @@ vi.mock('../src/lib/api/management', async (original) => ({
 	getFriends: vi.fn(),
 	putFriends: vi.fn(),
 	getAlbums: vi.fn(),
+	getAlbumYear: vi.fn(),
+	putAlbumYear: vi.fn(),
 	listMediaTasks: vi.fn(),
 	getFootprints: vi.fn(),
 	getSiteConfig: vi.fn()
@@ -187,6 +189,28 @@ it('makes shared site content read-only and links to its platform editor', async
 	expect((screen.getByRole('button', { name: 'New post' }) as HTMLButtonElement).disabled).toBe(
 		true
 	);
+});
+
+it('moves the selected photo in the underlying album after sorting its table', async () => {
+	vi.mocked(content.getAlbums).mockResolvedValue({
+		index: { schemaVersion: 1, years: [2026], totalPhotos: 3, devices: [] }, digest: '"index"'
+	});
+	const year = { year: 2026, photos: [
+		{ filename: 'c.jpg', path: '/c.jpg', title: 'Charlie' },
+		{ filename: 'a.jpg', path: '/a.jpg', title: 'Alpha' },
+		{ filename: 'b.jpg', path: '/b.jpg', title: 'Bravo' }
+	] };
+	vi.mocked(content.getAlbumYear).mockResolvedValue({ year, digest: '"year"' });
+	vi.mocked(content.putAlbumYear).mockResolvedValue({ year, digest: '"saved"' });
+	mount(<ContentScopeProvider resource="albums"><AlbumsPage /></ContentScopeProvider>, '/content/albums');
+	await screen.findByText('Charlie');
+	fireEvent.click(screen.getByRole('columnheader', { name: /Photo/ }));
+	const row = screen.getByText('Bravo').closest('tr')!;
+	fireEvent.click(within(row).getByRole('button', { name: 'Move up' }));
+	fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+	await waitFor(() => expect(content.putAlbumYear).toHaveBeenCalled());
+	const saved = vi.mocked(content.putAlbumYear).mock.calls[0][2];
+	expect(saved.map((photo) => photo.filename)).toEqual(['c.jpg', 'b.jpg', 'a.jpg']);
 });
 
 it('uses the platform permission rather than a site role for platform writes', async () => {
