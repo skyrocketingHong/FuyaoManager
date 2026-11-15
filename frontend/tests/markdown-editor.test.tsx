@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import MarkdownPreview from '../src/features/posts/MarkdownPreview';
 import MarkdownToolbar from '../src/features/posts/MarkdownToolbar';
 import { markdownCommand } from '../src/features/posts/markdownCommands';
-import { interpolateScroll } from '../src/features/posts/useMarkdownSync';
+import { interpolateScroll, useMarkdownSync } from '../src/features/posts/useMarkdownSync';
 import { setLocale } from '../src/lib/i18n';
 
 const options = { text: 'Text', linkText: 'Link text', imageText: 'Image description', tableColumn: 'Column', tableValue: 'Value', heading: 3, depth: 2 };
@@ -75,4 +75,57 @@ it('applies a toolbar command and supports undo and redo when native commands ar
 	await waitFor(() => expect(body.value).toBe('hello'));
 	fireEvent.click(screen.getByRole('button', { name: 'Redo' }));
 	await waitFor(() => expect(body.value).toBe('~~hello~~'));
+});
+
+it('exposes all heading levels directly and groups the table of contents controls', () => {
+	setLocale('en-US');
+	function Editor() {
+		const [value, setValue] = useState('hello');
+		const textarea = useRef<HTMLTextAreaElement>(null);
+		return <>
+			<MarkdownToolbar value={value} disabled={false} textarea={() => textarea.current}
+				onChange={setValue} onEmptyToc={() => {}} controls="body" />
+			<textarea id="body" aria-label="Body" ref={textarea} value={value}
+				onChange={(event) => setValue(event.target.value)} />
+		</>;
+	}
+	render(<Editor />);
+	const body = screen.getByRole('textbox', { name: 'Body' }) as HTMLTextAreaElement;
+	for (let level = 1; level <= 6; level++) {
+		body.setSelectionRange(0, body.value.length);
+		const button = screen.getByRole('button', { name: `Heading ${level}` });
+		expect(button.querySelector(`.lucide-heading-${level}`)).not.toBeNull();
+		fireEvent.click(button);
+		expect(body.value).toBe(`${'#'.repeat(level)} hello`);
+	}
+	expect(screen.queryByRole('combobox', { name: 'Heading level' })).toBeNull();
+	const toc = screen.getByRole('button', { name: 'Insert table of contents' });
+	const depth = screen.getByRole('combobox', { name: 'Table of contents depth' });
+	expect(toc.closest('.post-toc-controls')).toBe(depth.closest('.post-toc-controls'));
+});
+
+it('locates the caret inside a fenced code block independently of its language label', () => {
+	const source = '```constant\nconst x = 1;\n```';
+	const rangeStart = vi.spyOn(Range.prototype, 'setStart');
+	function Editor() {
+		const input = useRef<HTMLTextAreaElement>(null);
+		const preview = useRef<HTMLElement>(null);
+		const cursor = useRef<HTMLSpanElement>(null);
+		const textarea = useCallback(() => input.current, []);
+		useMarkdownSync({ textarea, preview, cursor, source, rendered: source, enabled: true });
+		return <>
+			<textarea ref={input} aria-label="Body" defaultValue={source} />
+			<section ref={preview}><span ref={cursor} hidden /><MarkdownPreview source={source} /></section>
+		</>;
+	}
+	render(<Editor />);
+	const body = screen.getByRole('textbox', { name: 'Body' }) as HTMLTextAreaElement;
+	body.focus();
+	const start = source.indexOf('\n') + 1;
+	body.setSelectionRange(start, start);
+	fireEvent.click(body);
+	expect(rangeStart).toHaveBeenLastCalledWith(expect.any(Text), 0);
+	body.setSelectionRange(start + 5, start + 5);
+	fireEvent.click(body);
+	expect(rangeStart).toHaveBeenLastCalledWith(expect.any(Text), 5);
 });

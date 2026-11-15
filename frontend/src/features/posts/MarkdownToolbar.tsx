@@ -1,14 +1,22 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Button, Select } from 'antd';
 import {
-	Bold, Code, Code2, Heading, Image, IndentDecrease, IndentIncrease, Italic,
+	Bold, Code, Code2, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
+	Image, IndentDecrease, IndentIncrease, Italic,
 	Link2, List, ListChecks, ListOrdered, ListTree, Minus, Quote, Redo2,
-	Strikethrough, Table2, Undo2
+	Strikethrough, Table2, Undo2, type LucideIcon
 } from 'lucide-react';
 import { t } from '../../lib/i18n';
 import { markdownCommand, type MarkdownCommand } from './markdownCommands';
 
 type HistoryCommand = 'undo' | 'redo';
+type ToolbarCommand = {
+	key: string;
+	command: MarkdownCommand | HistoryCommand;
+	label: string;
+	icon: LucideIcon;
+	heading?: number;
+};
 
 export default function MarkdownToolbar({ value, disabled, textarea, onChange, onEmptyToc, controls }: {
 	value: string;
@@ -19,7 +27,6 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 	controls: string;
 }) {
 	const [depth, setDepth] = useState(3);
-	const [heading, setHeading] = useState(2);
 	const [focused, setFocused] = useState(0);
 	const root = useRef<HTMLDivElement>(null);
 	const history = useRef({ entries: [value], index: 0 });
@@ -40,27 +47,29 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 		}
 		state.index = state.entries.length - 1;
 	}, [value, disabled]);
-	const commands = [
-		{ key: 'bold', label: t('posts.toolbarBold'), icon: Bold },
-		{ key: 'italic', label: t('posts.toolbarItalic'), icon: Italic },
-		{ key: 'strike', label: t('posts.toolbarStrike'), icon: Strikethrough },
-		{ key: 'link', label: t('posts.toolbarLink'), icon: Link2 },
-		{ key: 'image', label: t('posts.toolbarImage'), icon: Image },
-		{ key: 'heading', label: t('posts.toolbarHeading'), icon: Heading },
-		{ key: 'bullet', label: t('posts.toolbarBullet'), icon: List },
-		{ key: 'numbered', label: t('posts.toolbarNumbered'), icon: ListOrdered },
-		{ key: 'task', label: t('posts.toolbarTask'), icon: ListChecks },
-		{ key: 'quote', label: t('posts.toolbarQuote'), icon: Quote },
-		{ key: 'code', label: t('posts.toolbarCode'), icon: Code },
-		{ key: 'codeBlock', label: t('posts.toolbarCodeBlock'), icon: Code2 },
-		{ key: 'table', label: t('posts.toolbarTable'), icon: Table2 },
-		{ key: 'rule', label: t('posts.toolbarRule'), icon: Minus },
-		{ key: 'indent', label: t('posts.toolbarIndent'), icon: IndentIncrease },
-		{ key: 'outdent', label: t('posts.toolbarOutdent'), icon: IndentDecrease },
-		{ key: 'undo', label: t('posts.toolbarUndo'), icon: Undo2 },
-		{ key: 'redo', label: t('posts.toolbarRedo'), icon: Redo2 },
-		{ key: 'toc', label: t('posts.toolbarToc'), icon: ListTree }
-	] as const;
+	const commands: ToolbarCommand[] = [
+		{ key: 'bold', command: 'bold', label: t('posts.toolbarBold'), icon: Bold },
+		{ key: 'italic', command: 'italic', label: t('posts.toolbarItalic'), icon: Italic },
+		{ key: 'strike', command: 'strike', label: t('posts.toolbarStrike'), icon: Strikethrough },
+		{ key: 'link', command: 'link', label: t('posts.toolbarLink'), icon: Link2 },
+		{ key: 'image', command: 'image', label: t('posts.toolbarImage'), icon: Image },
+		...[Heading1, Heading2, Heading3, Heading4, Heading5, Heading6].map((icon, index) => ({
+			key: `heading-${index + 1}`, command: 'heading' as const,
+			label: t('posts.headingLevelValue', { count: index + 1 }), icon, heading: index + 1
+		})),
+		{ key: 'bullet', command: 'bullet', label: t('posts.toolbarBullet'), icon: List },
+		{ key: 'numbered', command: 'numbered', label: t('posts.toolbarNumbered'), icon: ListOrdered },
+		{ key: 'task', command: 'task', label: t('posts.toolbarTask'), icon: ListChecks },
+		{ key: 'quote', command: 'quote', label: t('posts.toolbarQuote'), icon: Quote },
+		{ key: 'code', command: 'code', label: t('posts.toolbarCode'), icon: Code },
+		{ key: 'codeBlock', command: 'codeBlock', label: t('posts.toolbarCodeBlock'), icon: Code2 },
+		{ key: 'table', command: 'table', label: t('posts.toolbarTable'), icon: Table2 },
+		{ key: 'rule', command: 'rule', label: t('posts.toolbarRule'), icon: Minus },
+		{ key: 'indent', command: 'indent', label: t('posts.toolbarIndent'), icon: IndentIncrease },
+		{ key: 'outdent', command: 'outdent', label: t('posts.toolbarOutdent'), icon: IndentDecrease },
+		{ key: 'undo', command: 'undo', label: t('posts.toolbarUndo'), icon: Undo2 },
+		{ key: 'redo', command: 'redo', label: t('posts.toolbarRedo'), icon: Redo2 }
+	];
 
 	function keyDown(event: KeyboardEvent<HTMLDivElement>) {
 		if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
@@ -76,7 +85,7 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 		buttons[next].focus();
 	}
 
-	function apply(command: MarkdownCommand | HistoryCommand) {
+	function apply(command: MarkdownCommand | HistoryCommand, heading = 2) {
 		if (disabled) return;
 		const input = textarea();
 		if (!input) return;
@@ -122,18 +131,21 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 				aria-label={t('posts.toolbar')} aria-controls={controls}
 				onKeyDown={nativeFocusGroup ? undefined : keyDown}>
 				<div role="group" aria-label={t('posts.toolbar')}>
-					{commands.map(({ key, label, icon: Icon }, index) => (
+					{commands.map(({ key, command, label, icon: Icon, heading }, index) => (
 						<Button key={key} type="text" title={label} icon={<Icon size={16} aria-hidden="true" />}
 							aria-label={label} tabIndex={nativeFocusGroup ? undefined : index === focused ? 0 : -1}
 							disabled={disabled} onFocus={nativeFocusGroup ? undefined : () => setFocused(index)}
-							onMouseDown={(event) => event.preventDefault()} onClick={() => apply(key)} />
+							onMouseDown={(event) => event.preventDefault()} onClick={() => apply(command, heading)} />
 					))}
 				</div>
 			</div>
-			<Select aria-label={t('posts.headingLevel')} value={heading} onChange={setHeading} disabled={disabled}
-				options={[1, 2, 3, 4, 5, 6].map((value) => ({ value, label: t('posts.headingLevelValue', { count: value }) }))} />
-			<Select aria-label={t('posts.tocDepth')} value={depth} onChange={setDepth} disabled={disabled}
-				options={[1, 2, 3, 4, 5, 6].map((value) => ({ value, label: t('posts.tocDepthValue', { count: value }) }))} />
+			<div className="post-toc-controls">
+				<Button type="text" title={t('posts.toolbarToc')} aria-label={t('posts.toolbarToc')}
+					aria-controls={controls} icon={<ListTree size={16} aria-hidden="true" />} disabled={disabled}
+					onMouseDown={(event) => event.preventDefault()} onClick={() => apply('toc')} />
+				<Select aria-label={t('posts.tocDepth')} value={depth} onChange={setDepth} disabled={disabled}
+					options={[1, 2, 3, 4, 5, 6].map((value) => ({ value, label: t('posts.tocDepthValue', { count: value }) }))} />
+			</div>
 		</div>
 	);
 }

@@ -25,6 +25,13 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--space-1);
+	min-width: 0;
+}
+.post-toc-controls {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	max-width: 100%;
 }
 .post-markdown-toolbar > [role='group'] {
 	display: flex;
@@ -33,7 +40,7 @@
 	min-width: 0;
 }
 @media (pointer: coarse) {
-	.post-markdown-toolbar .ant-btn {
+	.post-markdown-controls .ant-btn {
 		min-width: 44px;
 		min-height: 44px;
 	}

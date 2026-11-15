@@ -509,11 +509,10 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 						<div className={`post-editor-body post-editor-body--${view}`}>
 							<Form.Item
 								name="body"
-								label={t('posts.fieldBody')}
-								htmlFor={bodyId}
 								className="post-editor-source"
 							>
-								<Input.TextArea key={editorIdentity} id={bodyId} ref={bodyRef} spellCheck />
+								<Input.TextArea key={editorIdentity} id={bodyId} ref={bodyRef}
+									aria-label={t('posts.fieldBody')} spellCheck />
 							</Form.Item>
 							<section ref={previewRef} className="post-editor-preview" aria-label={t('posts.preview')}>
 								<span ref={previewCursorRef} className="post-preview-cursor" hidden aria-hidden="true" />

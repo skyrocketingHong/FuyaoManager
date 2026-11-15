@@ -186,7 +186,12 @@ export function useMarkdownSync({ textarea, preview, cursor, source, rendered, e
 			const start = Number(nearest.dataset.sourceStart);
 			const end = Number(nearest.dataset.sourceEnd);
 			const text = nearest.textContent ?? '';
-			const index = sourceOffsetToText(source.slice(start, end), text, offset - start);
+			let textStart = start;
+			if (nearest.parentElement?.tagName === 'PRE') {
+				const openingFence = source.slice(start, end).match(/^ {0,3}(?:`{3,}|~{3,})[^\n]*\n/);
+				if (openingFence) textStart += openingFence[0].length;
+			}
+			const index = sourceOffsetToText(source.slice(textStart, end), text, offset - textStart);
 			const position = textPosition(nearest, index);
 			let rect = nearest.getBoundingClientRect();
 			if (position) {

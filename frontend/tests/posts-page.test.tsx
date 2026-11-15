@@ -456,6 +456,7 @@ describe('PostsPage', () => {
 		fireEvent.keyDown(bold, { key: 'ArrowRight' });
 		expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Italic' }));
 		const body = screen.getByLabelText('Body (Markdown)') as HTMLTextAreaElement;
+		expect(screen.queryByText('Body (Markdown)')).toBeNull();
 		fireEvent.change(body, { target: { value: 'Hello world' } });
 		body.setSelectionRange(0, 5);
 		fireEvent.mouseDown(screen.getByRole('button', { name: 'Bold' }));
