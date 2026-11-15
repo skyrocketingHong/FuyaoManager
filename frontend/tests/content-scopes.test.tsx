@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { ContentScopeProvider } from '../src/components/ContentScopeProvider';
@@ -17,6 +17,7 @@ import { ApiError } from '../src/lib/api/client';
 import * as service from '../src/lib/api/content';
 import * as content from '../src/lib/api/management';
 import { setLocale } from '../src/lib/i18n';
+import { getVisibleButton } from './visible-button';
 
 const runtime = vi.hoisted(() => ({
 	state: { status: 'authenticated', user: { id: 'admin', platformRole: 'admin' } },
@@ -206,7 +207,7 @@ it('moves the selected photo in the underlying album after sorting its table', a
 	await screen.findByText('Charlie');
 	fireEvent.click(screen.getByRole('columnheader', { name: /Photo/ }));
 	const row = screen.getByText('Bravo').closest('tr')!;
-	fireEvent.click(within(row).getByRole('button', { name: 'Move up' }));
+	fireEvent.click(getVisibleButton(row, 'Move up'));
 	fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 	await waitFor(() => expect(content.putAlbumYear).toHaveBeenCalled());
 	const saved = vi.mocked(content.putAlbumYear).mock.calls[0][2];

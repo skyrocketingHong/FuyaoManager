@@ -9,6 +9,7 @@ import UsersPage from '../src/pages/UsersPage';
 import LogsPage from '../src/pages/LogsPage';
 import { setLocale } from '../src/lib/i18n';
 import * as service from '../src/lib/api/admin';
+import { getVisibleButton } from './visible-button';
 
 const runtime = vi.hoisted(() => ({
 	generation: 0,
@@ -258,7 +259,8 @@ it('revokes a specific session only after confirmation', async () => {
 	const sessions = within(drawer)
 		.getByRole('heading', { name: 'Active sessions' })
 		.closest('section')!;
-	fireEvent.click(within(sessions).getByRole('button', { name: 'Revoke' }));
+	const row = within(sessions).getByText('Full access').closest('tr')!;
+	fireEvent.click(getVisibleButton(row, 'Revoke'));
 	expect(service.revokeSessions).not.toHaveBeenCalled();
 	const confirmation = await screen.findByRole('dialog', { name: 'Revoke · member' });
 	fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirm' }));
