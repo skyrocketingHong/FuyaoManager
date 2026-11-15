@@ -1900,6 +1900,95 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/posts/media:
+    get:
+      operationId: listPostMedia
+      tags: [Content]
+      summary: List image files available to the resolved posts source
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+      responses:
+        '200':
+          description: Managed image paths and edit permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostMediaList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: importPostMedia
+      tags: [Content]
+      summary: Import one image without overwriting existing content
+      description: Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                path: { type: string }
+      responses:
+        '201':
+          description: Imported or identical existing image.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostMedia'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A different file already occupies the requested path.
+        '413':
+          description: The uploaded image exceeds the size limit.
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/sites/{siteId}/posts/media/file:
+    get:
+      operationId: getPostMedia
+      tags: [Content]
+      summary: Read one authorized post image
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The image bytes.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/gif:
+              schema: { type: string, format: binary }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/posts/vocabulary:
     get:
       operationId: getPostVocabulary
@@ -3728,6 +3817,91 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/content/posts/media:
+    get:
+      operationId: platformListPostMedia
+      tags: [Content]
+      summary: List image files available to the resolved posts source
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Managed image paths and edit permission.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostMediaList'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: platformImportPostMedia
+      tags: [Content]
+      summary: Import one image without overwriting existing content
+      description: Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+                path: { type: string }
+      responses:
+        '201':
+          description: Imported or identical existing image.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostMedia'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: A different file already occupies the requested path.
+        '413':
+          description: The uploaded image exceeds the size limit.
+        default:
+          $ref: '#/components/responses/Problem'
+
+  /api/v1/content/posts/media/file:
+    get:
+      operationId: platformGetPostMedia
+      tags: [Content]
+      summary: Read one authorized post image
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The image bytes.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+            image/gif:
+              schema: { type: string, format: binary }
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/content/posts/vocabulary:
     get:
       operationId: platformGetPostVocabulary
@@ -5512,6 +5686,21 @@ components:
           type: string
         postCount:
           type: integer
+    PostMedia:
+      type: object
+      required: [path, size]
+      properties:
+        path: { type: string, description: Public image URL path. }
+        size: { type: integer, format: int64, minimum: 0 }
+    PostMediaList:
+      type: object
+      required: [items, canEdit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostMedia'
+        canEdit: { type: boolean }
     PostDirectoryUpdate:
       type: object
       additionalProperties: false

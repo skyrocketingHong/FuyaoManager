@@ -99,6 +99,30 @@ func (s *Store) SavePostDirectory(id uuid.UUID, slug, title, digest string) (con
 	}
 	return t.SavePostDirectory(k, slug, title, digest)
 }
+
+func (s *Store) ListPostMedia(id uuid.UUID) ([]content.PostMedia, error) {
+	t, k, err := s.target(id, "posts", false)
+	if err != nil {
+		return nil, err
+	}
+	return t.ListPostMedia(k)
+}
+
+func (s *Store) ReadPostMedia(id uuid.UUID, path string) ([]byte, string, error) {
+	t, k, err := s.target(id, "posts", false)
+	if err != nil {
+		return nil, "", err
+	}
+	return t.ReadPostMedia(k, path)
+}
+
+func (s *Store) StorePostMedia(id uuid.UUID, path string, reader io.Reader, size int64) (content.PostMedia, error) {
+	t, k, err := s.target(id, "posts", true)
+	if err != nil {
+		return content.PostMedia{}, err
+	}
+	return t.StorePostMedia(k, path, reader, size)
+}
 func (s *Store) GetPost(id uuid.UUID, path string) (content.Post, error) {
 	t, k, e := s.target(id, "posts", false)
 	if e != nil {

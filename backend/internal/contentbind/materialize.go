@@ -1,8 +1,10 @@
 package contentbind
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -50,6 +52,11 @@ func Materialize(local, platform *content.Store, id uuid.UUID, sources store.Con
 		}
 	}
 	if platform != nil && (sources.Posts == "platform" || sources.Albums == "platform" || sources.Friends == "platform" || sources.Footprints == "platform") {
+		if sources.Posts == "platform" {
+			if err := checkPostMediaConflicts(filepath.Join(platform.ContentRoot(content.PlatformScopeID), "wp-content", "uploads"), filepath.Join(contentRoot, "wp-content", "uploads")); err != nil {
+				return fail(err)
+			}
+		}
 		for _, path := range []string{"images", "wp-content"} {
 			if err := copyTree(filepath.Join(platform.ContentRoot(content.PlatformScopeID), path), filepath.Join(contentRoot, path), true); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fail(err)
@@ -57,6 +64,84 @@ func Materialize(local, platform *content.Store, id uuid.UUID, sources store.Con
 		}
 	}
 	return contentRoot, configRoot, filepath.Join(configRoot, "favicon"), nil
+}
+
+// Different bytes at a shared post's public URL must never silently resolve
+// to a site-owned file during publication.
+func checkPostMediaConflicts(source, target string) error {
+	parent, err := os.Lstat(filepath.Dir(source))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !parent.IsDir() || parent.Mode()&os.ModeSymlink != 0 {
+		return content.ErrInvalidPath
+	}
+	if _, err := os.Lstat(source); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	return filepath.WalkDir(source, func(current string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return content.ErrInvalidPath
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return content.ErrInvalidPath
+		}
+		rel, err := filepath.Rel(source, current)
+		if err != nil {
+			return err
+		}
+		other := filepath.Join(target, rel)
+		info, err := os.Lstat(other)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if !info.Mode().IsRegular() {
+			return content.ErrInvalidPath
+		}
+		same, err := equalMediaFiles(current, other)
+		if err != nil {
+			return err
+		}
+		if !same {
+			return fmt.Errorf("post media path conflict: /wp-content/uploads/%s", filepath.ToSlash(rel))
+		}
+		return nil
+	})
+}
+
+func equalMediaFiles(a, b string) (bool, error) {
+	first, err := os.Open(a)
+	if err != nil {
+		return false, err
+	}
+	defer first.Close()
+	second, err := os.Open(b)
+	if err != nil {
+		return false, err
+	}
+	defer second.Close()
+	left, right := sha256.New(), sha256.New()
+	if _, err := io.Copy(left, first); err != nil {
+		return false, err
+	}
+	if _, err := io.Copy(right, second); err != nil {
+		return false, err
+	}
+	return string(left.Sum(nil)) == string(right.Sum(nil)), nil
 }
 func copyTree(source, target string, keep bool) error {
 	info, err := os.Lstat(source)

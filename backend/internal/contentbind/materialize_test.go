@@ -1,7 +1,10 @@
 package contentbind
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publicationmedia"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
@@ -22,6 +26,39 @@ func selectPlatform(s *store.ContentSources, category string) {
 		s.Friends = "platform"
 	case "footprints":
 		s.Footprints = "platform"
+	}
+}
+
+func TestImportedPostMediaSurvivesFrozenPublication(t *testing.T) {
+	id := uuid.New()
+	local := bindingFixture(t, id, "local", 1)
+	library := bindingFixture(t, content.PlatformScopeID, "library", 1)
+	var imageData bytes.Buffer
+	if err := png.Encode(&imageData, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
+		t.Fatal(err)
+	}
+	publicPath := "/wp-content/uploads/2020/06/image-1.png"
+	if _, err := library.StorePostMedia(content.PlatformScopeID, publicPath, bytes.NewReader(imageData.Bytes()), int64(imageData.Len())); err != nil {
+		t.Fatal(err)
+	}
+	sources := store.IndependentSources()
+	sources.Posts = "platform"
+	task, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	contentRoot, _, _, err := Materialize(local, library, id, sources, filepath.Join(task, "input"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen := filepath.Join(task, "publication-media")
+	if _, err := publicationmedia.Freeze(contentRoot, frozen, id, uuid.New()); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = publicationmedia.Remove(frozen) })
+	writeFixture(t, filepath.Join(library.ContentRoot(content.PlatformScopeID), strings.TrimPrefix(publicPath, "/")), "changed later")
+	if got := fixtureBytes(t, filepath.Join(frozen, strings.TrimPrefix(publicPath, "/"))); got != imageData.String() {
+		t.Fatal("frozen legacy image changed")
 	}
 }
 func fixtureBytes(t *testing.T, path string) string {
@@ -103,6 +140,31 @@ func TestMaterializeExcludesPrivatePostVocabulary(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, ".post-vocabulary.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("editing vocabulary leaked into build input: %v", err)
+	}
+}
+
+func TestSharedPostMediaConflictsStopSnapshot(t *testing.T) {
+	id := uuid.New()
+	local := bindingFixture(t, id, "local", 1)
+	library := bindingFixture(t, content.PlatformScopeID, "library", 1)
+	legacy := "wp-content/uploads/2020/06/image.png"
+	writeFixture(t, filepath.Join(local.ContentRoot(id), legacy), "local bytes")
+	writeFixture(t, filepath.Join(library.ContentRoot(content.PlatformScopeID), legacy), "platform bytes")
+	sources := store.IndependentSources()
+	sources.Posts = "platform"
+	target := filepath.Join(t.TempDir(), "snapshot")
+	if _, _, _, err := Materialize(local, library, id, sources, target); err == nil {
+		t.Fatal("conflicting image URL did not stop materialization")
+	}
+	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("failed materialization left a snapshot")
+	}
+	if fixtureBytes(t, filepath.Join(local.ContentRoot(id), legacy)) != "local bytes" || fixtureBytes(t, filepath.Join(library.ContentRoot(content.PlatformScopeID), legacy)) != "platform bytes" {
+		t.Fatal("failed materialization changed source content")
+	}
+	writeFixture(t, filepath.Join(local.ContentRoot(id), legacy), "platform bytes")
+	if _, _, _, err := Materialize(local, library, id, sources, target); err != nil {
+		t.Fatalf("identical shared media failed: %v", err)
 	}
 }
 

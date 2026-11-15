@@ -974,6 +974,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/posts/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List image files available to the resolved posts source */
+        get: operations["listPostMedia"];
+        put?: never;
+        /**
+         * Import one image without overwriting existing content
+         * @description Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+         */
+        post: operations["importPostMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/posts/media/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one authorized post image */
+        get: operations["getPostMedia"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/posts/vocabulary": {
         parameters: {
             query?: never;
@@ -1609,6 +1647,44 @@ export interface paths {
          * @description Updates the index title and preserves its other YAML fields and Markdown body.
          */
         put: operations["platformPutPostDirectory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List image files available to the resolved posts source */
+        get: operations["platformListPostMedia"];
+        put?: never;
+        /**
+         * Import one image without overwriting existing content
+         * @description Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+         */
+        post: operations["platformImportPostMedia"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/media/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one authorized post image */
+        get: operations["platformGetPostMedia"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2404,6 +2480,16 @@ export interface components {
             slug: string;
             title: string;
             postCount: number;
+        };
+        PostMedia: {
+            /** @description Public image URL path. */
+            path: string;
+            /** Format: int64 */
+            size: number;
+        };
+        PostMediaList: {
+            items: components["schemas"]["PostMedia"][];
+            canEdit: boolean;
         };
         PostDirectoryUpdate: {
             title: string;
@@ -4865,6 +4951,112 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listPostMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed image paths and edit permission. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostMediaList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    importPostMedia: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    path?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Imported or identical existing image. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostMedia"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            /** @description A different file already occupies the requested path. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The uploaded image exceeds the size limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    getPostMedia: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                    "image/gif": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getPostVocabulary: {
         parameters: {
             query?: never;
@@ -6671,6 +6863,103 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             412: components["responses"]["PreconditionFailed"];
             428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformListPostMedia: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Managed image paths and edit permission. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostMediaList"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformImportPostMedia: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    path?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Imported or identical existing image. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostMedia"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            /** @description A different file already occupies the requested path. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The uploaded image exceeds the size limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetPostMedia: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image bytes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                    "image/gif": string;
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
             default: components["responses"]["Problem"];
         };
     };
