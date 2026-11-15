@@ -26,6 +26,18 @@
 	flex-wrap: wrap;
 	gap: var(--space-1);
 }
+.post-markdown-toolbar > [role='group'] {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-1);
+	min-width: 0;
+}
+@media (pointer: coarse) {
+	.post-markdown-toolbar .ant-btn {
+		min-width: 44px;
+		min-height: 44px;
+	}
+}
 .post-editor-form {
 	display: flex;
 	flex-direction: column;

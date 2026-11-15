@@ -238,6 +238,10 @@ func TestGetPostTaxonomyBlocksSymlinkLeaks(t *testing.T) {
 	if err := os.Symlink(externalIndex, filepath.Join(postsDir, "empty", "_index.md")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
+	posts, total, err := s.ListPosts(id, "", 1, 20)
+	if err != nil || total != 1 || len(posts) != 1 || posts[0].Title != "real" {
+		t.Fatalf("linked post leaked into listing: %+v, %v", posts, err)
+	}
 
 	tax, err := s.GetPostTaxonomy(id)
 	if err != nil {

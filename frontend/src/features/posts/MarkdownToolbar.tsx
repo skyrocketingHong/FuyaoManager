@@ -43,6 +43,7 @@ export default function MarkdownToolbar({
 	const [depth, setDepth] = useState(3);
 	const [focused, setFocused] = useState(0);
 	const root = useRef<HTMLDivElement>(null);
+	const nativeFocusGroup = typeof HTMLElement !== 'undefined' && 'focusGroup' in HTMLElement.prototype;
 	const commands = [
 		{ key: 'bold', label: t('posts.toolbarBold'), icon: Bold },
 		{ key: 'italic', label: t('posts.toolbarItalic'), icon: Italic },
@@ -63,12 +64,14 @@ export default function MarkdownToolbar({
 		const current = buttons.indexOf(event.target as HTMLButtonElement);
 		if (current < 0 || !buttons.length) return;
 		event.preventDefault();
+		const rtl = root.current ? getComputedStyle(root.current).direction === 'rtl' : false;
+		const forward = (event.key === 'ArrowRight') !== rtl;
 		const next =
 			event.key === 'Home'
 				? 0
 				: event.key === 'End'
 					? buttons.length - 1
-					: (current + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length;
+					: (current + (forward ? 1 : -1) + buttons.length) % buttons.length;
 		setFocused(next);
 		buttons[next].focus();
 	}
@@ -158,24 +161,27 @@ export default function MarkdownToolbar({
 				ref={root}
 				className="post-markdown-toolbar"
 				role="toolbar"
+				{...({ focusgroup: 'toolbar wrap' } as Record<string, string>)}
 				aria-label={t('posts.toolbar')}
 				aria-controls={controls}
-				onKeyDown={keyDown}
+				onKeyDown={nativeFocusGroup ? undefined : keyDown}
 			>
-				{commands.map(({ key, label, icon: Icon }, index) => (
-					<Tooltip title={label} key={key}>
-						<Button
-							type="text"
-							icon={<Icon size={16} aria-hidden="true" />}
-							aria-label={label}
-							tabIndex={index === focused ? 0 : -1}
-							disabled={disabled}
-							onFocus={() => setFocused(index)}
-							onMouseDown={(event) => event.preventDefault()}
-							onClick={() => apply(key)}
-						/>
-					</Tooltip>
-				))}
+				<div role="group" aria-label={t('posts.toolbar')}>
+					{commands.map(({ key, label, icon: Icon }, index) => (
+						<Tooltip title={label} key={key}>
+							<Button
+								type="text"
+								icon={<Icon size={16} aria-hidden="true" />}
+								aria-label={label}
+								tabIndex={nativeFocusGroup ? undefined : index === focused ? 0 : -1}
+								disabled={disabled}
+								onFocus={nativeFocusGroup ? undefined : () => setFocused(index)}
+								onMouseDown={(event) => event.preventDefault()}
+								onClick={() => apply(key)}
+							/>
+						</Tooltip>
+					))}
+				</div>
 			</div>
 			<Select
 				aria-label={t('posts.tocDepth')}

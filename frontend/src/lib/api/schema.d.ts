@@ -981,12 +981,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List image files available to the resolved posts source */
+        /**
+         * List images managed for the resolved posts source
+         * @description Existing scoped image files are adopted into the media database automatically.
+         */
         get: operations["listPostMedia"];
         put?: never;
         /**
-         * Import one image without overwriting existing content
-         * @description Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+         * Upload one image without overwriting existing content
+         * @description Images are stored in the media database. Omit path to generate a URL, or provide a WordPress uploads path to preserve an existing link.
          */
         post: operations["importPostMedia"];
         delete?: never;
@@ -1661,12 +1664,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List image files available to the resolved posts source */
+        /**
+         * List images managed for the resolved posts source
+         * @description Existing scoped image files are adopted into the media database automatically.
+         */
         get: operations["platformListPostMedia"];
         put?: never;
         /**
-         * Import one image without overwriting existing content
-         * @description Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+         * Upload one image without overwriting existing content
+         * @description Images are stored in the media database. Omit path to generate a URL, or provide a WordPress uploads path to preserve an existing link.
          */
         post: operations["platformImportPostMedia"];
         delete?: never;
@@ -5017,7 +5023,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Imported or identical existing image. */
+            /** @description Uploaded or identical existing image. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -6930,7 +6936,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Imported or identical existing image. */
+            /** @description Uploaded or identical existing image. */
             201: {
                 headers: {
                     [name: string]: unknown;

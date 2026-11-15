@@ -325,7 +325,7 @@ func runServe(ctx context.Context) error {
 			var contentRoot, configRoot, faviconRoot string
 			err := albums.WithAlbumMetaLock(ctx, scope, func() error {
 				var err error
-				contentRoot, configRoot, faviconRoot, err = contentbind.Materialize(contentStore, platformContent, build.SiteID, sources, target)
+				contentRoot, configRoot, faviconRoot, err = contentbind.MaterializeWithMedia(ctx, contentStore, platformContent, st.PostMedia, build.SiteID, sources, target)
 				return err
 			})
 			return contentRoot, configRoot, faviconRoot, err

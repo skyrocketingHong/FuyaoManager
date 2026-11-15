@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"os"
@@ -13,7 +14,9 @@ import (
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/buildrunner"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/contentbind"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
@@ -320,7 +323,11 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 		t.Skip("real Node/SvelteKit build")
 	}
 	themeRoot := testThemeRoot(t)
-	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
+	taskRoot, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildsRoot := filepath.Join(taskRoot, "admin-builds")
 	t.Cleanup(func() { _ = buildrunner.MakeTreeWritable(buildsRoot) })
 
 	enq := &lateEnqueuer{}
@@ -350,6 +357,9 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 			Mode:       "production",
 			ContentRoots: func(siteID uuid.UUID) (string, string, string, error) {
 				return contentStore.ContentRoot(siteID), contentStore.ConfigRoot(siteID), contentStore.FaviconRoot(siteID), nil
+			},
+			MaterializeContent: func(ctx context.Context, build model.Build, target string) (string, string, string, error) {
+				return contentbind.MaterializeWithMedia(ctx, contentStore, nil, prodSt.PostMedia, build.SiteID, store.IndependentSources(), target)
 			},
 			Requirements: buildrunner.SiteRequirements{Capabilities: []string{"blog"}, URLConventions: []string{"posts", "blog-rss", "sitemap"}},
 		})
@@ -389,8 +399,13 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	selectThemeForSite(t, c, mustUUID(siteID), themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// Content edits through the API.
-	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", postBody("tech", "published-one", "Published One", false), nil); status != http.StatusCreated {
+	post := postBody("tech", "published-one", "Published One", false)
+	post["body"] = "## Hello\n\n![Image](/wp-content/uploads/2020/06/managed-1024x227.jpg)"
+	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", post, nil); status != http.StatusCreated {
 		t.Fatalf("create published post: %d %s", status, raw)
+	}
+	if status := postMediaUpload(t, c, "/api/v1/sites/"+siteID+"/posts/media", "/wp-content/uploads/2020/06/managed.jpg", tinyJPEGBytes); status != http.StatusCreated {
+		t.Fatalf("upload database image: %d", status)
 	}
 	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", postBody("tech", "hidden-draft", "Hidden Draft", true), nil); status != http.StatusCreated {
 		t.Fatalf("create draft post: %d %s", status, raw)
@@ -438,6 +453,14 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	}
 	if strings.Contains(string(allJSON), "hidden-draft") {
 		t.Fatal("draft post leaked into the frozen snapshot index")
+	}
+	image, err := os.ReadFile(filepath.Join(buildsRoot, build.ID, "publication-media", "wp-content", "uploads", "2020", "06", "managed.jpg"))
+	if err != nil || !bytes.Equal(image, tinyJPEGBytes) {
+		t.Fatalf("database image missing from frozen publication: %v", err)
+	}
+	image, err = os.ReadFile(filepath.Join(buildsRoot, build.ID, "publication-media", "wp-content", "uploads", "2020", "06", "managed-1024x227.jpg"))
+	if err != nil || !bytes.Equal(image, tinyJPEGBytes) {
+		t.Fatalf("legacy image link missing from frozen publication: %v", err)
 	}
 	friendsYAML, err := os.ReadFile(filepath.Join(snapshotPublic, "data", "friends.yaml"))
 	if err != nil {

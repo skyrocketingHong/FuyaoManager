@@ -4,7 +4,7 @@
  * bound to the typed API, the draft gate is visible, and viewers get no
  * create action.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	MemoryRouter,
 	Route,
@@ -13,16 +13,31 @@ import {
 	RouterProvider,
 	Outlet
 } from 'react-router-dom';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { App as AntApp, ConfigProvider } from 'antd';
-import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
-import PostsPage from '../src/pages/content/posts/PostsPage';
-import PostEditorPage from '../src/pages/content/posts/PostEditorPage';
-import PostVocabularyPage from '../src/pages/content/posts/PostVocabularyPage';
-import PostMediaPage from '../src/pages/content/posts/PostMediaPage';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import * as management from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
 import { initLocale } from '../src/lib/i18n';
+
+// rc-util otherwise gives every modal the same test-id, breaking dialog names.
+declare const process: { env: { NODE_ENV: string | undefined } };
+const originalNodeEnv = process.env.NODE_ENV;
+process.env.NODE_ENV = 'development';
+const [
+	{ App: AntApp, ConfigProvider },
+	{ PageHeaderProvider, usePageHeaderContent },
+	{ default: PostsPage },
+	{ default: PostEditorPage },
+	{ default: PostVocabularyPage },
+	{ default: PostMediaPage }
+] = await Promise.all([
+	import('antd'),
+	import('../src/components/PageHeader'),
+	import('../src/pages/content/posts/PostsPage'),
+	import('../src/pages/content/posts/PostEditorPage'),
+	import('../src/pages/content/posts/PostVocabularyPage'),
+	import('../src/pages/content/posts/PostMediaPage')
+]);
+afterAll(() => { process.env.NODE_ENV = originalNodeEnv; });
 
 vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	...(await importOriginal<object>()),
@@ -436,6 +451,10 @@ describe('PostsPage', () => {
 		const title = (await screen.findByLabelText('Title')) as HTMLInputElement;
 		await waitFor(() => expect(title.value).toBe('Hello'));
 		expect(title.closest('.post-editor-form')).toBeNull();
+		const bold = screen.getByRole('button', { name: 'Bold' });
+		bold.focus();
+		fireEvent.keyDown(bold, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Italic' }));
 		const body = screen.getByLabelText('Body (Markdown)') as HTMLTextAreaElement;
 		fireEvent.change(body, { target: { value: 'Hello world' } });
 		body.setSelectionRange(0, 5);
@@ -518,19 +537,12 @@ describe('PostsPage', () => {
 		);
 	});
 
-	it('imports categories, directories and tags into one scoped vocabulary', async () => {
+	it('shows existing categories, directories and tags without an import step', async () => {
 		const categories = [{ name: '技术', postCount: 1 }];
 		const directories = [{ slug: 'tech', title: '技术', postCount: 1 }];
 		const categoryGroups = [
 			{ name: 'tech', title: '技术', directory: 'tech', aliases: ['tech', '技术'], postCount: 1 }
 		];
-		const saved = {
-			version: 1 as const,
-			categories: ['tech', '技术'],
-			tags: ['Go'],
-			digest: 'sha256:' + 'e'.repeat(64),
-			canEdit: true
-		};
 		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
 			...emptyTaxonomy,
 			categories,
@@ -538,27 +550,18 @@ describe('PostsPage', () => {
 			categoryGroups,
 			tags: [{ name: 'Go', postCount: 1 }]
 		});
-		vi.mocked(management.putPostVocabulary).mockImplementationOnce(async () => {
-			vi.mocked(management.getPostVocabulary).mockResolvedValue({
-				vocabulary: saved,
-				etag: '"' + saved.digest + '"'
-			});
-			return { vocabulary: saved, etag: '"' + saved.digest + '"' };
-		});
 		mountPosts();
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
-		const importButton = await screen.findByRole('button', { name: 'Import existing terms' });
-		await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
-		fireEvent.click(importButton);
-		await waitFor(() =>
-			expect(management.putPostVocabulary).toHaveBeenCalledWith(
-				ownerSite.siteId,
-				{ version: 1, categories: ['tech', '技术'], tags: ['Go'] },
-				'"sha256:' + 'd'.repeat(64) + '"'
-			)
-		);
-		expect(screen.getAllByText('技术')).toHaveLength(1);
+		expect(await screen.findByText('技术')).toBeDefined();
+		expect(screen.queryByRole('button', { name: 'Import existing terms' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Add to vocabulary' })).toBeNull();
+		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
+		expect(await screen.findByText('Go')).toBeDefined();
+		fireEvent.change(screen.getByLabelText('Enter a tag'), { target: { value: 'Go' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+		expect(await screen.findByText('This term already exists.')).toBeDefined();
+		expect(management.putPostVocabulary).not.toHaveBeenCalled();
 	});
 
 	it('creates a directory through the scoped index ETag', async () => {
@@ -599,6 +602,60 @@ describe('PostsPage', () => {
 		expect(await screen.findByText('笔记')).toBeDefined();
 	});
 
+	it('renames a tag across its articles with each article ETag', async () => {
+		const tagged = { ...samplePost, tags: ['Go', 'Other'] };
+		vi.mocked(management.listPosts).mockResolvedValue({ posts: [tagged], total: 1 });
+		vi.mocked(management.getPost).mockResolvedValue({ post: tagged, etag: '"post-etag"' });
+		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+			...emptyTaxonomy, tags: [{ name: 'Go', postCount: 1 }, { name: 'Other', postCount: 1 }]
+		});
+		vi.mocked(management.putPost).mockImplementation(async (_target, _path, value) => {
+			vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+				...emptyTaxonomy, tags: [{ name: 'Rust', postCount: 1 }, { name: 'Other', postCount: 1 }]
+			});
+			return { post: { ...tagged, ...value }, etag: '"next"' };
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
+		const row = (await screen.findByText('Go')).closest('tr')!;
+		fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+		const editor = await screen.findByRole('dialog', { name: 'Edit tag' });
+		fireEvent.change(within(editor).getByLabelText('Enter a tag'), { target: { value: 'Rust' } });
+		fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+		const confirmation = await screen.findByRole('dialog', { name: 'Update the articles using this tag?' });
+		fireEvent.click(within(confirmation).getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(management.putPost).toHaveBeenCalledWith(
+			ownerSite.siteId, tagged.path, expect.objectContaining({ tags: ['Rust', 'Other'], body: tagged.body }), '"post-etag"'
+		));
+		await waitFor(() => expect(management.putPostVocabulary).toHaveBeenCalledWith(
+			ownerSite.siteId, { version: 1, categories: [], tags: ['Rust'] }, '"sha256:' + 'd'.repeat(64) + '"'
+		));
+	});
+
+	it('keeps the old tag when an article changed concurrently', async () => {
+		const tagged = { ...samplePost, tags: ['Go'] };
+		vi.mocked(management.listPosts).mockResolvedValue({ posts: [tagged], total: 1 });
+		vi.mocked(management.getPost).mockResolvedValue({ post: tagged, etag: '"stale"' });
+		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+			...emptyTaxonomy, tags: [{ name: 'Go', postCount: 1 }]
+		});
+		vi.mocked(management.putPost).mockRejectedValue(new Error('conflict'));
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
+		const row = (await screen.findByText('Go')).closest('tr')!;
+		fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+		const editor = await screen.findByRole('dialog', { name: 'Edit tag' });
+		fireEvent.change(within(editor).getByLabelText('Enter a tag'), { target: { value: 'Rust' } });
+		fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+		const confirmation = await screen.findByRole('dialog', { name: 'Update the articles using this tag?' });
+		fireEvent.click(within(confirmation).getByRole('button', { name: 'Save' }));
+		expect(await screen.findByText('Updated: 0; failed: 1; articles still using the old tag: 1.')).toBeDefined();
+		expect(management.putPostVocabulary).not.toHaveBeenCalled();
+		expect(screen.getByText('Go')).toBeDefined();
+	});
+
 	it('does not overwrite an index created after the directory list was loaded', async () => {
 		const existing = {
 			slug: 'notes',
@@ -636,7 +693,7 @@ describe('PostsPage', () => {
 		mountPosts();
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('radio', { name: 'Media' }));
-		const folderButton = await screen.findByRole('button', { name: 'Import folder' });
+		const folderButton = await screen.findByRole('button', { name: 'Upload folder' });
 		await waitFor(() => expect((folderButton as HTMLButtonElement).disabled).toBe(false));
 		const image = new File(['image'], 'image-1.png', { type: 'image/png' });
 		Object.defineProperty(image, 'webkitRelativePath', {

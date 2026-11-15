@@ -6,17 +6,39 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/contentbind"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
-// ASVS 8.2.1/8.2.2: resolve the caller's authorized posts source for every request.
+func (a *API) postMediaTarget(id uuid.UUID, write bool) (*content.Store, uuid.UUID, error) {
+	if resolver, ok := a.content.(interface {
+		PostMediaTarget(uuid.UUID, bool) (*content.Store, uuid.UUID, error)
+	}); ok {
+		return resolver.PostMediaTarget(id, write)
+	}
+	if legacy, ok := a.content.(*content.Store); ok {
+		return legacy, id, nil
+	}
+	return nil, id, content.ErrNotFound
+}
+
+// Resolve the caller's authorized posts source for every request.
 func (a *API) handleListPostMedia(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
 	target, ok := a.contentTarget(w, r, auth, false)
 	if !ok {
 		return
 	}
-	items, err := a.content.ListPostMedia(target.ID)
+	legacy, scope, err := a.postMediaTarget(target.ID, false)
+	if err == nil {
+		err = contentbind.SyncPostMedia(r.Context(), legacy, a.store.PostMedia, scope)
+	}
+	if err != nil {
+		writeContentError(w, err, "Failed to read post media.")
+		return
+	}
+	items, err := a.store.PostMedia.List(r.Context(), scope)
 	if err != nil {
 		writeContentError(w, err, "Failed to list post media.")
 		return
@@ -29,7 +51,13 @@ func (a *API) handleGetPostMedia(w http.ResponseWriter, r *http.Request, auth st
 	if !ok {
 		return
 	}
-	data, kind, err := a.content.ReadPostMedia(target.ID, r.URL.Query().Get("path"))
+	path := r.URL.Query().Get("path")
+	legacy, scope, err := a.postMediaTarget(target.ID, false)
+	if err != nil {
+		writeContentError(w, err, "Failed to read post media.")
+		return
+	}
+	data, kind, err := contentbind.ReadPostMedia(r.Context(), legacy, a.store.PostMedia, scope, path)
 	if err != nil {
 		writeContentError(w, err, "Failed to read post media.")
 		return
@@ -65,13 +93,30 @@ func (a *API) handleImportPostMedia(w http.ResponseWriter, r *http.Request, auth
 		return
 	}
 	defer file.Close()
-	item, err := a.content.StorePostMedia(target.ID, r.FormValue("path"), file, header.Size)
+	item, data, _, err := content.PreparePostMedia(r.FormValue("path"), file, header.Size)
 	if errors.Is(err, content.ErrTooLarge) {
 		writeProblem(w, http.StatusRequestEntityTooLarge, "request_too_large", "The upload exceeds the size limit.")
 		return
 	}
 	if err != nil {
 		writeContentError(w, err, "Failed to import post media.")
+		return
+	}
+	legacy, scope, err := a.postMediaTarget(target.ID, true)
+	if err == nil {
+		var existing []byte
+		existing, _, err = legacy.ReadPostMedia(scope, item.Path)
+		if errors.Is(err, content.ErrNotFound) {
+			err = nil
+		} else if err == nil && !bytes.Equal(existing, data) {
+			err = content.ErrExists
+		}
+	}
+	if err == nil {
+		err = a.store.PostMedia.Put(r.Context(), scope, item.Path, data)
+	}
+	if err != nil {
+		writeContentError(w, err, "Failed to store post media.")
 		return
 	}
 	writeJSON(w, http.StatusCreated, item)

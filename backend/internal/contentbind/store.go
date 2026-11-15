@@ -108,6 +108,11 @@ func (s *Store) ListPostMedia(id uuid.UUID) ([]content.PostMedia, error) {
 	return t.ListPostMedia(k)
 }
 
+// PostMediaTarget resolves the physical legacy source and database scope together.
+func (s *Store) PostMediaTarget(id uuid.UUID, write bool) (*content.Store, uuid.UUID, error) {
+	return s.target(id, "posts", write)
+}
+
 func (s *Store) ReadPostMedia(id uuid.UUID, path string) ([]byte, string, error) {
 	t, k, err := s.target(id, "posts", false)
 	if err != nil {

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -434,6 +433,9 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, or
 		if d.IsDir() {
 			return nil
 		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
+		}
 		if !strings.HasSuffix(path, ".md") || strings.HasPrefix(d.Name(), "_") {
 			return nil
 		}
@@ -445,7 +447,7 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, or
 		if !ValidPostPath(rel) {
 			return nil // section files (_index.md) and odd shapes are not editable posts
 		}
-		data, readErr := os.ReadFile(path)
+		data, _, readErr := s.ReadFile(siteID, RootContent, "posts/"+rel)
 		if readErr != nil {
 			return readErr
 		}

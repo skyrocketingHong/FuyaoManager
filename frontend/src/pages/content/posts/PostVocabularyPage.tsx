@@ -6,6 +6,7 @@ import DataTable from '../../../components/DataTable';
 import { usePageHeader } from '../../../components/PageHeader';
 import { TablePanel } from '../../../components/Panel';
 import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
+import { updatePostTags } from '../../../features/posts/manageTags';
 import {
 	getPostDirectory,
 	getPostTaxonomy,
@@ -18,6 +19,7 @@ import {
 } from '../../../lib/api/management';
 import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../../lib/i18n/errors';
+import { currentAuthGeneration } from '../../../lib/api/client';
 import { t, type MessageKey } from '../../../lib/i18n';
 
 type CategoryGroup = NonNullable<PostTaxonomy['categoryGroups']>[number];
@@ -61,6 +63,7 @@ export default function PostVocabularyPage() {
 	const [query, setQuery] = useState('');
 	const [input, setInput] = useState('');
 	const [directory, setDirectory] = useState<DirectoryDraft | null>(null);
+	const [tagDraft, setTagDraft] = useState<{ original: string; value: string } | null>(null);
 	const [taxonomy, setTaxonomy] = useState<PostTaxonomy | null>(null);
 	const [vocabulary, setVocabulary] = useState<PostVocabulary | null>(null);
 	const [etag, setEtag] = useState('');
@@ -76,7 +79,8 @@ export default function PostVocabularyPage() {
 		(directory.creating
 			? !!directory.slug.trim() || !!directory.title.trim()
 			: directory.title !== directory.originalTitle);
-	useUnsavedGuard(input.trim() !== '' || directoryDirty || saving);
+	const tagDirty = !!tagDraft && tagDraft.original !== tagDraft.value;
+	useUnsavedGuard(input.trim() !== '' || directoryDirty || tagDirty || saving);
 
 	const load = useCallback(() => {
 		if (!target) return;
@@ -111,6 +115,7 @@ export default function PostVocabularyPage() {
 		setEtag('');
 		setInput('');
 		setDirectory(null);
+		setTagDraft(null);
 		setQuery('');
 		setSaving(false);
 		load();
@@ -145,6 +150,14 @@ export default function PostVocabularyPage() {
 
 	function update(names: string[], remove: boolean) {
 		if (!vocabulary || !names.length) return;
+		if (
+			!remove &&
+			kind === 'tags' &&
+			names.some((name) => taxonomy?.tags.some((term) => term.name === name))
+		) {
+			void messageApi.warning(t('taxonomy.exists'));
+			return;
+		}
 		const existing = vocabulary[kind];
 		const next = remove
 			? existing.filter((entry) => !names.includes(entry))
@@ -163,23 +176,58 @@ export default function PostVocabularyPage() {
 		);
 	}
 
-	function importExisting() {
-		if (!taxonomy || !vocabulary) return;
-		const groups = taxonomy.categoryGroups ?? fallbackGroups(taxonomy);
-		const categories = Array.from(
-			new Set([...vocabulary.categories, ...groups.flatMap((group) => group.aliases)])
-		);
-		const tags = Array.from(
-			new Set([...vocabulary.tags, ...taxonomy.tags.map((term) => term.name)])
-		);
-		if (
-			categories.length === vocabulary.categories.length &&
-			tags.length === vocabulary.tags.length
-		) {
-			void messageApi.info(t('taxonomy.imported'));
+	async function changeTag(from: string, to: string | null) {
+		if (!target || !vocabulary || !editable || saving) return;
+		const current = scopeEpoch.current;
+		const generation = currentAuthGeneration();
+		const isCurrent = () => current === scopeEpoch.current && generation === currentAuthGeneration();
+		setSaving(true);
+		let changed = 0;
+		try {
+			const result = await updatePostTags(target, from, to, isCurrent);
+			changed = result.changed;
+			if (!isCurrent()) return;
+			const latest = await getPostTaxonomy(target);
+			if (!isCurrent()) return;
+			const remaining = latest.tags.find((tag) => tag.name === from)?.postCount ?? 0;
+			if (result.failed || remaining) {
+				void messageApi.warning(t('taxonomy.tagPartial', { changed, failed: result.failed, remaining }));
+			} else {
+				const tags = vocabulary.tags.filter((tag) => tag !== from);
+				if (to && !tags.includes(to)) tags.push(to);
+				await putPostVocabulary(target, { version: 1, categories: vocabulary.categories, tags }, etag);
+				if (!isCurrent()) return;
+				void messageApi.success(t('taxonomy.tagUpdated', { count: result.changed }));
+			}
+			setTagDraft(null);
+			load();
+		} catch (err) {
+			if (isCurrent()) {
+				void messageApi.warning(changed ? t('taxonomy.tagUnverified', { count: changed }) : t(apiErrorKey(err) ?? 'error.generic'));
+				load();
+			}
+		} finally {
+			if (isCurrent()) setSaving(false);
+		}
+	}
+
+	function saveTag() {
+		if (!tagDraft) return;
+		const name = tagDraft.value.trim();
+		if (!name || name === tagDraft.original) {
+			if (name) setTagDraft(null);
 			return;
 		}
-		void saveTerms({ version: 1, categories, tags });
+		if (taxonomy?.tags.some((tag) => tag.name === name)) {
+			void messageApi.warning(t('taxonomy.exists'));
+			return;
+		}
+		modal.confirm({
+			title: t('taxonomy.tagRenameConfirm'),
+			okText: t('common.save'),
+			cancelText: t('admin.cancel'),
+			onOk: () => changeTag(tagDraft.original, name)
+		});
 	}
 
 	async function editDirectory(slug: string) {
@@ -233,22 +281,8 @@ export default function PostVocabularyPage() {
 			}
 			await putPostDirectory(target, slug, title, currentETag);
 			if (current !== scopeEpoch.current) return;
-			let registered = true;
-			if (directory.creating && !vocabulary.categories.includes(slug)) {
-				try {
-					await putPostVocabulary(
-						target,
-						{ version: 1, categories: [...vocabulary.categories, slug], tags: vocabulary.tags },
-						etag
-					);
-				} catch {
-					registered = false;
-				}
-			}
-			if (current !== scopeEpoch.current) return;
 			setDirectory(null);
-			if (registered) void messageApi.success(t('taxonomy.directorySaved'));
-			else void messageApi.warning(t('taxonomy.registrationFailed'));
+			void messageApi.success(t('taxonomy.directorySaved'));
 			load();
 		} catch (err) {
 			if (current !== scopeEpoch.current) return;
@@ -287,6 +321,21 @@ export default function PostVocabularyPage() {
 		});
 	}
 
+	function closeTag() {
+		if (saving) return;
+		if (!tagDirty) {
+			setTagDraft(null);
+			return;
+		}
+		modal.confirm({
+			title: t('draft.leaveTitle'),
+			okText: t('posts.discardLocal'),
+			cancelText: t('draft.leaveCancel'),
+			okButtonProps: { danger: true },
+			onOk: () => setTagDraft(null)
+		});
+	}
+
 	const tabs = <PostWorkspaceTabs current={kind} />;
 	const search = (
 		<Input.Search
@@ -316,7 +365,9 @@ export default function PostVocabularyPage() {
 						placeholder={t('taxonomy.tagInput')}
 						value={input}
 						onChange={(event) => setInput(event.target.value)}
-						onPressEnter={() => {
+						onPressEnter={(event) => {
+							if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+							event.preventDefault();
 							const name = input.trim();
 							if (name) update([name], false);
 						}}
@@ -332,9 +383,6 @@ export default function PostVocabularyPage() {
 					</Button>
 				</Space.Compact>
 			)}
-			<Button disabled={!editable || saving || !taxonomy} onClick={importExisting}>
-				{t('taxonomy.importAll')}
-			</Button>
 		</Space>
 	);
 	const header = usePageHeader({ leading: tabs, content: search, actions });
@@ -408,7 +456,7 @@ export default function PostVocabularyPage() {
 													{t('posts.edit')}
 												</Button>
 											) : null}
-											{registered ? (
+											{registered && !group.directory && group.postCount === 0 ? (
 												<Popconfirm
 													title={t('taxonomy.removeConfirm')}
 													onConfirm={() => update(group.aliases, true)}
@@ -417,15 +465,7 @@ export default function PostVocabularyPage() {
 														{t('taxonomy.remove')}
 													</Button>
 												</Popconfirm>
-											) : (
-												<Button
-													size="small"
-													disabled={!editable || saving}
-													onClick={() => update(group.aliases, false)}
-												>
-													{t('taxonomy.register')}
-												</Button>
-											)}
+											) : null}
 										</Space>
 									);
 								}
@@ -446,30 +486,43 @@ export default function PostVocabularyPage() {
 							{
 								title: t('admin.actions'),
 								width: 180,
-								render: (_, term) =>
-									vocabulary?.tags.includes(term.name) ? (
+								render: (_, term) => (
+									<Space wrap>
+										<Button size="small" disabled={!editable || saving} onClick={() => setTagDraft({ original: term.name, value: term.name })}>
+											{t('posts.edit')}
+										</Button>
 										<Popconfirm
-											title={t('taxonomy.removeConfirm')}
-											onConfirm={() => update([term.name], true)}
+											title={t('taxonomy.tagDeleteConfirm')}
+											onConfirm={() => changeTag(term.name, null)}
 										>
 											<Button danger size="small" disabled={!editable || saving}>
 												{t('taxonomy.remove')}
 											</Button>
 										</Popconfirm>
-									) : (
-										<Button
-											size="small"
-											disabled={!editable || saving}
-											onClick={() => update([term.name], false)}
-										>
-											{t('taxonomy.register')}
-										</Button>
-									)
+									</Space>
+								)
 							}
 						]}
 					/>
 				)}
 			</TablePanel>
+			<Modal
+				title={t('taxonomy.editTag')}
+				open={!!tagDraft}
+				onCancel={closeTag}
+				onOk={saveTag}
+				confirmLoading={saving}
+				okButtonProps={{ disabled: !tagDraft?.value.trim() }}
+				okText={t('common.save')}
+				cancelText={t('admin.cancel')}
+			>
+				<Input
+					aria-label={t('taxonomy.tagInput')}
+					value={tagDraft?.value ?? ''}
+					disabled={saving}
+					onChange={(event) => setTagDraft((draft) => draft ? { ...draft, value: event.target.value } : draft)}
+				/>
+			</Modal>
 			<Modal
 				title={t(directory?.creating ? 'taxonomy.addCategory' : 'taxonomy.editCategory')}
 				open={!!directory}

@@ -1926,7 +1926,8 @@ paths:
     get:
       operationId: listPostMedia
       tags: [Content]
-      summary: List image files available to the resolved posts source
+      summary: List images managed for the resolved posts source
+      description: Existing scoped image files are adopted into the media database automatically.
       security:
         - sessionCookie: []
       parameters:
@@ -1945,8 +1946,8 @@ paths:
     post:
       operationId: importPostMedia
       tags: [Content]
-      summary: Import one image without overwriting existing content
-      description: Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+      summary: Upload one image without overwriting existing content
+      description: Images are stored in the media database. Omit path to generate a URL, or provide a WordPress uploads path to preserve an existing link.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -1965,7 +1966,7 @@ paths:
                 path: { type: string }
       responses:
         '201':
-          description: Imported or identical existing image.
+          description: Uploaded or identical existing image.
           content:
             application/json:
               schema:
@@ -3851,7 +3852,8 @@ paths:
     get:
       operationId: platformListPostMedia
       tags: [Content]
-      summary: List image files available to the resolved posts source
+      summary: List images managed for the resolved posts source
+      description: Existing scoped image files are adopted into the media database automatically.
       security:
         - sessionCookie: []
       responses:
@@ -3868,8 +3870,8 @@ paths:
     post:
       operationId: platformImportPostMedia
       tags: [Content]
-      summary: Import one image without overwriting existing content
-      description: Omit path to generate a new URL, or provide an existing WordPress uploads path when importing legacy files.
+      summary: Upload one image without overwriting existing content
+      description: Images are stored in the media database. Omit path to generate a URL, or provide a WordPress uploads path to preserve an existing link.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3887,7 +3889,7 @@ paths:
                 path: { type: string }
       responses:
         '201':
-          description: Imported or identical existing image.
+          description: Uploaded or identical existing image.
           content:
             application/json:
               schema:

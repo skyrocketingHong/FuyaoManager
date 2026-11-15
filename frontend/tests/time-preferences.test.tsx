@@ -48,7 +48,10 @@ it('saves a custom pattern from the display settings', async () => {
 	);
 	const input = screen.getByLabelText('Date and time pattern');
 	fireEvent.change(input, { target: { value: 'YYYY/MM/DD HH:mm Z' } });
-	fireEvent.blur(input);
+	fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+	expect(timeSnapshot().dateTimeFormat).not.toBe('YYYY/MM/DD HH:mm Z');
+	fireEvent.keyUp(input, { key: 'Enter', keyCode: 229 });
+	fireEvent.keyDown(input, { key: 'Enter', keyCode: 13 });
 	await waitFor(() => expect(timeSnapshot().dateTimeFormat).toBe('YYYY/MM/DD HH:mm Z'));
 	expect(JSON.parse(localStorage.getItem(timeStorageKey)!).preset).toBe('custom');
 });

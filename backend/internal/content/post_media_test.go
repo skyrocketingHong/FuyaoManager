@@ -81,6 +81,21 @@ func TestPostMediaRejectsSymlinks(t *testing.T) {
 	}
 }
 
+func TestWordPressOriginalPath(t *testing.T) {
+	for _, test := range []struct{ path, want string }{
+		{"/wp-content/uploads/2020/05/photo-1024x227.png", "/wp-content/uploads/2020/05/photo.png"},
+		{"/wp-content/uploads/photo-320x240.JPG", "/wp-content/uploads/photo.JPG"},
+		{"/wp-content/uploads/photo.png", ""},
+		{"/wp-content/uploads/../photo-2x3.png", ""},
+		{"/images/photo-2x3.png", ""},
+	} {
+		got, ok := WordPressOriginalPath(test.path)
+		if got != test.want || ok != (test.want != "") {
+			t.Errorf("%q: got %q, %v", test.path, got, ok)
+		}
+	}
+}
+
 func TestPostMediaConcurrentImportsHaveOneWinner(t *testing.T) {
 	s, id := concurrencyWorld(t)
 	images := [][]byte{postTestPNG(t, color.Black), postTestPNG(t, color.White)}

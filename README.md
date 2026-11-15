@@ -52,7 +52,7 @@ platform development history preserved; see
   operator-approved recovery entry.
 - **In-browser site creation**: per-site content, config, and favicon trees
   provisioned on disk with explicit state and idempotent retry.
-- **Content authority**: posts with Markdown preview, generated contents, shared taxonomy and managed legacy image imports; friends,
+- **Content authority**: posts with Markdown preview, generated contents, shared taxonomy and database-backed media; friends,
   social links, visual site configuration with a write-only AMap security
   code, footprint points — all writes go through one jailed content store
   with digest ETags and atomic writes.

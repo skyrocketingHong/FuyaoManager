@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
 import { Button, Form, Input, Select, Space, Tooltip } from 'antd';
 import { Info } from 'lucide-react';
 import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
@@ -28,6 +28,11 @@ export default function DateTimeSettings() {
 	}, [preferences.dateFormat, preferences.dateTimeFormat]);
 	function commit() {
 		setTimePreferences({ dateFormat, dateTimeFormat });
+	}
+	function commitOnEnter(event: KeyboardEvent<HTMLInputElement>) {
+		if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+		event.preventDefault();
+		commit();
 	}
 	return (
 		<section className="appearance-section datetime-settings" aria-labelledby="datetime-title">
@@ -91,9 +96,7 @@ export default function DateTimeSettings() {
 								maxLength={100}
 								onChange={(event) => setDateFormat(event.target.value)}
 								onBlur={commit}
-								onPressEnter={(event) => {
-									if (!event.nativeEvent.isComposing) commit();
-								}}
+								onPressEnter={commitOnEnter}
 							/>
 						</Form.Item>
 						<Form.Item label={t('datetime.dateTimeFormat')}>
@@ -103,9 +106,7 @@ export default function DateTimeSettings() {
 								maxLength={100}
 								onChange={(event) => setDateTimeFormat(event.target.value)}
 								onBlur={commit}
-								onPressEnter={(event) => {
-									if (!event.nativeEvent.isComposing) commit();
-								}}
+								onPressEnter={commitOnEnter}
 							/>
 						</Form.Item>
 					</>

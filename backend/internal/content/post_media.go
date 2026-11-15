@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -24,6 +25,20 @@ import (
 type PostMedia struct {
 	Path string `json:"path"`
 	Size int64  `json:"size"`
+}
+
+var wordpressSizeSuffix = regexp.MustCompile(`(?i)-[0-9]{1,5}x[0-9]{1,5}(\.(?:jpe?g|png|webp|gif))$`)
+
+// WordPressOriginalPath maps a generated size URL to its unsized original.
+func WordPressOriginalPath(publicPath string) (string, bool) {
+	if !strings.HasPrefix(publicPath, "/wp-content/uploads/") || CheckPostMediaPath(publicPath) != nil {
+		return "", false
+	}
+	original := wordpressSizeSuffix.ReplaceAllString(publicPath, "$1")
+	if original == publicPath || CheckPostMediaPath(original) != nil {
+		return "", false
+	}
+	return original, true
 }
 
 func postMediaName(value string, upload bool) (string, error) {
@@ -140,42 +155,68 @@ func (s *Store) ReadPostMedia(id uuid.UUID, publicPath string) ([]byte, string, 
 	return data, kind, err
 }
 
-// StorePostMedia imports one image without overwriting different existing bytes.
-// ASVS 5.2.1/5.2.2: bound and sniff uploads; Linkat makes creation atomic.
-func (s *Store) StorePostMedia(id uuid.UUID, publicPath string, reader io.Reader, sizeHint int64) (PostMedia, error) {
+// PreparePostMedia bounds and sniffs an image before storing it.
+func PreparePostMedia(publicPath string, reader io.Reader, sizeHint int64) (PostMedia, []byte, string, error) {
 	if sizeHint > maxUploadBytes {
-		return PostMedia{}, ErrTooLarge
+		return PostMedia{}, nil, "", ErrTooLarge
 	}
 	data, err := io.ReadAll(io.LimitReader(reader, maxUploadBytes+1))
 	if err != nil {
-		return PostMedia{}, err
+		return PostMedia{}, nil, "", err
 	}
 	if len(data) > int(maxUploadBytes) {
-		return PostMedia{}, ErrTooLarge
+		return PostMedia{}, nil, "", ErrTooLarge
 	}
 	if len(data) == 0 {
-		return PostMedia{}, fieldError("file", "must not be empty")
+		return PostMedia{}, nil, "", fieldError("file", "must not be empty")
 	}
 	if publicPath == "" {
 		kind := http.DetectContentType(data[:min(len(data), 512)])
 		ext := map[string]string{"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif"}[kind]
 		if ext == "" {
-			return PostMedia{}, fieldError("file", "unsupported image type")
+			return PostMedia{}, nil, "", fieldError("file", "unsupported image type")
 		}
 		now := time.Now().UTC()
 		publicPath = fmt.Sprintf("/wp-content/uploads/%04d/%02d/%s%s", now.Year(), now.Month(), randomHexName(20), ext)
 	}
 	rel, err := postMediaName(publicPath, true)
 	if err != nil {
+		return PostMedia{}, nil, "", err
+	}
+	kind, err := mediaType(data, rel)
+	if err != nil {
+		return PostMedia{}, nil, "", err
+	}
+	return PostMedia{Path: publicPath, Size: int64(len(data))}, data, kind, nil
+}
+
+func ValidatePostMedia(publicPath string, data []byte) (string, error) {
+	rel, err := postMediaName(publicPath, false)
+	if err != nil {
+		return "", err
+	}
+	if len(data) > int(maxUploadBytes) {
+		return "", ErrTooLarge
+	}
+	return mediaType(data, rel)
+}
+
+func CheckPostMediaPath(publicPath string) error {
+	_, err := postMediaName(publicPath, false)
+	return err
+}
+
+// StorePostMedia retains the file-backed path for existing content.
+func (s *Store) StorePostMedia(id uuid.UUID, publicPath string, reader io.Reader, sizeHint int64) (PostMedia, error) {
+	item, data, _, err := PreparePostMedia(publicPath, reader, sizeHint)
+	if err != nil {
 		return PostMedia{}, err
 	}
-	if _, err := mediaType(data, rel); err != nil {
-		return PostMedia{}, err
-	}
+	rel := strings.TrimPrefix(item.Path, "/")
 	if err := s.withFileLock(id, "post-media", rel, func() error { return s.writePostMedia(id, rel, data) }); err != nil {
 		return PostMedia{}, err
 	}
-	return PostMedia{Path: publicPath, Size: int64(len(data))}, nil
+	return item, nil
 }
 
 func (s *Store) writePostMedia(id uuid.UUID, rel string, data []byte) error {
