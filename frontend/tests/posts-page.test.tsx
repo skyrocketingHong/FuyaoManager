@@ -731,6 +731,35 @@ describe('PostsPage', () => {
 		}
 	);
 
+	it.each(['Beta 战士 👨‍🔬', 'Windows 10 Insider Preview 🐱‍👤', ' WWDC'])(
+		'edits the migrated Unicode category %s through its identifier', async (title) => {
+			const slug = 'category-0123456789abcdef';
+			vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+				...emptyTaxonomy,
+				categoryGroups: [{ name: slug, title, directory: slug, aliases: [slug, title], postCount: 0 }]
+			});
+			vi.mocked(management.getPostDirectory).mockResolvedValue({
+				directory: { slug, title, digest: 'digest', canEdit: true }, etag: '"category-etag"'
+			});
+			vi.mocked(management.putPostDirectory).mockResolvedValue({
+				directory: { slug, title: title + ' updated', digest: 'updated', canEdit: true }, etag: '"updated"'
+			});
+			mountPosts();
+			await screen.findByText('Hello');
+			fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
+			const row = (await screen.findByText(title)).closest('tr')!;
+			fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+			const editor = await screen.findByRole('dialog', { name: 'Edit category' });
+			const name = within(editor).getByLabelText('Display name') as HTMLInputElement;
+			expect(name.value).toBe(title);
+			fireEvent.change(name, { target: { value: title + ' updated' } });
+			fireEvent.click(within(editor).getByRole('button', { name: 'Save' }));
+			await waitFor(() => expect(management.putPostDirectory).toHaveBeenCalledWith(
+				ownerSite.siteId, slug, title + ' updated', '"category-etag"'
+			));
+		}
+	);
+
 	it('does not overwrite an index created after the directory list was loaded', async () => {
 		const existing = {
 			slug: 'notes',

@@ -180,6 +180,46 @@ func containsString(values []string, expected string) bool {
 	return false
 }
 
+func TestDatabaseBlogMigratedUnicodeCategoriesAreEditable(t *testing.T) {
+	w := newWorkspaceTestWorld(t)
+	names := []string{"Beta 战士 👨‍🔬", "Windows 10 Insider Preview 🐱‍👤", " WWDC"}
+	_, _, err := w.library.SavePostVocabulary(content.PlatformScopeID,
+		content.PostVocabulary{Version: 1, Categories: names, Tags: []string{}}, content.Digest(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := contentbind.InitializeDatabasePosts(context.Background(), w.env.pool, w.local, w.library, w.env.store.Blog, w.env.store.PostMedia); err != nil {
+		t.Fatal(err)
+	}
+	taxonomy, err := w.library.GetPostTaxonomy(content.PlatformScopeID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range names {
+		var slug string
+		for _, group := range taxonomy.CategoryGroups {
+			if group.Title == name {
+				slug = group.Directory
+				break
+			}
+		}
+		if !content.ValidPostCategory(slug) {
+			t.Fatalf("migrated category has no editable identifier: %q", name)
+		}
+		path := "/api/v1/content/posts/directories/" + slug
+		header, _ := workspaceRequest(t, w.client, "GET", path, nil, "", 200)
+		saved, raw := workspaceRequest(t, w.client, "PUT", path, map[string]string{"title": name + " updated"}, header.Get("ETag"), 200)
+		var category content.PostDirectoryDocument
+		if err := json.Unmarshal(raw, &category); err != nil || category.Title != name+" updated" {
+			t.Fatalf("migrated category title was not saved: %v", err)
+		}
+		workspaceRequest(t, w.client, "PUT", path, map[string]string{"title": name}, header.Get("ETag"), 412)
+		if saved.Get("ETag") == header.Get("ETag") {
+			t.Fatal("updated category retained its old revision")
+		}
+	}
+}
+
 func TestDatabaseBlogBuildIgnoresChangedLegacyMedia(t *testing.T) {
 	w := newWorkspaceTestWorld(t)
 	site := w.createSite(t, "database-blog-media")
