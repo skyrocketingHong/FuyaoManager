@@ -62,6 +62,7 @@ first-install recovery; it is not presented as a verified rollback candidate.
 ## Installation and configuration
 
 Initial installation is an operator action. Use a successful CI prerelease,
+with Python 3 and PostgreSQL client tools compatible with the server installed.
 verify its asset digest, and preserve the old application and a database backup
 before switching. The supervisor's `stage` operator command uses the same package
 verifier as routine updates:

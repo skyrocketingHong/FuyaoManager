@@ -29,7 +29,7 @@ GitHub Actions 使用 PostgreSQL 验证后端，验证并构建一次前端，�
 
 ## 安装与配置
 
-首次安装由运维执行。从成功 CI 预发布版本取得产物并验证资产摘要，切换前保留旧程序及数据库备份。管理器的 `stage` 运维命令与日常更新使用相同的程序包校验器：
+首次安装由运维执行，服务器需安装 Python 3 及与数据库服务器兼容的 PostgreSQL 客户端工具。从成功 CI 预发布版本取得产物并验证资产摘要，切换前保留旧程序及数据库备份。管理器的 `stage` 运维命令与日常更新使用相同的程序包校验器：
 
 ```text
 fuyao-manager-updater stage ARCHIVE NEW_RELEASE_DIR OWNER/REPO COMMIT RUN_ID ATTEMPT BRANCH --verified-download

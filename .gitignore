@@ -203,3 +203,6 @@ site/static/wp-content/**
 .mimosa/
 .v2c/
 .video_agent/
+
+# Python maintenance tests
+scripts/**/__pycache__/
