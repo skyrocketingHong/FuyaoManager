@@ -266,6 +266,18 @@ func TestDatabaseBlogImportRejectsUnsupportedResources(t *testing.T) {
 	}
 }
 
+func TestDatabaseBlogImportRejectsHiddenDirectories(t *testing.T) {
+	w := newWorkspaceTestWorld(t)
+	root := w.library.ContentRoot(content.PlatformScopeID)
+	workspaceWrite(t, filepath.Join(root, "posts/.drafts/hidden.md"), []byte("hidden article"))
+	if err := w.env.store.Blog.ImportLegacyScope(context.Background(), w.library, content.PlatformScopeID); err == nil || !strings.Contains(err.Error(), "unsupported hidden blog directory") {
+		t.Fatalf("hidden directory was silently omitted: %v", err)
+	}
+	if imported, err := w.env.store.Blog.Imported(context.Background(), content.PlatformScopeID); err != nil || imported {
+		t.Fatalf("partial import marker: %v %v", imported, err)
+	}
+}
+
 func TestDatabaseBlogImportRejectsSymlinkedRoot(t *testing.T) {
 	w := newWorkspaceTestWorld(t)
 	root := filepath.Join(w.library.ContentRoot(content.PlatformScopeID), "posts")

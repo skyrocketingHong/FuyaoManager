@@ -74,7 +74,7 @@ func scanLegacyBlog(root string) ([]string, []string, error) {
 		rel = filepath.ToSlash(rel)
 		if entry.IsDir() {
 			if strings.HasPrefix(entry.Name(), ".") {
-				return fs.SkipDir
+				return fmt.Errorf("unsupported hidden blog directory: %s", rel)
 			}
 			if !validPublicationPath(rel) {
 				return fmt.Errorf("invalid category path: %s", rel)
