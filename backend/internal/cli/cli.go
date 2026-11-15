@@ -587,7 +587,7 @@ func runInitAdmin(ctx context.Context, args []string) error {
 	// The code is a secret: printed once to the terminal, never logged.
 	fmt.Printf("administrator %q registered (pending initialization)\n", *username)
 	fmt.Printf("initialization code: %s\n", code)
-	fmt.Printf("code expires:        %s\n", expiresAt.Local().Format(time.RFC3339))
+	fmt.Printf("code expires:        %s\n", expiresAt.UTC().Format(time.RFC3339))
 	fmt.Println("Open the admin console in a browser and enter this code once to activate the account and sign in.")
 	return nil
 }
@@ -615,7 +615,7 @@ func runLoginCode(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("login code for %q: %s\n", *username, code)
-	fmt.Printf("code expires:       %s\n", expiresAt.Local().Format(time.RFC3339))
+	fmt.Printf("code expires:       %s\n", expiresAt.UTC().Format(time.RFC3339))
 	fmt.Println("Enter this code in the admin console to sign in. It can be used once.")
 	return nil
 }
@@ -671,7 +671,7 @@ func runBootstrapAdmin(ctx context.Context, args []string) error {
 	// logged.
 	fmt.Printf("administrator %q registered (pending passkey enrollment)\n", *username)
 	fmt.Printf("enrollment permit: %s\n", code)
-	fmt.Printf("permit expires:    %s\n", expiresAt.Local().Format(time.RFC3339))
+	fmt.Printf("permit expires:    %s\n", expiresAt.UTC().Format(time.RFC3339))
 	fmt.Println("Enter this permit in the admin console to register your passkey. It can be used once.")
 	return nil
 }
