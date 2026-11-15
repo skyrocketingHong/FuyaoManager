@@ -308,7 +308,7 @@ it('shows server content counts on an adopted static site without fabricated tra
 	expect(screen.queryByText(/Cloudflare|visitors|traffic/i)).toBeNull();
 });
 
-it('resets pagination, query, and search display when the content scope switches', async () => {
+it('resets loaded batches, query, and search display when the content scope switches', async () => {
 	const platformPost: content.Post = {
 		path: 'tech/platform.md',
 		category: 'tech',
@@ -351,7 +351,7 @@ it('resets pagination, query, and search display when the content scope switches
 	mount(<ScopeHarness />, '/content/posts');
 	await screen.findByText('Platform post');
 
-	// Page two of the platform scope stays pending while the scope switches.
+	// The next platform batch stays pending while the scope switches.
 	let resolveLate!: (value: { posts: content.Post[]; total: number }) => void;
 	vi.mocked(content.listPosts).mockImplementationOnce(
 		() =>
@@ -359,7 +359,7 @@ it('resets pagination, query, and search display when the content scope switches
 				resolveLate = resolve;
 			})
 	);
-	fireEvent.click(screen.getByLabelText('Page 2'));
+	fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
 	await waitFor(() =>
 		expect(content.listPosts).toHaveBeenLastCalledWith({ type: 'platform' }, '', 2, 20)
 	);
@@ -372,9 +372,7 @@ it('resets pagination, query, and search display when the content scope switches
 	vi.mocked(content.listPosts).mockResolvedValueOnce({ posts: [sitePost], total: 1 });
 
 	fireEvent.click(screen.getByText('switch-scope'));
-	await waitFor(() =>
-		expect(content.listPosts).toHaveBeenLastCalledWith('site', '', 1, 20)
-	);
+	await waitFor(() => expect(content.listPosts).toHaveBeenLastCalledWith('site', '', 1, 20));
 
 	// The late platform response must not cover the new scope's data.
 	resolveLate({ posts: [latePost], total: 30 });
@@ -383,7 +381,7 @@ it('resets pagination, query, and search display when the content scope switches
 	expect(screen.queryByText('Platform post')).toBeNull();
 
 	// The page and the search display were reset with the scope.
-	const search = (screen.getByPlaceholderText('Search title / slug / tag') as HTMLInputElement);
+	const search = screen.getByPlaceholderText('Search title / slug / tag') as HTMLInputElement;
 	expect(search.value).toBe('');
 	expect(screen.queryByLabelText('Page 2')).toBeNull();
 });

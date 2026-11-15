@@ -13,7 +13,7 @@ import {
 	RouterProvider,
 	Outlet
 } from 'react-router-dom';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
 import PostsPage from '../src/pages/sites/PostsPage';
@@ -209,7 +209,7 @@ describe('PostsPage', () => {
 		expect(screen.getAllByRole('button', { name: /New post/ })).toHaveLength(1);
 	});
 
-	it('paginates with a shared page size and resets the page on search and size changes', async () => {
+	it('loads further batches without pagination and resets after search and size changes', async () => {
 		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 25 });
 		mountPosts();
 		await screen.findByText('Hello');
@@ -228,8 +228,9 @@ describe('PostsPage', () => {
 			])
 		);
 
-		// Page navigation keeps the query and the shared page size.
-		fireEvent.click(screen.getByLabelText('Page 2'));
+		// Loading more keeps the query and the selected batch size.
+		expect(screen.queryByLabelText('Page 2')).toBeNull();
+		fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
 		await waitFor(() =>
 			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
 				expect.anything(),
@@ -240,9 +241,9 @@ describe('PostsPage', () => {
 		);
 
 		// Changing the page size returns to page one and drives the same size.
-		fireEvent.mouseDown(screen.getByRole('combobox'));
+		fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Posts per load' }));
 		fireEvent.click(
-			await screen.findByText('50 / page', { selector: '.ant-select-item-option-content' })
+			await screen.findByText('50 posts', { selector: '.ant-select-item-option-content' })
 		);
 		await waitFor(() =>
 			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
@@ -262,6 +263,41 @@ describe('PostsPage', () => {
 		fireEvent.click(retry);
 		await screen.findByText('Hello');
 		expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+	});
+
+	it('loads the next batch when the last article enters the viewport', async () => {
+		let trigger: IntersectionObserverCallback | undefined;
+		const observe = vi.fn();
+		vi.stubGlobal(
+			'IntersectionObserver',
+			class {
+				constructor(callback: IntersectionObserverCallback) {
+					trigger = callback;
+				}
+				observe = observe;
+				disconnect = vi.fn();
+			}
+		);
+		const first = Array.from({ length: 20 }, (_, index) => ({
+			...samplePost,
+			path: `tech/${index}.md`,
+			title: `Post ${index}`
+		}));
+		vi.mocked(management.listPosts)
+			.mockResolvedValueOnce({ posts: first, total: 21 })
+			.mockResolvedValueOnce({
+				posts: [{ ...samplePost, path: 'tech/20.md', title: 'Post 20' }],
+				total: 21
+			});
+		mountPosts();
+		await screen.findByText('Post 19');
+		await waitFor(() => expect(observe).toHaveBeenCalled());
+		act(() =>
+			trigger?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+		);
+		expect(await screen.findByText('Post 20')).toBeDefined();
+		expect(management.listPosts).toHaveBeenLastCalledWith(ownerSite.siteId, '', 2, 20);
+		expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
 	});
 
 	it('picks taxonomy candidates in the editor and saves arrays, refreshing after the save', async () => {

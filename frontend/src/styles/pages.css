@@ -144,10 +144,9 @@
 }
 .friends-row {
 	display: grid;
-	grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(
-			120px,
-			1fr
-		) auto;
+	grid-template-columns:
+		minmax(110px, 1fr) minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(120px, 1fr)
+		auto;
 	align-items: center;
 	gap: var(--space-2);
 	margin-bottom: var(--space-2);
@@ -181,6 +180,11 @@
 .posts-search {
 	width: 260px;
 	max-width: 100%;
+}
+.posts-load-more {
+	display: flex;
+	justify-content: center;
+	padding: var(--space-2);
 }
 
 @media (max-width: 991px) {
