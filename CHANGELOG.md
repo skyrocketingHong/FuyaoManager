@@ -7,6 +7,13 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.9.0 - 2026-11-15
+
+- Store blog articles, categories, tags and images in PostgreSQL. The first startup imports existing content and preserves publication paths and unmodeled frontmatter; builds generate private Markdown and media snapshots.
+- Use a stable article ID and an editable, scope-unique slug. The article list displays its categories and slug; category and tag management have dedicated routes.
+- Rename or remove tags and their article references in one transaction, including Unicode names. The split editor and preview now have matching heights.
+- Requires database migration `0021` and a backup before the operator-controlled upgrade. Application rollback to the previous file-based version is unavailable; published website releases remain unchanged.
+
 ## 0.8.1 - 2026-11-15
 
 - Fixed the Markdown editor width and synchronized split-view scrolling and cursor position. Expanded the formatting toolbar.
