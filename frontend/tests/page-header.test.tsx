@@ -8,7 +8,11 @@ import { describe, expect, it, beforeAll, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { ConfigProvider } from 'antd';
-import { PageHeaderProvider, usePageHeader, usePageHeaderContent } from '../src/components/PageHeader';
+import {
+	PageHeaderProvider,
+	usePageHeader,
+	usePageHeaderContent
+} from '../src/components/PageHeader';
 
 beforeAll(() => {
 	if (!window.matchMedia) {
@@ -34,6 +38,7 @@ function Slot() {
 	const header = usePageHeaderContent();
 	return (
 		<div>
+			<span data-testid="leading">{header?.leading}</span>
 			<span data-testid="content">{header?.content}</span>
 			<span data-testid="actions">{header?.actions}</span>
 		</div>
@@ -41,7 +46,14 @@ function Slot() {
 }
 
 function Publisher({ tag, enabled = true }: { tag: string; enabled?: boolean }) {
-	usePageHeader({ content: <span>content-{tag}</span>, actions: <button>action-{tag}</button> }, enabled);
+	usePageHeader(
+		{
+			leading: <button>back-{tag}</button>,
+			content: <span>content-{tag}</span>,
+			actions: <button>action-{tag}</button>
+		},
+		enabled
+	);
 	return null;
 }
 
@@ -62,6 +74,7 @@ describe('PageHeader slots', () => {
 	it('renders published content and actions into the top bar', () => {
 		render(<Harness scope="u1:/sites" pages={['a']} />);
 		expect(screen.getByText('content-a')).toBeDefined();
+		expect(screen.getByText('back-a')).toBeDefined();
 		expect(screen.getByText('action-a')).toBeDefined();
 	});
 

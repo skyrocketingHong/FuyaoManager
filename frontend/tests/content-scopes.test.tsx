@@ -72,6 +72,7 @@ function Header() {
 	const value = usePageHeaderContent();
 	return (
 		<div>
+			{value?.leading}
 			{value?.content}
 			{value?.actions}
 		</div>

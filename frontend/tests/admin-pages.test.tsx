@@ -240,7 +240,10 @@ it('requires confirmation before elevating a platform role', async () => {
 	vi.mocked(service.setUserRole).mockResolvedValue({ ...member, platformRole: 'admin' });
 	mount();
 	const drawer = await openMember();
-	await choose(within(drawer).getByRole('combobox', { name: 'Platform role' }), 'Platform administrator');
+	await choose(
+		within(drawer).getByRole('combobox', { name: 'Platform role' }),
+		'Platform administrator'
+	);
 	expect(service.setUserRole).not.toHaveBeenCalled();
 	const confirmation = await screen.findByRole('dialog', { name: 'Change platform role · member' });
 	fireEvent.click(within(confirmation).getByRole('button', { name: 'Confirm' }));
@@ -366,7 +369,6 @@ it('filters logs by outcome and expands metadata without inventing record detail
 	expect(await screen.findByText('No matching events')).toBeDefined();
 });
 
-
 // The real top bar renders page filters and actions exactly once and keeps
 // every control operable next to the locale, theme, account, and navigation
 // entries.
@@ -411,6 +413,10 @@ it('renders UsersPage filters and actions once in the real top bar and keeps the
 	// Typing keeps its value and the refresh still drives the query.
 	await screen.findByText('member');
 	const search = screen.getByLabelText('Search users');
+	expect(
+		screen.getByRole('button', { name: 'Create user' }).compareDocumentPosition(search) &
+			Node.DOCUMENT_POSITION_FOLLOWING
+	).toBeTruthy();
 	fireEvent.change(search, { target: { value: 'member' } });
 	expect((search as HTMLInputElement).value).toBe('member');
 	fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));

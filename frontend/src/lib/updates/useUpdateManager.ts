@@ -19,7 +19,7 @@ export function useUpdateManager() {
 		loading: boolean;
 	}>({ generation, data: null, error: '', loading: true });
 	const [busy, setBusy] = useState(false);
-	const [note, setNote] = useState('');
+	const [note, setNote] = useState<{ type: 'success' | 'warning'; text: string } | null>(null);
 	const current = useCallback(
 		() => mounted.current && generation === currentAuthGeneration(),
 		[generation]
@@ -51,7 +51,7 @@ export function useUpdateManager() {
 		mounted.current = true;
 		mutation.current = false;
 		setBusy(false);
-		setNote('');
+		setNote(null);
 		setState({ generation, data: null, error: '', loading: true });
 		const controller = new AbortController();
 		void refresh(controller.signal);
@@ -68,24 +68,28 @@ export function useUpdateManager() {
 		mutation.current = true;
 		sequence.current++;
 		setBusy(true);
-		setNote('');
+		setNote(null);
 		try {
 			const data = await manageUpdates(action);
 			if (!current()) return false;
 			setState({ generation, data, error: '', loading: false });
-			setNote(t(action.action === 'check' ? 'updates.checked' : 'updates.accepted'));
+			setNote({
+				type: 'success',
+				text: t(action.action === 'check' ? 'updates.checked' : 'updates.accepted')
+			});
 			return true;
 		} catch (cause) {
 			if (current()) {
 				const unknown =
 					action.action !== 'check' && (!(cause instanceof ApiError) || cause.status >= 500);
-				setNote(
-					unknown
+				setNote({
+					type: 'warning',
+					text: unknown
 						? t('updates.unknown')
 						: cause instanceof ApiError
-							? cause.detail
+							? cause.detail || t('updates.actionFailed')
 							: t('updates.actionFailed')
-				);
+				});
 				if (cause instanceof ApiError && cause.status === 403) void loadSession();
 			}
 			return false;

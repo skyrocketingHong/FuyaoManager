@@ -397,7 +397,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			</Button>
 		</Space>
 	);
-	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
+	const headerActive = usePageHeader({ leading: headerContent, actions: headerActions });
 	const dateRule = {
 		validator: async (_: unknown, value?: string) => {
 			if (value && !isValidPostDate(value)) throw new Error(t('posts.dateInvalid'));

@@ -108,26 +108,18 @@
 	color: var(--muted-foreground);
 	min-width: 0;
 }
-.topbar-identity {
-	display: flex;
-	align-items: center;
-	gap: var(--space-3);
+.topbar-page-leading {
 	min-width: 0;
-	flex: 1 1 auto;
-}
-.topbar-identity:empty {
-	display: none;
+	max-width: 100%;
 }
 .topbar-page-content {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2);
-	/* The floor keeps filter rows readable: when the first row cannot fit it
-	   any more, the whole filter block wraps onto its own line instead of
-	   being squeezed beside the session controls. */
-	min-width: min(360px, 100%);
-	flex: 1 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	flex: 0 1 auto;
 }
 .topbar-page-actions {
 	display: flex;
@@ -137,8 +129,8 @@
 	flex: 0 1 auto;
 	min-width: 0;
 	max-width: 100%;
-	margin-inline-start: auto;
 }
+.topbar-page-leading .ant-space,
 .topbar-page-content .ant-space,
 .topbar-page-actions .ant-space {
 	flex-wrap: wrap;

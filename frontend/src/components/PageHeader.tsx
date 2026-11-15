@@ -19,6 +19,7 @@ import {
 import { Segmented } from 'antd';
 
 export interface PageHeaderContent {
+	leading?: ReactNode;
 	content?: ReactNode;
 	actions?: ReactNode;
 }
@@ -67,11 +68,11 @@ export function PageHeaderProvider({ scope, children }: { scope: string; childre
 export function usePageHeader(value: PageHeaderContent, enabled = true): boolean {
 	const registration = useContext(RegistrationContext);
 	const owner = useId();
-	const { content, actions } = value;
+	const { leading, content, actions } = value;
 	useLayoutEffect(() => {
 		if (!enabled || !registration) return undefined;
-		return registration.publish(owner, registration.scope, { content, actions });
-	}, [registration, owner, enabled, content, actions]);
+		return registration.publish(owner, registration.scope, { leading, content, actions });
+	}, [registration, owner, enabled, leading, content, actions]);
 	return !!registration;
 }
 

@@ -1,7 +1,7 @@
 // Platform maintenance controls ported from robot-platform's
 // PlatformComponentsPage: header actions, facts, channel switches, confirmed
 // version selection and durable task polling, adapted to this console's API.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Empty, Input, Select, Space, Switch } from 'antd';
 import { RefreshCw } from 'lucide-react';
 import { Panel } from '../components/Panel';
@@ -18,12 +18,22 @@ const short = (value?: string) => (value ? value.slice(0, 12) : '—');
 const versionKey = (version: UpdateVersion) => `${version.runId}:${version.commit}`;
 
 export default function UpdatesPage() {
-	const { modal } = App.useApp();
+	const { modal, message } = App.useApp();
 	const manager = useUpdateManager();
 	const { data, busy, fresh } = manager;
 	const [selected, setSelected] = useState<string>();
 	const [token, setToken] = useState('');
 	const [confirmationError, setConfirmationError] = useState('');
+	const lastNotice = useRef<typeof manager.note>(null);
+	useEffect(() => {
+		if (!manager.note) {
+			lastNotice.current = null;
+			return;
+		}
+		if (lastNotice.current === manager.note) return;
+		lastNotice.current = manager.note;
+		void message.open({ type: manager.note.type, content: manager.note.text });
+	}, [manager.note, message]);
 	useEffect(() => {
 		setSelected(undefined);
 		setToken('');
@@ -68,7 +78,6 @@ export default function UpdatesPage() {
 			}
 		});
 	};
-	const content = <span>{t('nav.updates')}</span>;
 	const actions = (
 		<Space wrap>
 			<Button icon={<RefreshCw size={16} />} onClick={() => void manager.refresh()} disabled={busy}>
@@ -93,16 +102,11 @@ export default function UpdatesPage() {
 			</Button>
 		</Space>
 	);
-	const inHeader = usePageHeader({ content, actions });
+	const inHeader = usePageHeader({ actions });
 	if (manager.loading && !data) return <PageLoading />;
 	return (
 		<div className="page-stack updates-page">
-			{!inHeader && (
-				<div className="table-panel-header">
-					{content}
-					{actions}
-				</div>
-			)}
+			{!inHeader && <div className="table-panel-header">{actions}</div>}
 			{manager.error && (
 				<Alert
 					type="warning"
@@ -111,7 +115,6 @@ export default function UpdatesPage() {
 					action={<Button onClick={() => void manager.refresh()}>{t('common.retry')}</Button>}
 				/>
 			)}
-			{manager.note && <p role="status">{manager.note}</p>}
 			{confirmationError && <Alert type="warning" showIcon title={confirmationError} />}
 			{data && !data.enabled && <Empty description={t('updates.unavailable')} />}
 			{data?.enabled && (

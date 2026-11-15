@@ -241,11 +241,13 @@ export default function PostVocabularyPage() {
 		});
 	}
 
+	const headerLeading = (
+		<Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate(basePath)}>
+			{t('posts.back')}
+		</Button>
+	);
 	const headerContent = (
 		<Space wrap>
-			<Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate(basePath)}>
-				{t('posts.back')}
-			</Button>
 			<PageTabs
 				value={kind}
 				onChange={(value) => setKind(value as VocabularyKind)}
@@ -299,7 +301,11 @@ export default function PostVocabularyPage() {
 				</Button>
 			</Space.Compact>
 		);
-	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
+	const headerActive = usePageHeader({
+		leading: headerLeading,
+		content: headerContent,
+		actions: headerActions
+	});
 	const terms =
 		kind === 'directories'
 			? []
@@ -316,8 +322,9 @@ export default function PostVocabularyPage() {
 			{modalContext}
 			{!headerActive ? (
 				<Space wrap>
-					{headerContent}
+					{headerLeading}
 					{headerActions}
+					{headerContent}
 				</Space>
 			) : null}
 			{errorKey ? (

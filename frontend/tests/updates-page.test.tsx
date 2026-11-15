@@ -107,6 +107,17 @@ it('keeps header hooks stable across load, failure, retry and success', async ()
 	expect(button('Install latest').hasAttribute('disabled')).toBe(false);
 });
 
+it('shows the completed update check as an antd message without moving the page', async () => {
+	mount();
+	await screen.findByText('Application and supervisor');
+	fireEvent.click(button('Check updates'));
+	const notice = await screen.findByText('Update check completed.');
+	expect(notice.closest('.ant-message')).not.toBeNull();
+	expect(document.querySelector('.updates-page')?.textContent).not.toContain(
+		'Update check completed.'
+	);
+});
+
 it('requires confirmation and sends a checked commit and run, then retains the task receipt', async () => {
 	vi.mocked(service.manageUpdates).mockImplementation(async (action) => ({
 		...initial(),

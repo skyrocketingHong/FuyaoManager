@@ -31,10 +31,9 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 				</span>
 				<div className="topbar-navigation">{navigationSlot}</div>
 				<div className="topbar-main">
-					<div className="topbar-identity">
-						{header?.content && <div className="topbar-page-content">{header.content}</div>}
-					</div>
+					{header?.leading && <div className="topbar-page-leading">{header.leading}</div>}
 					{header?.actions && <div className="topbar-page-actions">{header.actions}</div>}
+					{header?.content && <div className="topbar-page-content">{header.content}</div>}
 				</div>
 				<div className="topbar-session">
 					<Tooltip title={t('app.localeSwitch')}>
@@ -56,27 +55,27 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 						/>
 					</Tooltip>
 					{user && (
-					<Dropdown
-						trigger={['click']}
-						menu={{
-							items: [
-								// Identity lines are plain group captions, not disabled menu
-								// items: screen readers must not announce them as "disabled".
-								{
-									key: 'identity',
-									type: 'group',
-									label: user.displayName || user.username,
-									children: []
-								},
-								{
-									key: 'binding',
-									type: 'group',
-									label: t(
-										session.passkeyBound ? 'account.passkeyBound' : 'account.passkeyUnbound'
-									),
-									children: []
-								},
-								{ type: 'divider' },
+						<Dropdown
+							trigger={['click']}
+							menu={{
+								items: [
+									// Identity lines are plain group captions, not disabled menu
+									// items: screen readers must not announce them as "disabled".
+									{
+										key: 'identity',
+										type: 'group',
+										label: user.displayName || user.username,
+										children: []
+									},
+									{
+										key: 'binding',
+										type: 'group',
+										label: t(
+											session.passkeyBound ? 'account.passkeyBound' : 'account.passkeyUnbound'
+										),
+										children: []
+									},
+									{ type: 'divider' },
 									{
 										key: 'appearance',
 										label: t('nav.appearance'),
