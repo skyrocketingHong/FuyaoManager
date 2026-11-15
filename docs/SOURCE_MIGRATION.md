@@ -26,11 +26,13 @@ FuyaoManager was extracted from the FuyaoHomepage repository
 
 ## Commit mapping
 
-`git filter-repo` rewrote commit hashes. The complete old-hash → new-hash
-map is committed at
+`git filter-repo` rewrote commit hashes. The original extraction's old-hash →
+extracted-hash map is kept at
 [docs/source-mapping/commit-map-from-fuyaohomepage.txt](./source-mapping/commit-map-from-fuyaohomepage.txt);
 67 source commits map to 48 extracted commits (commits touching only dropped
-paths are pruned entirely).
+paths were pruned entirely). A later history cleanup removed the independent
+homepage ancestry and local agent instructions, so the extracted hashes in
+this historical map are not the current repository's commit IDs.
 
 ## Identity changes in this repository
 

@@ -1,4 +1,4 @@
-# git filter-repo commit map: old FuyaoHomepage hash -> new FuyaoManager hash
+# Historical extraction map: source FuyaoHomepage hash -> pre-cleanup FuyaoManager hash
 0171b4eb4e30d95f97c333df1f5b4b678bf2c6d9 0512cca057953185be11b3f0c41379f2cc533552
 0410d972a3a3e39c2c6e30afcd55fc2e4e478d79 93f1111cb1d6f93a5c19b06dd2f185eca6a96e74
 07964321471087f65b482595d114a89d9ca0399e 0dc5739cc2ad7e638551ecb47235ab7b8dfdabbd
