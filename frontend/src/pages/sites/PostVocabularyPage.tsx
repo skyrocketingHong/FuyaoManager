@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Input, Modal, Popconfirm, Space, message } from 'antd';
-import { ArrowLeft } from 'lucide-react';
-import { PageTabs, usePageHeader } from '../../components/PageHeader';
 import { useContentScope } from '../../components/ContentScopeProvider';
 import DataTable from '../../components/DataTable';
+import { usePageHeader } from '../../components/PageHeader';
 import { TablePanel } from '../../components/Panel';
+import PostWorkspaceTabs from '../../features/posts/PostWorkspaceTabs';
 import {
 	getPostDirectory,
 	getPostTaxonomy,
@@ -13,13 +13,14 @@ import {
 	putPostDirectory,
 	putPostVocabulary,
 	type PostTaxonomy,
-	type PostVocabulary
+	type PostVocabulary,
+	type PostVocabularyUpdate
 } from '../../lib/api/management';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
-type VocabularyKind = 'directories' | 'categories' | 'tags';
+type CategoryGroup = NonNullable<PostTaxonomy['categoryGroups']>[number];
 type DirectoryDraft = {
 	slug: string;
 	title: string;
@@ -30,17 +31,35 @@ type DirectoryDraft = {
 const EMPTY_CONTENT_DIGEST =
 	'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855';
 
+function fallbackGroups(taxonomy: PostTaxonomy): CategoryGroup[] {
+	const rows: CategoryGroup[] = taxonomy.directories.map((entry) => ({
+		name: entry.slug,
+		title: entry.title,
+		directory: entry.slug,
+		aliases: [entry.slug],
+		postCount: entry.postCount
+	}));
+	for (const term of taxonomy.categories) {
+		if (!rows.some((entry) => entry.name === term.name))
+			rows.push({
+				name: term.name,
+				title: term.name,
+				aliases: [term.name],
+				postCount: term.postCount
+			});
+	}
+	return rows;
+}
+
 export default function PostVocabularyPage() {
-	const { siteId } = useParams<{ siteId: string }>();
+	const [params] = useSearchParams();
+	const kind = params.get('view') === 'tags' ? 'tags' : 'categories';
 	const scope = useContentScope();
 	const target = scope.target;
-	const basePath = siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
-	const navigate = useNavigate();
 	const [messageApi, contextHolder] = message.useMessage();
 	const [modal, modalContext] = Modal.useModal();
-	const [kind, setKind] = useState<VocabularyKind>('categories');
 	const [query, setQuery] = useState('');
-	const [inputs, setInputs] = useState({ categories: '', tags: '' });
+	const [input, setInput] = useState('');
 	const [directory, setDirectory] = useState<DirectoryDraft | null>(null);
 	const [taxonomy, setTaxonomy] = useState<PostTaxonomy | null>(null);
 	const [vocabulary, setVocabulary] = useState<PostVocabulary | null>(null);
@@ -52,13 +71,12 @@ export default function PostVocabularyPage() {
 	const scopeEpoch = useRef(0);
 	const controller = useRef<AbortController | null>(null);
 	const editable = (scope.canEdit ?? vocabulary?.canEdit) === true && vocabulary?.canEdit === true;
-	const input = kind === 'directories' ? '' : inputs[kind];
 	const directoryDirty =
 		!!directory &&
 		(directory.creating
 			? !!directory.slug.trim() || !!directory.title.trim()
 			: directory.title !== directory.originalTitle);
-	useUnsavedGuard(inputs.categories.trim() !== '' || inputs.tags.trim() !== '' || directoryDirty);
+	useUnsavedGuard(input.trim() !== '' || directoryDirty || saving);
 
 	const load = useCallback(() => {
 		if (!target) return;
@@ -91,7 +109,7 @@ export default function PostVocabularyPage() {
 		setTaxonomy(null);
 		setVocabulary(null);
 		setEtag('');
-		setInputs({ categories: '', tags: '' });
+		setInput('');
 		setDirectory(null);
 		setQuery('');
 		setSaving(false);
@@ -103,41 +121,16 @@ export default function PostVocabularyPage() {
 		};
 	}, [scope.key, load]);
 
-	async function update(name: string, remove: boolean) {
-		if (!target || !vocabulary || !editable || saving || kind === 'directories') return;
-		if (!name.trim()) return;
-		const existing = vocabulary[kind];
-		if (!remove && existing.includes(name)) {
-			void messageApi.warning(t('taxonomy.exists'));
-			return;
-		}
-		const value = {
-			version: 1 as const,
-			categories:
-				kind === 'categories'
-					? remove
-						? existing.filter((entry) => entry !== name)
-						: [...existing, name]
-					: vocabulary.categories,
-			tags:
-				kind === 'tags'
-					? remove
-						? existing.filter((entry) => entry !== name)
-						: [...existing, name]
-					: vocabulary.tags
-		};
+	async function saveTerms(next: PostVocabularyUpdate, clearInput = false) {
+		if (!target || !vocabulary || !editable || saving) return;
 		const current = scopeEpoch.current;
 		setSaving(true);
 		try {
-			const saved = await putPostVocabulary(target, value, etag);
+			const saved = await putPostVocabulary(target, next, etag);
 			if (current !== scopeEpoch.current) return;
 			setVocabulary(saved.vocabulary);
 			setEtag(saved.etag);
-			if (!remove)
-				setInputs((currentInputs) => ({
-					...currentInputs,
-					[kind]: currentInputs[kind].trim() === name ? '' : currentInputs[kind]
-				}));
+			if (clearInput) setInput('');
 			void messageApi.success(t('taxonomy.saved'));
 			load();
 		} catch (err) {
@@ -148,6 +141,45 @@ export default function PostVocabularyPage() {
 		} finally {
 			if (current === scopeEpoch.current) setSaving(false);
 		}
+	}
+
+	function update(names: string[], remove: boolean) {
+		if (!vocabulary || !names.length) return;
+		const existing = vocabulary[kind];
+		const next = remove
+			? existing.filter((entry) => !names.includes(entry))
+			: Array.from(new Set([...existing, ...names]));
+		if (!remove && next.length === existing.length) {
+			void messageApi.warning(t('taxonomy.exists'));
+			return;
+		}
+		void saveTerms(
+			{
+				version: 1,
+				categories: kind === 'categories' ? next : vocabulary.categories,
+				tags: kind === 'tags' ? next : vocabulary.tags
+			},
+			kind === 'tags' && !remove
+		);
+	}
+
+	function importExisting() {
+		if (!taxonomy || !vocabulary) return;
+		const groups = taxonomy.categoryGroups ?? fallbackGroups(taxonomy);
+		const categories = Array.from(
+			new Set([...vocabulary.categories, ...groups.flatMap((group) => group.aliases)])
+		);
+		const tags = Array.from(
+			new Set([...vocabulary.tags, ...taxonomy.tags.map((term) => term.name)])
+		);
+		if (
+			categories.length === vocabulary.categories.length &&
+			tags.length === vocabulary.tags.length
+		) {
+			void messageApi.info(t('taxonomy.imported'));
+			return;
+		}
+		void saveTerms({ version: 1, categories, tags });
 	}
 
 	async function editDirectory(slug: string) {
@@ -173,7 +205,7 @@ export default function PostVocabularyPage() {
 	}
 
 	async function saveDirectory() {
-		if (!target || !directory || !editable || saving) return;
+		if (!target || !directory || !vocabulary || !editable || saving) return;
 		const slug = directory.slug.trim();
 		const title = directory.title.trim();
 		if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
@@ -201,8 +233,22 @@ export default function PostVocabularyPage() {
 			}
 			await putPostDirectory(target, slug, title, currentETag);
 			if (current !== scopeEpoch.current) return;
+			let registered = true;
+			if (directory.creating && !vocabulary.categories.includes(slug)) {
+				try {
+					await putPostVocabulary(
+						target,
+						{ version: 1, categories: [...vocabulary.categories, slug], tags: vocabulary.tags },
+						etag
+					);
+				} catch {
+					registered = false;
+				}
+			}
+			if (current !== scopeEpoch.current) return;
 			setDirectory(null);
-			void messageApi.success(t('taxonomy.directorySaved'));
+			if (registered) void messageApi.success(t('taxonomy.directorySaved'));
+			else void messageApi.warning(t('taxonomy.registrationFailed'));
 			load();
 		} catch (err) {
 			if (current !== scopeEpoch.current) return;
@@ -218,7 +264,7 @@ export default function PostVocabularyPage() {
 								: draft
 						);
 				} catch {
-					/* The draft remains open for a later retry. */
+					/* Keep the draft for retry. */
 				}
 			}
 		} finally {
@@ -241,90 +287,76 @@ export default function PostVocabularyPage() {
 		});
 	}
 
-	const headerLeading = (
-		<Button type="text" icon={<ArrowLeft size={16} />} onClick={() => navigate(basePath)}>
-			{t('posts.back')}
-		</Button>
+	const tabs = <PostWorkspaceTabs current={kind} />;
+	const search = (
+		<Input.Search
+			aria-label={t('taxonomy.search')}
+			placeholder={t('taxonomy.search')}
+			value={query}
+			onChange={(event) => setQuery(event.target.value)}
+			allowClear
+		/>
 	);
-	const headerContent = (
+	const actions = (
 		<Space wrap>
-			<PageTabs
-				value={kind}
-				onChange={(value) => setKind(value as VocabularyKind)}
-				ariaLabel={t('taxonomy.title')}
-				options={[
-					{ value: 'categories', label: t('taxonomy.categories') },
-					{ value: 'tags', label: t('taxonomy.tags') },
-					{ value: 'directories', label: t('taxonomy.directories') }
-				]}
-			/>
-			<Input.Search
-				aria-label={t('taxonomy.search')}
-				placeholder={t('taxonomy.search')}
-				value={query}
-				onChange={(event) => setQuery(event.target.value)}
-				allowClear
-			/>
-		</Space>
-	);
-	const headerActions =
-		kind === 'directories' ? (
-			<Button
-				type="primary"
-				disabled={!editable || saving}
-				onClick={() =>
-					setDirectory({ slug: '', title: '', originalTitle: '', etag: '', creating: true })
-				}
-			>
-				{t('taxonomy.addDirectory')}
-			</Button>
-		) : (
-			<Space.Compact>
-				<Input
-					aria-label={t(kind === 'categories' ? 'taxonomy.categoryInput' : 'taxonomy.tagInput')}
-					placeholder={t(kind === 'categories' ? 'taxonomy.categoryInput' : 'taxonomy.tagInput')}
-					value={input}
-					onChange={(event) => {
-						const value = event.target.value;
-						setInputs((current) => ({ ...current, [kind]: value }));
-					}}
-					onPressEnter={() => void update(input.trim(), false)}
-					disabled={!editable || saving}
-				/>
+			{kind === 'categories' ? (
 				<Button
 					type="primary"
-					loading={saving}
-					disabled={!editable || !input.trim()}
-					onClick={() => void update(input.trim(), false)}
+					disabled={!editable || saving}
+					onClick={() =>
+						setDirectory({ slug: '', title: '', originalTitle: '', etag: '', creating: true })
+					}
 				>
-					{t('taxonomy.add')}
+					{t('taxonomy.addCategory')}
 				</Button>
-			</Space.Compact>
-		);
-	const headerActive = usePageHeader({
-		leading: headerLeading,
-		content: headerContent,
-		actions: headerActions
-	});
-	const terms =
-		kind === 'directories'
-			? []
-			: (taxonomy?.[kind] ?? []).filter((term) =>
-					term.name.toLowerCase().includes(query.trim().toLowerCase())
-				);
-	const directories = (taxonomy?.directories ?? []).filter((entry) =>
-		`${entry.slug} ${entry.title}`.toLowerCase().includes(query.trim().toLowerCase())
+			) : (
+				<Space.Compact>
+					<Input
+						aria-label={t('taxonomy.tagInput')}
+						placeholder={t('taxonomy.tagInput')}
+						value={input}
+						onChange={(event) => setInput(event.target.value)}
+						onPressEnter={() => {
+							const name = input.trim();
+							if (name) update([name], false);
+						}}
+						disabled={!editable || saving}
+					/>
+					<Button
+						type="primary"
+						loading={saving}
+						disabled={!editable || !input.trim()}
+						onClick={() => update([input.trim()], false)}
+					>
+						{t('taxonomy.add')}
+					</Button>
+				</Space.Compact>
+			)}
+			<Button disabled={!editable || saving || !taxonomy} onClick={importExisting}>
+				{t('taxonomy.importAll')}
+			</Button>
+		</Space>
+	);
+	const header = usePageHeader({ leading: tabs, content: search, actions });
+	const groups = (taxonomy?.categoryGroups ?? (taxonomy ? fallbackGroups(taxonomy) : [])).filter(
+		(entry) =>
+			`${entry.name} ${entry.title} ${entry.aliases.join(' ')}`
+				.toLowerCase()
+				.includes(query.trim().toLowerCase())
+	);
+	const terms = (taxonomy?.tags ?? []).filter((term) =>
+		term.name.toLowerCase().includes(query.trim().toLowerCase())
 	);
 
 	return (
 		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{modalContext}
-			{!headerActive ? (
+			{!header ? (
 				<Space wrap>
-					{headerLeading}
-					{headerActions}
-					{headerContent}
+					{tabs}
+					{actions}
+					{search}
 				</Space>
 			) : null}
 			{errorKey ? (
@@ -336,30 +368,67 @@ export default function PostVocabularyPage() {
 				/>
 			) : null}
 			<TablePanel className="fill-height">
-				{kind === 'directories' ? (
-					<DataTable<(typeof directories)[number]>
+				{kind === 'categories' ? (
+					<DataTable<CategoryGroup>
 						className="taxonomy-table"
-						rowKey="slug"
-						dataSource={directories}
+						rowKey="name"
+						dataSource={groups}
 						loading={loading}
 						locale={{ emptyText: t('taxonomy.empty') }}
-						pagination={{ pageSize: 20, showSizeChanger: false }}
+						pagination={false}
 						columns={[
-							{ title: t('taxonomy.directoryTitle'), dataIndex: 'title' },
-							{ title: t('taxonomy.directorySlug'), dataIndex: 'slug' },
+							{
+								title: t('taxonomy.categoryName'),
+								dataIndex: 'title',
+								render: (_, group) => (
+									<>
+										{group.title}
+										{group.directory && group.directory !== group.title ? (
+											<div className="subtle">{group.directory}</div>
+										) : null}
+									</>
+								)
+							},
 							{ title: t('taxonomy.count'), dataIndex: 'postCount', width: 110 },
 							{
 								title: t('admin.actions'),
-								width: 120,
-								render: (_, entry) => (
-									<Button
-										size="small"
-										disabled={!editable || saving}
-										onClick={() => void editDirectory(entry.slug)}
-									>
-										{t('posts.edit')}
-									</Button>
-								)
+								width: 220,
+								render: (_, group) => {
+									const registered = group.aliases.some((name) =>
+										vocabulary?.categories.includes(name)
+									);
+									return (
+										<Space wrap>
+											{group.directory ? (
+												<Button
+													size="small"
+													disabled={!editable || saving}
+													onClick={() => void editDirectory(group.directory!)}
+												>
+													{t('posts.edit')}
+												</Button>
+											) : null}
+											{registered ? (
+												<Popconfirm
+													title={t('taxonomy.removeConfirm')}
+													onConfirm={() => update(group.aliases, true)}
+												>
+													<Button danger size="small" disabled={!editable || saving}>
+														{t('taxonomy.remove')}
+													</Button>
+												</Popconfirm>
+											) : (
+												<Button
+													size="small"
+													disabled={!editable || saving}
+													onClick={() => update(group.aliases, false)}
+												>
+													{t('taxonomy.register')}
+												</Button>
+											)}
+										</Space>
+									);
+								}
 							}
 						]}
 					/>
@@ -370,19 +439,18 @@ export default function PostVocabularyPage() {
 						dataSource={terms}
 						loading={loading}
 						locale={{ emptyText: t('taxonomy.empty') }}
-						pagination={{ pageSize: 20, showSizeChanger: false }}
+						pagination={false}
 						columns={[
 							{ title: t('taxonomy.name'), dataIndex: 'name' },
 							{ title: t('taxonomy.count'), dataIndex: 'postCount', width: 110 },
 							{
 								title: t('admin.actions'),
 								width: 180,
-								render: (_, term) => {
-									const registered = vocabulary?.[kind].includes(term.name) === true;
-									return registered ? (
+								render: (_, term) =>
+									vocabulary?.tags.includes(term.name) ? (
 										<Popconfirm
 											title={t('taxonomy.removeConfirm')}
-											onConfirm={() => void update(term.name, true)}
+											onConfirm={() => update([term.name], true)}
 										>
 											<Button danger size="small" disabled={!editable || saving}>
 												{t('taxonomy.remove')}
@@ -392,19 +460,18 @@ export default function PostVocabularyPage() {
 										<Button
 											size="small"
 											disabled={!editable || saving}
-											onClick={() => void update(term.name, false)}
+											onClick={() => update([term.name], false)}
 										>
 											{t('taxonomy.register')}
 										</Button>
-									);
-								}
+									)
 							}
 						]}
 					/>
 				)}
 			</TablePanel>
 			<Modal
-				title={t(directory?.creating ? 'taxonomy.addDirectory' : 'taxonomy.editDirectory')}
+				title={t(directory?.creating ? 'taxonomy.addCategory' : 'taxonomy.editCategory')}
 				open={!!directory}
 				onCancel={closeDirectory}
 				onOk={() => void saveDirectory()}
@@ -415,7 +482,7 @@ export default function PostVocabularyPage() {
 			>
 				{directory ? (
 					<Space orientation="vertical" style={{ width: '100%' }}>
-						<label htmlFor="directory-slug">{t('taxonomy.directorySlug')}</label>
+						<label htmlFor="directory-slug">{t('taxonomy.categorySlug')}</label>
 						<Input
 							id="directory-slug"
 							value={directory.slug}

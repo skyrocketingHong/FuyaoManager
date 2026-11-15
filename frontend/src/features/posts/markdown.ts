@@ -13,8 +13,13 @@ function headings(tree: Root): HeadingInfo[] {
 	function visit(node: { type: string; children?: unknown[] }) {
 		if (node.type === 'heading') {
 			const heading = node as Heading;
-			const text = toString(heading).trim();
-			result.push({ node: heading, text, slug: slugger.slug(text), depth: heading.depth });
+			const content = toString(heading, { includeHtml: false, includeImageAlt: false });
+			result.push({
+				node: heading,
+				text: content.trim(),
+				slug: slugger.slug(content),
+				depth: heading.depth
+			});
 		}
 		for (const child of node.children ?? []) {
 			if (child && typeof child === 'object' && 'type' in child)

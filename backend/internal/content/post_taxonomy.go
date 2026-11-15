@@ -13,13 +13,27 @@ import (
 )
 
 // PostTaxonomy aggregates the blog directory structure, registered terms,
-// and frontmatter category/tag usages of one content scope. Physical
-// directories and categories remain separate views.
+// and frontmatter category/tag usages of one content scope. CategoryGroups
+// combines matching directory and term identities while preserving both sources.
 type PostTaxonomy struct {
-	Directories []PostDirectory `json:"directories"`
-	Categories  []TaxonomyTerm  `json:"categories"`
-	Tags        []TaxonomyTerm  `json:"tags"`
-	PostCount   int             `json:"postCount"`
+	Directories    []PostDirectory     `json:"directories"`
+	Categories     []TaxonomyTerm      `json:"categories"`
+	CategoryGroups []PostCategoryGroup `json:"categoryGroups"`
+	Tags           []TaxonomyTerm      `json:"tags"`
+	PostCount      int                 `json:"postCount"`
+}
+
+type PostCategoryGroup struct {
+	Name      string   `json:"name"`
+	Title     string   `json:"title"`
+	Directory string   `json:"directory,omitempty"`
+	Aliases   []string `json:"aliases"`
+	PostCount int      `json:"postCount"`
+}
+
+type categoryUsage struct {
+	directory  string
+	categories []string
 }
 
 // PostDirectory is one valid first-level physical directory of the posts
@@ -49,11 +63,16 @@ type TaxonomyTerm struct {
 // the contentbind binding decides which scope a caller may see.
 func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	tax := PostTaxonomy{
-		Directories: []PostDirectory{},
-		Categories:  []TaxonomyTerm{},
-		Tags:        []TaxonomyTerm{},
+		Directories:    []PostDirectory{},
+		Categories:     []TaxonomyTerm{},
+		CategoryGroups: []PostCategoryGroup{},
+		Tags:           []TaxonomyTerm{},
 	}
 	vocabulary, _, err := s.GetPostVocabulary(scopeID)
+	if err != nil {
+		return PostTaxonomy{}, err
+	}
+	aliases, err := s.getCategoryAliases(scopeID)
 	if err != nil {
 		return PostTaxonomy{}, err
 	}
@@ -61,6 +80,7 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	if errors.Is(err, ErrNotFound) {
 		// No posts tree yet: an empty vocabulary is a real state.
 		mergePostVocabulary(&tax, vocabulary)
+		buildCategoryGroups(&tax, nil, aliases)
 		return tax, nil
 	}
 	if err != nil {
@@ -70,6 +90,7 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 	dirPosts := map[string]int{}
 	catCounts := map[string]int{}
 	tagCounts := map[string]int{}
+	var usage []categoryUsage
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			if path == root && errors.Is(walkErr, fs.ErrNotExist) {
@@ -129,6 +150,7 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 		}
 		countTaxonomyTerms(post.Categories, catCounts)
 		countTaxonomyTerms(post.Tags, tagCounts)
+		usage = append(usage, categoryUsage{directory: post.Category, categories: post.Categories})
 		return nil
 	})
 	if err != nil {
@@ -159,7 +181,65 @@ func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
 		tax.Tags = append(tax.Tags, TaxonomyTerm{Name: name, PostCount: tagCounts[name]})
 	}
 	mergePostVocabulary(&tax, vocabulary)
+	buildCategoryGroups(&tax, usage, aliases)
 	return tax, nil
+}
+
+// Category groups merge a physical directory with exact slug or unique title
+// references without rewriting any existing article or public path.
+func buildCategoryGroups(tax *PostTaxonomy, usage []categoryUsage, aliases map[string]string) {
+	groups := make([]PostCategoryGroup, 0, len(tax.Directories)+len(tax.Categories))
+	lookup := map[string]int{}
+	titleIndex := map[string]int{}
+	for _, dir := range tax.Directories {
+		index := len(groups)
+		groups = append(groups, PostCategoryGroup{Name: dir.Slug, Title: dir.Title, Directory: dir.Slug, Aliases: []string{dir.Slug}})
+		lookup[dir.Slug] = index
+		if _, exists := titleIndex[dir.Title]; exists {
+			titleIndex[dir.Title] = -1
+		} else {
+			titleIndex[dir.Title] = index
+		}
+	}
+	for _, term := range tax.Categories {
+		index, exists := lookup[term.Name]
+		if !exists {
+			if slug, ok := aliases[term.Name]; ok {
+				index, exists = lookup[slug]
+			}
+			if exists {
+				// A previously saved mapping survives a category title change.
+			} else if candidate, ok := titleIndex[term.Name]; ok && candidate >= 0 {
+				index = candidate
+			} else {
+				index = len(groups)
+				groups = append(groups, PostCategoryGroup{Name: term.Name, Title: term.Name, Aliases: []string{}})
+			}
+			lookup[term.Name] = index
+			groups[index].Aliases = append(groups[index].Aliases, term.Name)
+		}
+	}
+	for _, post := range usage {
+		seen := map[int]bool{}
+		if index, ok := lookup[post.directory]; ok {
+			seen[index] = true
+		}
+		for _, name := range post.categories {
+			if index, ok := lookup[name]; ok {
+				seen[index] = true
+			}
+		}
+		for index := range seen {
+			groups[index].PostCount++
+		}
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		if groups[i].Title != groups[j].Title {
+			return groups[i].Title < groups[j].Title
+		}
+		return groups[i].Name < groups[j].Name
+	})
+	tax.CategoryGroups = groups
 }
 
 func mergePostVocabulary(tax *PostTaxonomy, vocabulary PostVocabulary) {

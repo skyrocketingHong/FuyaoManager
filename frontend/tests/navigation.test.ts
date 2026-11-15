@@ -124,6 +124,8 @@ describe('navigation metadata', () => {
 		expect(selectedPath('/content/posts/tech%2Fhello.md/edit')).toBe('/content/posts');
 		expect(selectedPath('/sites/abc/posts/tech%2Fhello.md/edit')).toBe('/sites/abc/posts');
 		expect(selectedPath('/sites/abc/posts/vocabulary')).toBe('/sites/abc/posts');
+		expect(selectedPath('/content/posts/media')).toBe('/content/posts');
+		expect(selectedPath('/sites/abc/posts/media')).toBe('/sites/abc/posts');
 	});
 
 	it('fills concrete paths', () => {

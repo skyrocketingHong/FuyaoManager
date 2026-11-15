@@ -270,6 +270,13 @@ export async function rollbackRelease(siteId: string, releaseId: string): Promis
 export interface PostTaxonomy {
 	directories: { slug: string; title: string; postCount: number }[];
 	categories: { name: string; postCount: number }[];
+	categoryGroups?: {
+		name: string;
+		title: string;
+		directory?: string;
+		aliases: string[];
+		postCount: number;
+	}[];
 	tags: { name: string; postCount: number }[];
 	postCount: number;
 	canEdit: boolean;
@@ -290,6 +297,47 @@ export async function getPostTaxonomy(
 export type PostVocabulary = components['schemas']['PostVocabulary'];
 export type PostVocabularyUpdate = components['schemas']['PostVocabularyUpdate'];
 export type PostDirectoryDocument = components['schemas']['PostDirectoryDocument'];
+export type PostMedia = components['schemas']['PostMedia'];
+export type PostMediaList = components['schemas']['PostMediaList'];
+
+export async function listPostMedia(
+	target: ContentTarget,
+	signal?: AbortSignal
+): Promise<PostMediaList> {
+	return (
+		await api<PostMediaList>('GET', `${contentResourcePath(target, 'posts')}/media`, { signal })
+	).data;
+}
+
+export function postMediaURL(target: ContentTarget, path: string): string {
+	return `${contentResourcePath(target, 'posts')}/media/file?path=${encodeURIComponent(path)}`;
+}
+
+export function postPreviewImageURL(target: ContentTarget, source: string): string {
+	const raw = source.split(/[?#]/, 1)[0];
+	if (!raw.startsWith('/wp-content/uploads/') && !raw.startsWith('/images/')) return source;
+	try {
+		return postMediaURL(target, decodeURIComponent(raw));
+	} catch {
+		return postMediaURL(target, raw);
+	}
+}
+
+export async function importPostMedia(
+	target: ContentTarget,
+	file: File,
+	path?: string
+): Promise<PostMedia> {
+	const body = new FormData();
+	body.append('file', file, file.name);
+	if (path) body.append('path', path);
+	return (
+		await api<PostMedia>('POST', `${contentResourcePath(target, 'posts')}/media`, {
+			body,
+			multipart: true
+		})
+	).data;
+}
 
 export async function getPostDirectory(
 	target: ContentTarget,

@@ -134,12 +134,16 @@ func TestMaterializeExcludesPrivatePostVocabulary(t *testing.T) {
 	if _, _, err := local.SavePostVocabulary(id, content.PostVocabulary{Version: 1, Categories: []string{}, Tags: []string{"private-unused"}}, content.Digest(nil)); err != nil {
 		t.Fatal(err)
 	}
+	writeFixture(t, filepath.Join(local.ContentRoot(id), ".post-category-aliases.json"), `{"version":1,"aliases":{"old":"new"}}`)
 	root, _, _, err := Materialize(local, nil, id, store.IndependentSources(), filepath.Join(t.TempDir(), "snapshot"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(root, ".post-vocabulary.json")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("editing vocabulary leaked into build input: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".post-category-aliases.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("category aliases leaked into build input: %v", err)
 	}
 }
 

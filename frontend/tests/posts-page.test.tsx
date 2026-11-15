@@ -19,6 +19,7 @@ import { PageHeaderProvider, usePageHeaderContent } from '../src/components/Page
 import PostsPage from '../src/pages/sites/PostsPage';
 import PostEditorPage from '../src/pages/sites/PostEditorPage';
 import PostVocabularyPage from '../src/pages/sites/PostVocabularyPage';
+import PostMediaPage from '../src/pages/sites/PostMediaPage';
 import * as management from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
 import { initLocale } from '../src/lib/i18n';
@@ -34,6 +35,8 @@ vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	putPostVocabulary: vi.fn(),
 	getPostDirectory: vi.fn(),
 	putPostDirectory: vi.fn(),
+	listPostMedia: vi.fn(),
+	importPostMedia: vi.fn(),
 	getPostTaxonomy: vi.fn()
 }));
 
@@ -120,6 +123,7 @@ function mountPosts() {
 					{ index: true, element: <PostsPage /> },
 					{ path: 'new', element: <PostEditorPage mode="new" /> },
 					{ path: 'vocabulary', element: <PostVocabularyPage /> },
+					{ path: 'media', element: <PostMediaPage /> },
 					{ path: ':postPath/edit', element: <PostEditorPage mode="edit" /> }
 				]
 			}
@@ -153,6 +157,7 @@ describe('PostsPage', () => {
 			etag: '"sha256:' + 'c'.repeat(64) + '"'
 		}));
 		vi.mocked(management.getPostTaxonomy).mockResolvedValue(emptyTaxonomy);
+		vi.mocked(management.listPostMedia).mockResolvedValue({ items: [], canEdit: true });
 		vi.mocked(management.getPost).mockResolvedValue({ post: samplePost, etag: samplePost.digest });
 		vi.mocked(management.getPostVocabulary).mockResolvedValue({
 			vocabulary: {
@@ -336,8 +341,6 @@ describe('PostsPage', () => {
 		// Existing categories and tags are searchable selections.
 		fireEvent.mouseDown(screen.getByLabelText('Categories'));
 		fireEvent.click(await screen.findByText('go', { selector: '.ant-select-item-option-content' }));
-		fireEvent.change(screen.getByLabelText('Categories'), { target: { value: '新分类' } });
-		fireEvent.keyDown(screen.getByLabelText('Categories'), { key: 'Enter', keyCode: 13 });
 		const tags = screen.getByLabelText('Tags');
 		fireEvent.mouseDown(tags);
 		fireEvent.change(tags, { target: { value: 'newtag' } });
@@ -354,12 +357,12 @@ describe('PostsPage', () => {
 			tags: string[];
 		};
 		expect(body.category).toBe('tech');
-		expect(body.categories).toEqual(['go', '新分类']);
+		expect(body.categories).toEqual(['go']);
 		expect(body.tags).toEqual(['newtag']);
 		await waitFor(() =>
 			expect(management.putPostVocabulary).toHaveBeenCalledWith(
 				ownerSite.siteId,
-				{ version: 1, categories: ['新分类'], tags: ['newtag'] },
+				{ version: 1, categories: [], tags: ['newtag'] },
 				'"sha256:' + 'd'.repeat(64) + '"'
 			)
 		);
@@ -500,40 +503,47 @@ describe('PostsPage', () => {
 		);
 	});
 
-	it('registers an unused category in the scope vocabulary with its ETag', async () => {
+	it('imports categories, directories and tags into one scoped vocabulary', async () => {
+		const categories = [{ name: '技术', postCount: 1 }];
+		const directories = [{ slug: 'tech', title: '技术', postCount: 1 }];
+		const categoryGroups = [
+			{ name: 'tech', title: '技术', directory: 'tech', aliases: ['tech', '技术'], postCount: 1 }
+		];
 		const saved = {
 			version: 1 as const,
-			categories: ['技术'],
-			tags: [],
+			categories: ['tech', '技术'],
+			tags: ['Go'],
 			digest: 'sha256:' + 'e'.repeat(64),
 			canEdit: true
 		};
+		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+			...emptyTaxonomy,
+			categories,
+			directories,
+			categoryGroups,
+			tags: [{ name: 'Go', postCount: 1 }]
+		});
 		vi.mocked(management.putPostVocabulary).mockImplementationOnce(async () => {
 			vi.mocked(management.getPostVocabulary).mockResolvedValue({
 				vocabulary: saved,
 				etag: '"' + saved.digest + '"'
 			});
-			vi.mocked(management.getPostTaxonomy).mockResolvedValue({
-				...emptyTaxonomy,
-				categories: [{ name: '技术', postCount: 0 }]
-			});
 			return { vocabulary: saved, etag: '"' + saved.digest + '"' };
 		});
 		mountPosts();
 		await screen.findByText('Hello');
-		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
-		const input = await screen.findByLabelText('Enter a category');
-		await waitFor(() => expect((input as HTMLInputElement).disabled).toBe(false));
-		fireEvent.change(input, { target: { value: '技术' } });
-		fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
+		const importButton = await screen.findByRole('button', { name: 'Import existing terms' });
+		await waitFor(() => expect((importButton as HTMLButtonElement).disabled).toBe(false));
+		fireEvent.click(importButton);
 		await waitFor(() =>
 			expect(management.putPostVocabulary).toHaveBeenCalledWith(
 				ownerSite.siteId,
-				{ version: 1, categories: ['技术'], tags: [] },
+				{ version: 1, categories: ['tech', '技术'], tags: ['Go'] },
 				'"sha256:' + 'd'.repeat(64) + '"'
 			)
 		);
-		expect(await screen.findByText('技术')).toBeDefined();
+		expect(screen.getAllByText('技术')).toHaveLength(1);
 	});
 
 	it('creates a directory through the scoped index ETag', async () => {
@@ -556,11 +566,11 @@ describe('PostsPage', () => {
 		});
 		mountPosts();
 		await screen.findByText('Hello');
-		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
-		await screen.findByLabelText('Enter a category');
-		fireEvent.click(screen.getByRole('radio', { name: 'Directories' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Add directory' }));
-		fireEvent.change(screen.getByLabelText('Directory slug'), { target: { value: 'notes' } });
+		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
+		const addCategory = await screen.findByRole('button', { name: 'Add category' });
+		await waitFor(() => expect((addCategory as HTMLButtonElement).disabled).toBe(false));
+		fireEvent.click(addCategory);
+		fireEvent.change(screen.getByLabelText('Category slug'), { target: { value: 'notes' } });
 		fireEvent.change(screen.getByLabelText('Display name'), { target: { value: '笔记' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		await waitFor(() =>
@@ -587,15 +597,41 @@ describe('PostsPage', () => {
 		});
 		mountPosts();
 		await screen.findByText('Hello');
-		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
-		await screen.findByLabelText('Enter a category');
-		fireEvent.click(screen.getByRole('radio', { name: 'Directories' }));
-		fireEvent.click(screen.getByRole('button', { name: 'Add directory' }));
-		fireEvent.change(screen.getByLabelText('Directory slug'), { target: { value: 'notes' } });
+		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
+		const addCategory = await screen.findByRole('button', { name: 'Add category' });
+		await waitFor(() => expect((addCategory as HTMLButtonElement).disabled).toBe(false));
+		fireEvent.click(addCategory);
+		fireEvent.change(screen.getByLabelText('Category slug'), { target: { value: 'notes' } });
 		fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'My title' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 		expect(await screen.findByText('This directory already exists.')).toBeDefined();
 		expect(management.putPostDirectory).not.toHaveBeenCalled();
 		expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('My title');
+	});
+
+	it('bulk imports an image folder while retaining the legacy public path', async () => {
+		const path = '/wp-content/uploads/2020/06/image-1.png';
+		vi.mocked(management.importPostMedia).mockImplementationOnce(async () => {
+			vi.mocked(management.listPostMedia).mockResolvedValue({
+				items: [{ path, size: 20 }],
+				canEdit: true
+			});
+			return { path, size: 20 };
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('radio', { name: 'Media' }));
+		const folderButton = await screen.findByRole('button', { name: 'Import folder' });
+		await waitFor(() => expect((folderButton as HTMLButtonElement).disabled).toBe(false));
+		const image = new File(['image'], 'image-1.png', { type: 'image/png' });
+		Object.defineProperty(image, 'webkitRelativePath', {
+			value: 'wp-content/uploads/2020/06/image-1.png'
+		});
+		const picker = document.querySelector<HTMLInputElement>('input[webkitdirectory]')!;
+		fireEvent.change(picker, { target: { files: [image] } });
+		await waitFor(() =>
+			expect(management.importPostMedia).toHaveBeenCalledWith(ownerSite.siteId, image, path)
+		);
+		expect(await screen.findByText(path)).toBeDefined();
 	});
 });

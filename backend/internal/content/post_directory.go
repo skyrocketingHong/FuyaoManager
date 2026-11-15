@@ -98,8 +98,37 @@ func (s *Store) SavePostDirectory(scopeID uuid.UUID, slug, title, expectedDigest
 		if expectedDigest != "" && current != expectedDigest {
 			return ErrConflict
 		}
-		if _, err := directoryTitle(raw, slug); err != nil {
+		oldTitle, err := directoryTitle(raw, slug)
+		if err != nil {
 			return err
+		}
+		if raw != nil && oldTitle != title {
+			taxonomy, err := s.GetPostTaxonomy(scopeID)
+			if err != nil {
+				return err
+			}
+			names := []string{}
+			matches := 0
+			otherSlug := false
+			for _, entry := range taxonomy.Directories {
+				if entry.Title == oldTitle {
+					matches++
+				}
+				if entry.Slug == oldTitle && entry.Slug != slug {
+					otherSlug = true
+				}
+			}
+			for _, group := range taxonomy.CategoryGroups {
+				if group.Directory == slug {
+					names = append(names, group.Aliases...)
+				}
+			}
+			if matches == 1 && !otherSlug {
+				names = append(names, oldTitle)
+			}
+			if err := s.rememberCategoryAliases(scopeID, slug, names); err != nil {
+				return err
+			}
 		}
 		fm, body, err := SplitFrontmatter(raw)
 		if err != nil {

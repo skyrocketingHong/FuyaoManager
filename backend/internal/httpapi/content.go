@@ -67,11 +67,12 @@ func (a *API) handleGetPostsTaxonomy(w http.ResponseWriter, r *http.Request, aut
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"directories": taxonomy.Directories,
-		"categories":  taxonomy.Categories,
-		"tags":        taxonomy.Tags,
-		"postCount":   taxonomy.PostCount,
-		"canEdit":     target.CanEdit,
+		"directories":    taxonomy.Directories,
+		"categories":     taxonomy.Categories,
+		"categoryGroups": taxonomy.CategoryGroups,
+		"tags":           taxonomy.Tags,
+		"postCount":      taxonomy.PostCount,
+		"canEdit":        target.CanEdit,
 	})
 }
 

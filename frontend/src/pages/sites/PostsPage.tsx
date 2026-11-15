@@ -8,6 +8,7 @@ import { timeText } from '../../components/Widgets';
 import StatusTag from '../../components/StatusTag';
 import { TablePanel } from '../../components/Panel';
 import { useContentScope } from '../../components/ContentScopeProvider';
+import PostWorkspaceTabs from '../../features/posts/PostWorkspaceTabs';
 import {
 	deletePost,
 	getPost,
@@ -185,21 +186,26 @@ export default function PostsPage() {
 	);
 	const newButton = (
 		<Space wrap>
-			<Button onClick={() => navigate(`${basePath}/vocabulary`)}>{t('taxonomy.manage')}</Button>
 			<Button type="primary" disabled={!editable} onClick={() => navigate(`${basePath}/new`)}>
 				<Trans text={t('posts.new')} />
 			</Button>
 		</Space>
 	);
-	const headerActive = usePageHeader({ content: searchBox, actions: newButton });
+	const headerTabs = <PostWorkspaceTabs current="posts" />;
+	const headerActive = usePageHeader({
+		leading: headerTabs,
+		content: searchBox,
+		actions: newButton
+	});
 
 	return (
 		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
-				<Space wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-					{searchBox}
+				<Space wrap style={{ width: '100%' }}>
+					{headerTabs}
 					{newButton}
+					{searchBox}
 				</Space>
 			) : null}
 			{errorKey ? (

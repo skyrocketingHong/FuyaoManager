@@ -15,6 +15,7 @@ it('generates depth-limited links with matching duplicate slugs and ignores code
 		'- [标题](#%E6%A0%87%E9%A2%98)\n  - [Repeat](#repeat)\n  - [Repeat](#repeat-2)'
 	);
 	expect(buildTableOfContents(source, 3)).toContain('    - [Repeat](#repeat-1)');
+	expect(buildTableOfContents('## <em>Title</em> ![logo](logo.png)', 3)).toBe('- [Title](#title-)');
 });
 
 it('keeps fragment navigation inside the preview and opens ordinary links normally', () => {

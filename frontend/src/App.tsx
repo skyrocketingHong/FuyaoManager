@@ -32,6 +32,7 @@ import ThemePage from './pages/sites/ThemePage';
 import PostsPage from './pages/sites/PostsPage';
 import PostEditorPage from './pages/sites/PostEditorPage';
 import PostVocabularyPage from './pages/sites/PostVocabularyPage';
+import PostMediaPage from './pages/sites/PostMediaPage';
 import FriendsPage from './pages/sites/FriendsPage';
 import SiteConfigPage from './pages/sites/SiteConfigPage';
 import AlbumsPage from './pages/sites/AlbumsPage';
@@ -46,6 +47,7 @@ const pageByNavId: Record<string, ComponentType> = {
 	'content.posts.new': () => <PostEditorPage mode="new" />,
 	'content.posts.edit': () => <PostEditorPage mode="edit" />,
 	'content.posts.vocabulary': PostVocabularyPage,
+	'content.posts.media': PostMediaPage,
 	'content.albums': AlbumsPage,
 	'content.footprints': FootprintsPage,
 	'content.friends': FriendsPage,
@@ -62,6 +64,7 @@ const pageByNavId: Record<string, ComponentType> = {
 	'site.posts.new': () => <PostEditorPage mode="new" />,
 	'site.posts.edit': () => <PostEditorPage mode="edit" />,
 	'site.posts.vocabulary': PostVocabularyPage,
+	'site.posts.media': PostMediaPage,
 	'site.friends': FriendsPage,
 	'site.albums': AlbumsPage,
 	'site.footprints': FootprintsPage,

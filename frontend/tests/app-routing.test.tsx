@@ -60,11 +60,13 @@ vi.mock('../src/lib/sites/site-list', () => ({
 const getSite = vi.fn();
 const getPost = vi.fn();
 const getPostTaxonomy = vi.fn();
+const listPostMedia = vi.fn();
 const apiRequest = vi.fn();
 vi.mock('../src/lib/api/management', () => ({
 	getSite: (...args: unknown[]) => getSite(...args),
 	getPost: (...args: unknown[]) => getPost(...args),
-	getPostTaxonomy: (...args: unknown[]) => getPostTaxonomy(...args)
+	getPostTaxonomy: (...args: unknown[]) => getPostTaxonomy(...args),
+	listPostMedia: (...args: unknown[]) => listPostMedia(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
 	currentAuthGeneration: () => 0,
@@ -150,6 +152,7 @@ beforeEach(() => {
 	setLocale('zh-CN');
 	mockSiteListState = { status: 'ready', sites: [siteAbc], errorKey: null };
 	getSite.mockResolvedValue(siteAbc);
+	listPostMedia.mockResolvedValue({ items: [], canEdit: true });
 	getPostTaxonomy.mockResolvedValue({
 		directories: [],
 		categories: [],
@@ -313,6 +316,17 @@ describe('deep links and menu selection', () => {
 				name: (name) => name.replace(/\s/g, '') === zh['common.save']
 			})
 		).toHaveLength(1);
+	});
+
+	it('opens the platform media workspace in the real shell', async () => {
+		renderAt('/content/posts/media');
+		await waitFor(() =>
+			expect(listPostMedia).toHaveBeenCalledWith({ type: 'platform' }, expect.anything())
+		);
+		expect(screen.getByRole('button', { name: zh['media.importFolder'] })).toBeDefined();
+		expect(document.querySelector('.ant-menu-item-selected')?.textContent).toContain(
+			zh['nav.posts']
+		);
 	});
 
 	it('opens shared site posts as read-only in the real editor', async () => {

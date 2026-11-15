@@ -38,6 +38,7 @@ import {
 	getSite,
 	putPost,
 	putPostVocabulary,
+	postPreviewImageURL,
 	type Post,
 	type PostTaxonomy,
 	type Site
@@ -97,20 +98,17 @@ function sameForm(a: PostForm, b: PostForm): boolean {
 	return JSON.stringify(toBody(a)) === JSON.stringify(toBody(b));
 }
 
-async function registerNewTerms(target: ContentTarget, categories: string[], tags: string[]) {
+async function registerNewTerms(target: ContentTarget, tags: string[]) {
 	for (let attempt = 0; attempt < 2; attempt++) {
 		const { vocabulary, etag } = await getPostVocabulary(target);
-		const missingCategories = categories.filter(
-			(category) => !vocabulary.categories.includes(category)
-		);
 		const missingTags = tags.filter((tag) => !vocabulary.tags.includes(tag));
-		if (!missingCategories.length && !missingTags.length) return;
+		if (!missingTags.length) return;
 		try {
 			await putPostVocabulary(
 				target,
 				{
 					version: 1,
-					categories: [...vocabulary.categories, ...new Set(missingCategories)],
+					categories: vocabulary.categories,
 					tags: [...vocabulary.tags, ...new Set(missingTags)]
 				},
 				etag
@@ -263,13 +261,6 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			...(taxonomy?.tags ?? []).map((term) => term.name)
 		]);
 		const newTags = (submitted.tags ?? []).filter((tag) => !knownTags.has(tag));
-		const knownCategories = new Set([
-			...(baseline?.categories ?? []),
-			...(taxonomy?.categories ?? []).map((term) => term.name)
-		]);
-		const newCategories = (submitted.categories ?? []).filter(
-			(category) => !knownCategories.has(category)
-		);
 		setSaving(true);
 		try {
 			const { post: saved, etag: nextEtag } = editing
@@ -293,9 +284,9 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			if (newerFields.length) void messageApi.info(t('posts.newerEditsKept'));
 			if (!editing) createdPath.current = saved.path;
 			void messageApi.success(t('posts.saved'));
-			if (newTags.length || newCategories.length) {
+			if (newTags.length) {
 				try {
-					await registerNewTerms(target, newCategories, newTags);
+					await registerNewTerms(target, newTags);
 				} catch {
 					if (epoch === editorEpoch.current)
 						void messageApi.warning(t('posts.vocabularyRegistrationFailed'));
@@ -403,6 +394,17 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			if (value && !isValidPostDate(value)) throw new Error(t('posts.dateInvalid'));
 		}
 	};
+	const categoryOptions = taxonomy?.categoryGroups
+		? taxonomy.categoryGroups.map((group) => ({
+				value: group.aliases.find((alias) => draft?.categories.includes(alias)) ?? group.name,
+				label: group.title
+			}))
+		: [
+				...(taxonomy?.categories ?? []).map((entry) => ({ value: entry.name, label: entry.name })),
+				...(taxonomy?.directories ?? [])
+					.filter((entry) => !(taxonomy?.categories ?? []).some((term) => term.name === entry.slug))
+					.map((entry) => ({ value: entry.slug, label: entry.title }))
+			];
 
 	return (
 		<div className="page-stack page-stack--fill post-editor-page">
@@ -501,7 +503,12 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 							<section className="post-editor-preview" aria-label={t('posts.preview')}>
 								{previewBody ? (
 									<Suspense fallback={<PageLoading spec="section" />}>
-										<MarkdownPreview source={previewBody} />
+										<MarkdownPreview
+											source={previewBody}
+											imageURL={
+												target ? (source) => postPreviewImageURL(target, source) : undefined
+											}
+										/>
 									</Suspense>
 								) : (
 									<Typography.Text type="secondary">{t('posts.previewEmpty')}</Typography.Text>
@@ -596,7 +603,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 							]}
 						>
 							<Select
-								mode="tags"
+								mode="multiple"
 								showSearch={{
 									filterOption: (input, option) =>
 										`${option?.value ?? ''} ${option?.label ?? ''}`
@@ -606,21 +613,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 								allowClear
 								loading={taxonomyLoading}
 								placeholder={t('posts.categoriesPlaceholder')}
-								options={[
-									...(taxonomy?.categories ?? []).map((entry) => ({
-										value: entry.name,
-										label:
-											(taxonomy?.directories ?? []).find(
-												(directory) => directory.slug === entry.name
-											)?.title ?? entry.name
-									})),
-									...(taxonomy?.directories ?? [])
-										.filter(
-											(directory) =>
-												!(taxonomy?.categories ?? []).some((entry) => entry.name === directory.slug)
-										)
-										.map((directory) => ({ value: directory.slug, label: directory.title }))
-								]}
+								options={categoryOptions}
 							/>
 						</Form.Item>
 						<Form.Item

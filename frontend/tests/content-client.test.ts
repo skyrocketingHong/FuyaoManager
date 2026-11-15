@@ -10,7 +10,8 @@ import {
 	putAlbumYear,
 	putFriends,
 	putPost,
-	putPostDirectory
+	putPostDirectory,
+	postPreviewImageURL
 } from '../src/lib/api/management';
 
 vi.mock('../src/lib/api/client', () => ({ api: vi.fn(), setCsrfToken: vi.fn() }));
@@ -46,6 +47,15 @@ it('routes platform resources without a site identity and retains existing site 
 			`/api/v1/sites/website/${resource === 'friends' || resource === 'footprints' ? 'content/' : ''}${resource}`
 		);
 	}
+});
+
+it('resolves legacy image paths through the authenticated source-scoped endpoint', () => {
+	expect(postPreviewImageURL(platformContent, '/wp-content/uploads/2020/06/image-1.png')).toBe(
+		'/api/v1/content/posts/media/file?path=%2Fwp-content%2Fuploads%2F2020%2F06%2Fimage-1.png'
+	);
+	expect(postPreviewImageURL('site', 'https://other.example/a.png')).toBe(
+		'https://other.example/a.png'
+	);
 });
 it('uses the platform prefix for list, encoded post details, media tasks and conditional writes', async () => {
 	await listPosts(platformContent, 'search me', 2, 10);

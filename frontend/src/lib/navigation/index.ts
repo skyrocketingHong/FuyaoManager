@@ -57,6 +57,15 @@ export const navItems: readonly NavItem[] = [
 		parentId: 'content.posts'
 	},
 	{
+		id: 'content.posts.media',
+		path: '/content/posts/media',
+		scope: 'platform',
+		group: 'content',
+		titleKey: 'posts.media',
+		menu: false,
+		parentId: 'content.posts'
+	},
+	{
 		id: 'content.posts.edit',
 		path: '/content/posts/:postPath/edit',
 		scope: 'platform',
@@ -156,6 +165,15 @@ export const navItems: readonly NavItem[] = [
 		scope: 'site',
 		group: 'content',
 		titleKey: 'taxonomy.title',
+		menu: false,
+		parentId: 'site.posts'
+	},
+	{
+		id: 'site.posts.media',
+		path: '/sites/:siteId/posts/media',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'posts.media',
 		menu: false,
 		parentId: 'site.posts'
 	},

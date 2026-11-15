@@ -324,3 +324,85 @@ func TestGetPostTaxonomyFailsOnBrokenIndex(t *testing.T) {
 		t.Fatal("a broken index must fail the taxonomy read")
 	}
 }
+
+func TestCategoryGroupsMergeDirectoriesAndLegacyAliasesWithoutDoubleCounting(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	if _, _, err := s.SavePostDirectory(id, "tech", "技术", Digest(nil)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePost(id, Post{Category: "tech", Slug: "one", Title: "One", Date: "2026-01-01", Categories: []string{"tech", "技术"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreatePost(id, Post{Category: "misc", Slug: "two", Title: "Two", Date: "2026-01-02", Categories: []string{"技术", "旧分类"}}); err != nil {
+		t.Fatal(err)
+	}
+	tax, err := s.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var merged, legacy *PostCategoryGroup
+	for i := range tax.CategoryGroups {
+		group := &tax.CategoryGroups[i]
+		if group.Name == "tech" {
+			merged = group
+		}
+		if group.Name == "旧分类" {
+			legacy = group
+		}
+	}
+	if merged == nil || merged.Title != "技术" || merged.Directory != "tech" || merged.PostCount != 2 || len(merged.Aliases) != 2 {
+		t.Fatalf("merged group: %+v", merged)
+	}
+	if legacy == nil || legacy.Directory != "" || legacy.PostCount != 1 {
+		t.Fatalf("legacy group: %+v", legacy)
+	}
+	_, digest, err := s.GetPostDirectory(id, "tech")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.SavePostDirectory(id, "tech", "开发", digest); err != nil {
+		t.Fatal(err)
+	}
+	tax, err = s.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	merged = nil
+	for i := range tax.CategoryGroups {
+		if tax.CategoryGroups[i].Name == "tech" {
+			merged = &tax.CategoryGroups[i]
+		}
+	}
+	if merged == nil || merged.Title != "开发" || merged.PostCount != 2 || len(merged.Aliases) != 2 {
+		t.Fatalf("rename lost legacy alias: %+v", merged)
+	}
+	post, err := s.GetPost(id, "tech/one.md")
+	if err != nil || len(post.Categories) != 2 || post.Categories[1] != "技术" {
+		t.Fatalf("rename modified article: %+v %v", post.Categories, err)
+	}
+}
+
+func TestCategoryGroupsDoNotMergeAmbiguousTitles(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	for _, slug := range []string{"one", "two"} {
+		if _, _, err := s.SavePostDirectory(id, slug, "同名", Digest(nil)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreatePost(id, Post{Category: "one", Slug: "post", Title: "Post", Date: "2026-01-01", Categories: []string{"同名"}}); err != nil {
+		t.Fatal(err)
+	}
+	tax, err := s.GetPostTaxonomy(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, group := range tax.CategoryGroups {
+		if group.Name == "同名" && group.Directory == "" && group.PostCount == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("ambiguous title was merged: %+v", tax.CategoryGroups)
+	}
+}

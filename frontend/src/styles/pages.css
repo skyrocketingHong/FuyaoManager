@@ -121,6 +121,15 @@
 .taxonomy-table .ant-table-content > table {
 	min-width: 560px;
 }
+.post-media-table .ant-table-content > table {
+	min-width: 560px;
+}
+.post-media-thumbnail {
+	display: block;
+	width: 56px;
+	height: 44px;
+	object-fit: contain;
+}
 .builds-table .ant-table-content > table {
 	min-width: 720px;
 }

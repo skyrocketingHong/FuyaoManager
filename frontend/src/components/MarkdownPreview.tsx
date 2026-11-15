@@ -4,7 +4,13 @@ import remarkGfm from 'remark-gfm';
 import type { PluggableList } from 'unified';
 import { remarkPreviewHeadings } from '../features/posts/markdown';
 
-export default function MarkdownPreview({ source }: { source: string }) {
+export default function MarkdownPreview({
+	source,
+	imageURL
+}: {
+	source: string;
+	imageURL?: (source: string) => string;
+}) {
 	const root = useRef<HTMLDivElement>(null);
 	const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
 	const plugins = useMemo<PluggableList>(
@@ -17,6 +23,9 @@ export default function MarkdownPreview({ source }: { source: string }) {
 				remarkPlugins={plugins}
 				skipHtml
 				components={{
+					img: ({ node: _node, src, ...props }) => (
+						<img {...props} src={src && imageURL ? imageURL(src) : src} />
+					),
 					a: ({ node: _node, href, ...props }) => {
 						if (!href?.startsWith('#'))
 							return <a {...props} href={href} target="_blank" rel="noopener noreferrer" />;

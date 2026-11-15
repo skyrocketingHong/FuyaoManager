@@ -936,7 +936,7 @@ export interface paths {
          * @description Aggregates the posts tree for editor assistance: first-level physical
          *     directories (with their post counts and `_index.md` display titles),
          *     registered and frontmatter category and tag vocabularies (counted
-         *     once per post), and the total post count. Drafts and posts with invalid dates
+         *     once per post), unified category groups, and the total post count. Drafts and posts with invalid dates
          *     count; broken files fail the read instead of being skipped. The
          *     taxonomy follows the site's posts source: shared content reads the
          *     platform library with `canEdit=false`.
@@ -2504,9 +2504,17 @@ export interface components {
             name: string;
             postCount: number;
         };
+        PostCategoryGroup: {
+            name: string;
+            title: string;
+            directory?: string;
+            aliases: string[];
+            postCount: number;
+        };
         PostTaxonomy: {
             directories: components["schemas"]["PostDirectory"][];
             categories: components["schemas"]["TaxonomyTerm"][];
+            categoryGroups: components["schemas"]["PostCategoryGroup"][];
             tags: components["schemas"]["TaxonomyTerm"][];
             postCount: number;
             canEdit: boolean;

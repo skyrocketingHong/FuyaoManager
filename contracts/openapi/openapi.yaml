@@ -1799,7 +1799,7 @@ paths:
         Aggregates the posts tree for editor assistance: first-level physical
         directories (with their post counts and `_index.md` display titles),
         registered and frontmatter category and tag vocabularies (counted
-        once per post), and the total post count. Drafts and posts with invalid dates
+        once per post), unified category groups, and the total post count. Drafts and posts with invalid dates
         count; broken files fail the read instead of being skipped. The
         taxonomy follows the site's posts source: shared content reads the
         platform library with `canEdit=false`.
@@ -5723,9 +5723,20 @@ components:
           type: string
         postCount:
           type: integer
+    PostCategoryGroup:
+      type: object
+      required: [name, title, aliases, postCount]
+      properties:
+        name: { type: string }
+        title: { type: string }
+        directory: { type: string }
+        aliases:
+          type: array
+          items: { type: string }
+        postCount: { type: integer, minimum: 0 }
     PostTaxonomy:
       type: object
-      required: [directories, categories, tags, postCount, canEdit]
+      required: [directories, categories, categoryGroups, tags, postCount, canEdit]
       properties:
         directories:
           type: array
@@ -5735,6 +5746,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TaxonomyTerm'
+        categoryGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/PostCategoryGroup'
         tags:
           type: array
           items:
