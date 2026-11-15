@@ -5,11 +5,20 @@
  * create action.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes, createMemoryRouter, RouterProvider, useRouteError } from 'react-router-dom';
+import {
+	MemoryRouter,
+	Route,
+	Routes,
+	createMemoryRouter,
+	RouterProvider,
+	Outlet
+} from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
 import PostsPage from '../src/pages/sites/PostsPage';
+import PostEditorPage from '../src/pages/sites/PostEditorPage';
+import PostVocabularyPage from '../src/pages/sites/PostVocabularyPage';
 import * as management from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
 import { initLocale } from '../src/lib/i18n';
@@ -19,6 +28,12 @@ vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	getSite: vi.fn(),
 	listPosts: vi.fn(),
 	createPost: vi.fn(),
+	getPost: vi.fn(),
+	putPost: vi.fn(),
+	getPostVocabulary: vi.fn(),
+	putPostVocabulary: vi.fn(),
+	getPostDirectory: vi.fn(),
+	putPostDirectory: vi.fn(),
 	getPostTaxonomy: vi.fn()
 }));
 
@@ -84,12 +99,6 @@ function Header() {
 	);
 }
 
-function RouteErrorDump() {
-	const error = useRouteError();
-	console.log('ROUTE-ERROR:', error, '| STACK:', JSON.stringify((error as Error)?.stack, null, 0).slice(0, 700));
-	return <div>route-crash</div>;
-}
-
 function mountPosts() {
 	const router = createMemoryRouter(
 		[
@@ -100,12 +109,18 @@ function mountPosts() {
 						<AntApp>
 							<PageHeaderProvider scope="posts">
 								<Header />
-								<PostsPage />
+								<Outlet />
 							</PageHeaderProvider>
 						</AntApp>
 					</ConfigProvider>
 				),
-				errorElement: <RouteErrorDump />
+				errorElement: <div>route-crash</div>,
+				children: [
+					{ index: true, element: <PostsPage /> },
+					{ path: 'new', element: <PostEditorPage mode="new" /> },
+					{ path: 'vocabulary', element: <PostVocabularyPage /> },
+					{ path: ':postPath/edit', element: <PostEditorPage mode="edit" /> }
+				]
 			}
 		],
 		{ initialEntries: ['/sites/11111111-1111-1111-1111-111111111111/posts'] }
@@ -114,18 +129,44 @@ function mountPosts() {
 }
 
 describe('PostsPage', () => {
-	afterEach(cleanup);
+	afterEach(() => {
+		cleanup();
+		vi.unstubAllGlobals();
+	});
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		const NativeRequest = globalThis.Request;
+		vi.stubGlobal(
+			'Request',
+			class extends NativeRequest {
+				constructor(input: RequestInfo | URL, init?: RequestInit) {
+					super(input, init ? { ...init, signal: undefined } : init);
+				}
+			}
+		);
 		vi.mocked(management.getSite).mockImplementation(() => Promise.resolve(ownerSite));
 		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 1 });
-		vi.mocked(management.createPost).mockResolvedValue({
-			...samplePost,
-			category: 'tech',
-			digest: 'sha256:' + 'c'.repeat(64)
-		});
+		vi.mocked(management.createPost).mockImplementation(async (_target, post) => ({
+			post: { ...samplePost, ...post, digest: 'sha256:' + 'c'.repeat(64) },
+			etag: '"sha256:' + 'c'.repeat(64) + '"'
+		}));
 		vi.mocked(management.getPostTaxonomy).mockResolvedValue(emptyTaxonomy);
+		vi.mocked(management.getPost).mockResolvedValue({ post: samplePost, etag: samplePost.digest });
+		vi.mocked(management.getPostVocabulary).mockResolvedValue({
+			vocabulary: {
+				version: 1,
+				categories: [],
+				tags: [],
+				digest: 'sha256:' + 'd'.repeat(64),
+				canEdit: true
+			},
+			etag: '"sha256:' + 'd'.repeat(64) + '"'
+		});
+		vi.mocked(management.putPostVocabulary).mockImplementation(async (_target, value) => ({
+			vocabulary: { ...value, digest: 'sha256:' + 'e'.repeat(64), canEdit: true },
+			etag: '"sha256:' + 'e'.repeat(64) + '"'
+		}));
 		initLocale();
 	});
 
@@ -239,20 +280,16 @@ describe('PostsPage', () => {
 		const taxonomyCallsBefore = vi.mocked(management.getPostTaxonomy).mock.calls.length;
 
 		fireEvent.click(screen.getByRole('button', { name: /New post/ }));
-		await waitFor(() =>
-			expect(
-				document.querySelector('.ant-modal .ant-form')
-			).not.toBeNull()
-		);
+		await waitFor(() => expect(document.querySelector('.post-editor-form')).not.toBeNull());
 
 		// The directory AutoComplete offers the taxonomy directories.
 		const category = screen.getByLabelText('Category');
 		fireEvent.mouseDown(category);
 		fireEvent.change(category, { target: { value: 'tech' } });
 		await waitFor(() => {
-			const options = Array.from(
-				document.querySelectorAll('.ant-select-item-option-content')
-			).map((node) => node.textContent);
+			const options = Array.from(document.querySelectorAll('.ant-select-item-option-content')).map(
+				(node) => node.textContent
+			);
 			if (!options.some((text) => text === 'Tech (tech)')) {
 				throw new Error('directory candidates missing');
 			}
@@ -261,9 +298,9 @@ describe('PostsPage', () => {
 
 		// Existing categories and tags are searchable selections.
 		fireEvent.mouseDown(screen.getByLabelText('Categories'));
-		fireEvent.click(
-			await screen.findByText('go', { selector: '.ant-select-item-option-content' })
-		);
+		fireEvent.click(await screen.findByText('go', { selector: '.ant-select-item-option-content' }));
+		fireEvent.change(screen.getByLabelText('Categories'), { target: { value: '新分类' } });
+		fireEvent.keyDown(screen.getByLabelText('Categories'), { key: 'Enter', keyCode: 13 });
 		const tags = screen.getByLabelText('Tags');
 		fireEvent.mouseDown(tags);
 		fireEvent.change(tags, { target: { value: 'newtag' } });
@@ -280,8 +317,15 @@ describe('PostsPage', () => {
 			tags: string[];
 		};
 		expect(body.category).toBe('tech');
-		expect(body.categories).toEqual(['go']);
+		expect(body.categories).toEqual(['go', '新分类']);
 		expect(body.tags).toEqual(['newtag']);
+		await waitFor(() =>
+			expect(management.putPostVocabulary).toHaveBeenCalledWith(
+				ownerSite.siteId,
+				{ version: 1, categories: ['新分类'], tags: ['newtag'] },
+				'"sha256:' + 'd'.repeat(64) + '"'
+			)
+		);
 
 		// The saved article refreshes the taxonomy for the next editor.
 		await waitFor(() =>
@@ -289,6 +333,10 @@ describe('PostsPage', () => {
 				taxonomyCallsBefore
 			)
 		);
+		await waitFor(() =>
+			expect(management.getPost).toHaveBeenCalledWith(ownerSite.siteId, 'tech/hello.md')
+		);
+		expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
 	}, 15000);
 
 	it('shows a retryable taxonomy error and keeps the editor values', async () => {
@@ -297,20 +345,183 @@ describe('PostsPage', () => {
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('button', { name: /New post/ }));
 		const title = await screen.findByLabelText('Title');
-		console.log(
-			'GETSITE-RESULTS:',
-			JSON.stringify(vi.mocked(management.getSite).mock.results.map((r) => [r.type, typeof r.value, r.value && typeof (r.value as Promise<unknown>).then])),
-			'TAX-RESULTS:',
-			JSON.stringify(vi.mocked(management.getPostTaxonomy).mock.results.map((r) => [r.type, typeof r.value, r.value && typeof (r.value as Promise<unknown>).then])),
-		);
 		fireEvent.change(title, { target: { value: 'kept' } });
 		const retry = await screen.findByRole('button', { name: 'Retry' });
 		fireEvent.click(retry);
-		await waitFor(() =>
-			expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-		);
+		await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull());
 		expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('kept');
 		// The retry re-read the taxonomy instead of faking an empty one.
 		await waitFor(() => expect(management.getPostTaxonomy).toHaveBeenCalledTimes(2));
 	}, 15000);
+
+	it('opens an encoded article route and renders Markdown without executing raw HTML', async () => {
+		vi.mocked(management.getPost).mockResolvedValue({
+			post: {
+				...samplePost,
+				body: '# Preview heading\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n<script>window.attack = true</script>\n\n[unsafe](javascript:alert(1))'
+			},
+			etag: samplePost.digest
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		expect(await screen.findByRole('heading', { name: 'Preview heading' })).toBeDefined();
+		expect(management.getPost).toHaveBeenCalledWith(ownerSite.siteId, 'tech/hello.md');
+		expect(document.querySelector('.markdown-preview table')).not.toBeNull();
+		expect(document.querySelector('.markdown-preview script')).toBeNull();
+		expect(screen.getByText('unsafe').closest('a')?.getAttribute('href') ?? '').not.toMatch(
+			/^javascript:/i
+		);
+	});
+
+	it('keeps edits made during saving and uses the returned digest on the next save', async () => {
+		let finish!: (result: { post: typeof samplePost; etag: string }) => void;
+		vi.mocked(management.putPost).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					finish = resolve;
+				})
+		);
+		vi.mocked(management.putPost).mockResolvedValueOnce({
+			post: { ...samplePost, title: 'Later', digest: 'sha256:' + 'c'.repeat(64) },
+			etag: '"sha256:' + 'c'.repeat(64) + '"'
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		const title = await screen.findByLabelText('Title');
+		fireEvent.change(title, { target: { value: 'First' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(management.putPost).toHaveBeenCalledTimes(1));
+		expect(vi.mocked(management.putPost).mock.calls[0][2].date).toBe(samplePost.date);
+		fireEvent.change(title, { target: { value: 'Later' } });
+		finish({
+			post: { ...samplePost, title: 'First', digest: 'sha256:' + 'b'.repeat(64) },
+			etag: '"sha256:' + 'b'.repeat(64) + '"'
+		});
+		await waitFor(() =>
+			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Later')
+		);
+		await waitFor(() =>
+			expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(
+				false
+			)
+		);
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(management.putPost).toHaveBeenCalledTimes(2));
+		expect(vi.mocked(management.putPost).mock.calls[1][3]).toBe('"sha256:' + 'b'.repeat(64) + '"');
+	});
+
+	it('keeps the draft when leaving is cancelled', async () => {
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		const title = await screen.findByLabelText('Title');
+		fireEvent.change(title, { target: { value: 'Unsaved' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Back to posts' }));
+		const cancel = await screen.findByRole('button', { name: 'Keep editing' });
+		fireEvent.click(cancel);
+		await waitFor(() =>
+			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Unsaved')
+		);
+	});
+
+	it('registers an unused category in the scope vocabulary with its ETag', async () => {
+		const saved = {
+			version: 1 as const,
+			categories: ['技术'],
+			tags: [],
+			digest: 'sha256:' + 'e'.repeat(64),
+			canEdit: true
+		};
+		vi.mocked(management.putPostVocabulary).mockImplementationOnce(async () => {
+			vi.mocked(management.getPostVocabulary).mockResolvedValue({
+				vocabulary: saved,
+				etag: '"' + saved.digest + '"'
+			});
+			vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+				...emptyTaxonomy,
+				categories: [{ name: '技术', postCount: 0 }]
+			});
+			return { vocabulary: saved, etag: '"' + saved.digest + '"' };
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
+		const input = await screen.findByLabelText('Enter a category');
+		await waitFor(() => expect((input as HTMLInputElement).disabled).toBe(false));
+		fireEvent.change(input, { target: { value: '技术' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+		await waitFor(() =>
+			expect(management.putPostVocabulary).toHaveBeenCalledWith(
+				ownerSite.siteId,
+				{ version: 1, categories: ['技术'], tags: [] },
+				'"sha256:' + 'd'.repeat(64) + '"'
+			)
+		);
+		expect(await screen.findByText('技术')).toBeDefined();
+	});
+
+	it('creates a directory through the scoped index ETag', async () => {
+		const initial = {
+			slug: 'notes',
+			title: 'notes',
+			digest: 'sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+			canEdit: true
+		};
+		vi.mocked(management.getPostDirectory).mockResolvedValue({
+			directory: initial,
+			etag: '"' + initial.digest + '"'
+		});
+		vi.mocked(management.putPostDirectory).mockImplementationOnce(async () => {
+			vi.mocked(management.getPostTaxonomy).mockResolvedValue({
+				...emptyTaxonomy,
+				directories: [{ slug: 'notes', title: '笔记', postCount: 0 }]
+			});
+			return { directory: { ...initial, title: '笔记' }, etag: '"updated"' };
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
+		await screen.findByLabelText('Enter a category');
+		fireEvent.click(screen.getByRole('radio', { name: 'Directories' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add directory' }));
+		fireEvent.change(screen.getByLabelText('Directory slug'), { target: { value: 'notes' } });
+		fireEvent.change(screen.getByLabelText('Display name'), { target: { value: '笔记' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() =>
+			expect(management.putPostDirectory).toHaveBeenCalledWith(
+				ownerSite.siteId,
+				'notes',
+				'笔记',
+				'"' + initial.digest + '"'
+			)
+		);
+		expect(await screen.findByText('笔记')).toBeDefined();
+	});
+
+	it('does not overwrite an index created after the directory list was loaded', async () => {
+		const existing = {
+			slug: 'notes',
+			title: 'Other author',
+			digest: 'sha256:' + 'a'.repeat(64),
+			canEdit: true
+		};
+		vi.mocked(management.getPostDirectory).mockResolvedValue({
+			directory: existing,
+			etag: '"' + existing.digest + '"'
+		});
+		mountPosts();
+		await screen.findByText('Hello');
+		fireEvent.click(screen.getByRole('button', { name: 'Manage categories and tags' }));
+		await screen.findByLabelText('Enter a category');
+		fireEvent.click(screen.getByRole('radio', { name: 'Directories' }));
+		fireEvent.click(screen.getByRole('button', { name: 'Add directory' }));
+		fireEvent.change(screen.getByLabelText('Directory slug'), { target: { value: 'notes' } });
+		fireEvent.change(screen.getByLabelText('Display name'), { target: { value: 'My title' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		expect(await screen.findByText('This directory already exists.')).toBeDefined();
+		expect(management.putPostDirectory).not.toHaveBeenCalled();
+		expect((screen.getByLabelText('Display name') as HTMLInputElement).value).toBe('My title');
+	});
 });

@@ -4,16 +4,39 @@ import { contentResourcePath, platformContent, putContentSources } from '../src/
 import {
 	getFriends,
 	getPost,
+	getPostDirectory,
 	listPosts,
 	processAlbums,
 	putAlbumYear,
-	putFriends
+	putFriends,
+	putPost,
+	putPostDirectory
 } from '../src/lib/api/management';
 
 vi.mock('../src/lib/api/client', () => ({ api: vi.fn(), setCsrfToken: vi.fn() }));
 beforeEach(() => {
 	vi.clearAllMocks();
 	vi.mocked(api).mockResolvedValue({ data: {}, etag: '"content"' });
+});
+
+it('keeps the returned HTTP ETag for consecutive article writes and directory updates', async () => {
+	vi.mocked(api).mockResolvedValue({
+		data: { digest: 'unquoted-json-digest' },
+		etag: '"exact-response-etag"'
+	});
+	const saved = await putPost('website', 'tech/hello.md', { title: 'Updated' }, '"previous"');
+	expect(saved.etag).toBe('"exact-response-etag"');
+	expect(api).toHaveBeenLastCalledWith('PUT', '/api/v1/sites/website/posts/tech%2Fhello.md', {
+		body: { title: 'Updated' },
+		etag: '"previous"'
+	});
+	await getPostDirectory(platformContent, 'notes');
+	expect(api).toHaveBeenLastCalledWith('GET', '/api/v1/content/posts/directories/notes');
+	await putPostDirectory(platformContent, 'notes', '笔记', '"index"');
+	expect(api).toHaveBeenLastCalledWith('PUT', '/api/v1/content/posts/directories/notes', {
+		body: { title: '笔记' },
+		etag: '"index"'
+	});
 });
 
 it('routes platform resources without a site identity and retains existing site resource paths', () => {

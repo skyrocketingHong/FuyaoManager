@@ -185,7 +185,7 @@ export default function LogsPage() {
 		actions
 	});
 	return (
-		<TablePanel>
+		<div className="page-stack page-stack--fill"><TablePanel className="fill-height">
 			{!header && (
 				<div className="panel-body">
 					<Space wrap>
@@ -204,6 +204,7 @@ export default function LogsPage() {
 			)}
 			<DataTable
 				className="operation-logs-table"
+				styles={{ content: { overflowY: 'auto' } }}
 				minWidth={1540}
 				columnWidths={[164, 140, 160, 190, 100, undefined, 175]}
 				heads={[
@@ -247,6 +248,6 @@ export default function LogsPage() {
 					<VersionText className="log-address">{event.peerIp || t('admin.never')}</VersionText>
 				])}
 			/>
-		</TablePanel>
+		</TablePanel></div>
 	);
 }

@@ -11,6 +11,7 @@ interface MatrixTableProps {
 	minWidth?: number;
 	rowKeys?: Key[];
 	pagination?: TableProps<ReactNode[]>['pagination'];
+	styles?: TableProps<ReactNode[]>['styles'];
 }
 
 // robot-platform's Widgets.DataTable uses small tables and a shared surface.
@@ -26,6 +27,7 @@ export default function DataTable<Row extends object>(props: TableProps<Row> | M
 			className = '',
 			minWidth,
 			rowKeys,
+			styles,
 			pagination = false
 		} = props;
 		const keys = new Map(rows.map((row, index) => [row, rowKeys?.[index] ?? String(index)]));
@@ -34,6 +36,7 @@ export default function DataTable<Row extends object>(props: TableProps<Row> | M
 				className={`data-table ${className}`.trim()}
 				size="small"
 				pagination={pagination}
+				styles={styles}
 				locale={{ emptyText: empty }}
 				columns={heads.map((head, column) => ({
 					title: head,

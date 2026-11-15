@@ -287,6 +287,64 @@ export async function getPostTaxonomy(
 	return data;
 }
 
+export type PostVocabulary = components['schemas']['PostVocabulary'];
+export type PostVocabularyUpdate = components['schemas']['PostVocabularyUpdate'];
+export type PostDirectoryDocument = components['schemas']['PostDirectoryDocument'];
+
+export async function getPostDirectory(
+	target: ContentTarget,
+	slug: string
+): Promise<{ directory: PostDirectoryDocument; etag: string }> {
+	const { data, etag } = await api<PostDirectoryDocument>(
+		'GET',
+		`${contentResourcePath(target, 'posts')}/directories/${encodeURIComponent(slug)}`
+	);
+	if (!etag) throw new Error('Missing post directory ETag');
+	return { directory: data, etag };
+}
+
+export async function putPostDirectory(
+	target: ContentTarget,
+	slug: string,
+	title: string,
+	etag: string
+): Promise<{ directory: PostDirectoryDocument; etag: string }> {
+	const result = await api<PostDirectoryDocument>(
+		'PUT',
+		`${contentResourcePath(target, 'posts')}/directories/${encodeURIComponent(slug)}`,
+		{ body: { title }, etag }
+	);
+	if (!result.etag) throw new Error('Missing post directory ETag');
+	return { directory: result.data, etag: result.etag };
+}
+
+export async function getPostVocabulary(
+	target: ContentTarget,
+	signal?: AbortSignal
+): Promise<{ vocabulary: PostVocabulary; etag: string }> {
+	const { data, etag } = await api<PostVocabulary>(
+		'GET',
+		`${contentResourcePath(target, 'posts')}/vocabulary`,
+		{ signal }
+	);
+	if (!etag) throw new Error('Missing post vocabulary ETag');
+	return { vocabulary: data, etag };
+}
+
+export async function putPostVocabulary(
+	target: ContentTarget,
+	value: PostVocabularyUpdate,
+	etag: string
+): Promise<{ vocabulary: PostVocabulary; etag: string }> {
+	const result = await api<PostVocabulary>(
+		'PUT',
+		`${contentResourcePath(target, 'posts')}/vocabulary`,
+		{ body: value, etag }
+	);
+	if (!result.etag) throw new Error('Missing post vocabulary ETag');
+	return { vocabulary: result.data, etag: result.etag };
+}
+
 export async function listPosts(
 	siteId: ContentTarget,
 	query: string,
@@ -300,9 +358,15 @@ export async function listPosts(
 	return data;
 }
 
-export async function createPost(siteId: ContentTarget, post: Partial<Post>): Promise<Post> {
-	const { data } = await api<Post>('POST', contentResourcePath(siteId, 'posts'), { body: post });
-	return data;
+export async function createPost(
+	siteId: ContentTarget,
+	post: Partial<Post>
+): Promise<{ post: Post; etag: string }> {
+	const { data, etag } = await api<Post>('POST', contentResourcePath(siteId, 'posts'), {
+		body: post
+	});
+	if (etag === null) throw new Error('post response missing ETag');
+	return { post: data, etag };
 }
 
 export async function getPost(
@@ -322,8 +386,8 @@ export async function putPost(
 	postPath: string,
 	post: Partial<Post>,
 	etag: string
-): Promise<Post> {
-	const { data } = await api<Post>(
+): Promise<{ post: Post; etag: string }> {
+	const { data, etag: nextEtag } = await api<Post>(
 		'PUT',
 		`${contentResourcePath(siteId, 'posts')}/${encodeURIComponent(postPath)}`,
 		{
@@ -331,7 +395,8 @@ export async function putPost(
 			etag
 		}
 	);
-	return data;
+	if (nextEtag === null) throw new Error('post response missing ETag');
+	return { post: data, etag: nextEtag };
 }
 
 export async function deletePost(

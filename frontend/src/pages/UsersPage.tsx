@@ -168,7 +168,7 @@ export default function UsersPage() {
 	const inHeader = usePageHeader({ content, actions });
 	const visibleCode = code?.generation === generation ? code.value : null;
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{!inHeader && (
 				<div className="table-panel-header">
 					{content}
@@ -190,9 +190,10 @@ export default function UsersPage() {
 				<PageLoading label={t('common.loading')} />
 			) : (
 				query.data && (
-					<TablePanel>
+					<TablePanel className="fill-height">
 						<DataTable<service.AdminUser>
 							scroll={{ x: 'max-content' }}
+							styles={{ content: { overflowY: 'auto' } }}
 							rowKey="id"
 							dataSource={query.data.users}
 							loading={query.loading}

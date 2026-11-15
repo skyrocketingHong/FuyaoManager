@@ -120,6 +120,10 @@ describe('navigation metadata', () => {
 		expect(selectedPath('/sites/abc')).toBe('/sites/abc');
 		expect(selectedPath('/themes')).toBe('/themes');
 		expect(selectedPath('/nowhere')).toBeNull();
+		expect(selectedPath('/content/posts/new')).toBe('/content/posts');
+		expect(selectedPath('/content/posts/tech%2Fhello.md/edit')).toBe('/content/posts');
+		expect(selectedPath('/sites/abc/posts/tech%2Fhello.md/edit')).toBe('/sites/abc/posts');
+		expect(selectedPath('/sites/abc/posts/vocabulary')).toBe('/sites/abc/posts');
 	});
 
 	it('fills concrete paths', () => {

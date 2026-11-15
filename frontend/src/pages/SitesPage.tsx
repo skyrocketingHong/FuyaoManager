@@ -246,6 +246,7 @@ export default function SitesPage() {
 						<Empty description={t('sites.empty')} />
 					) : (
 						<DataTable<Site>
+							className="sites-table"
 							rowKey="siteId"
 							pagination={false}
 							dataSource={group.records}

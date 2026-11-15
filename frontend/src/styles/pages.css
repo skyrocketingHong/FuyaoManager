@@ -11,6 +11,10 @@
 	flex-direction: column;
 	gap: var(--space-4);
 	max-width: none;
+	min-width: 0;
+}
+.shell-content > .page-stack:not(.page-stack--fill) {
+	min-height: 100%;
 }
 
 /* Workspace fill mode, enabled per page with .page-stack--fill: the stack is
@@ -64,15 +68,37 @@
 .fill-height.table-panel > .table-panel-content,
 .fill-height.table-panel > .table-panel-content > .ant-table-wrapper,
 .fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin,
-.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container,
-.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table,
-.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container {
+.fill-height.table-panel
+	> .table-panel-content
+	> .ant-table-wrapper
+	> .ant-spin
+	> .ant-spin-container,
+.fill-height.table-panel
+	> .table-panel-content
+	> .ant-table-wrapper
+	> .ant-spin
+	> .ant-spin-container
+	> .ant-table,
+.fill-height.table-panel
+	> .table-panel-content
+	> .ant-table-wrapper
+	> .ant-spin
+	> .ant-spin-container
+	> .ant-table
+	> .ant-table-container {
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
 }
-.fill-height.table-panel > .table-panel-content > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-content {
+.fill-height.table-panel
+	> .table-panel-content
+	> .ant-table-wrapper
+	> .ant-spin
+	> .ant-spin-container
+	> .ant-table
+	> .ant-table-container
+	> .ant-table-content {
 	flex: 1 1 auto;
 	min-height: 0;
 	overflow-y: auto;
@@ -85,6 +111,63 @@
    and break the vertical chain. */
 .posts-table .ant-table-content > table {
 	min-width: 720px;
+}
+.sites-table .ant-table-content > table {
+	min-width: 760px;
+}
+.albums-table .ant-table-content > table {
+	min-width: 760px;
+}
+.taxonomy-table .ant-table-content > table {
+	min-width: 560px;
+}
+.builds-table .ant-table-content > table {
+	min-width: 720px;
+}
+.releases-table .ant-table-content > table {
+	min-width: 720px;
+}
+.releases-panel > .ant-card-body > .panel-body {
+	display: flex;
+	flex-direction: column;
+	overflow-y: auto;
+}
+.release-history {
+	flex: 1 1 auto;
+	min-height: 12rem;
+}
+.friends-groups {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	overflow-y: auto;
+}
+.friends-row {
+	display: grid;
+	grid-template-columns: minmax(110px, 1fr) minmax(150px, 1.5fr) minmax(120px, 1fr) minmax(
+			120px,
+			1fr
+		) auto;
+	align-items: center;
+	gap: var(--space-2);
+	margin-bottom: var(--space-2);
+}
+.friends-row .ant-input {
+	min-width: 0;
+	width: 100%;
+}
+.footprints-list {
+	overflow-y: auto;
+}
+@container (max-width: 800px) {
+	.friends-row {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+@container (max-width: 440px) {
+	.friends-row {
+		grid-template-columns: minmax(0, 1fr);
+	}
 }
 
 /* Themes catalog fill table: same local-min-width approach as the posts
@@ -390,7 +473,7 @@
 /* Dense key/value rows used by overview and detail surfaces. */
 .fact-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
 	gap: var(--space-4);
 }
 

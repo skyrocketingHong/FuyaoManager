@@ -12,6 +12,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
 import FriendsPage from '../src/pages/sites/FriendsPage';
 import PostsPage from '../src/pages/sites/PostsPage';
+import PostEditorPage from '../src/pages/sites/PostEditorPage';
 import * as api from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
 import { initLocale, t } from '../src/lib/i18n';
@@ -24,6 +25,7 @@ vi.mock('../src/lib/api/management', async (importOriginal) => ({
 	putFriends: vi.fn(),
 	listPosts: vi.fn(),
 	getPost: vi.fn(),
+	getPostTaxonomy: vi.fn(),
 	putPost: vi.fn()
 }));
 
@@ -81,14 +83,36 @@ beforeAll(() =>
 );
 beforeEach(() => {
 	vi.clearAllMocks();
+	const NativeRequest = globalThis.Request;
+	vi.stubGlobal(
+		'Request',
+		class extends NativeRequest {
+			constructor(input: RequestInfo | URL, init?: RequestInit) {
+				super(input, init ? { ...init, signal: undefined } : init);
+			}
+		}
+	);
 	vi.mocked(api.getSite).mockResolvedValue(site);
+	vi.mocked(api.getPostTaxonomy).mockResolvedValue({
+		directories: [],
+		categories: [],
+		tags: [],
+		postCount: 0,
+		canEdit: true
+	});
 	initLocale();
 });
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
 
 function mount(element: React.ReactElement, section: string, siteId = site.siteId) {
 	const router = createMemoryRouter(
-		[{ path: '/sites/:siteId/' + section, element }],
+		[
+			{ path: '/sites/:siteId/' + section, element },
+			{ path: '/sites/:siteId/posts/:postPath/edit', element: <PostEditorPage mode="edit" /> }
+		],
 		{ initialEntries: [`/sites/${siteId}/${section}`] }
 	);
 	render(<RouterProvider router={router} />);
@@ -160,6 +184,119 @@ describe('editing state (R5)', () => {
 		);
 	});
 
+	it('keeps fields edited while the conflict synchronization is in flight', async () => {
+		let finish!: (result: { post: typeof post & { description: string }; etag: string }) => void;
+		vi.mocked(api.listPosts).mockResolvedValue({ posts: [post], total: 1 });
+		vi.mocked(api.getPost)
+			.mockResolvedValueOnce({ post, etag: '"d1"' })
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finish = resolve;
+					})
+			);
+		vi.mocked(api.putPost).mockRejectedValue(
+			new ApiError(412, 'precondition_failed', 'conflict', null)
+		);
+		mount(<PostsPage />, 'posts');
+		await screen.findByText('Original title');
+		fireEvent.click(button(t('posts.edit')));
+		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+			target: { value: 'Local title' }
+		});
+		fireEvent.click(button(t('common.save')));
+		await waitFor(() => expect(button(t('posts.conflictAction'))).toBeTruthy());
+		fireEvent.click(button(t('posts.conflictAction')));
+		await waitFor(() => expect(api.getPost).toHaveBeenCalledTimes(2));
+		const description = screen.getByLabelText(t('posts.fieldDescription')) as HTMLTextAreaElement;
+		fireEvent.change(description, { target: { value: 'Typed during sync' } });
+		await act(async () =>
+			finish({
+				post: { ...post, title: 'Server title', description: 'Server description' },
+				etag: '"d2"'
+			})
+		);
+		await waitFor(() => expect(description.value).toBe('Typed during sync'));
+		expect((screen.getByLabelText(t('posts.fieldTitle')) as HTMLInputElement).value).toBe(
+			'Local title'
+		);
+	});
+
+	it('loads the current server version when discarding edits after a conflict', async () => {
+		vi.mocked(api.listPosts).mockResolvedValue({ posts: [post], total: 1 });
+		vi.mocked(api.getPost)
+			.mockResolvedValueOnce({ post, etag: '"d1"' })
+			.mockResolvedValueOnce({ post: { ...post, title: 'Server V2' }, etag: '"d2"' });
+		vi.mocked(api.putPost).mockRejectedValue(
+			new ApiError(412, 'precondition_failed', 'conflict', null)
+		);
+		mount(<PostsPage />, 'posts');
+		await screen.findByText('Original title');
+		fireEvent.click(button(t('posts.edit')));
+		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+			target: { value: 'Discard me' }
+		});
+		fireEvent.click(button(t('common.save')));
+		await waitFor(() => expect(button(t('posts.discardLocal'))).toBeTruthy());
+		fireEvent.click(button(t('posts.discardLocal')));
+		await screen.findByText(t('posts.discardConfirm'));
+		const confirm = document.querySelector(
+			'.ant-popconfirm-buttons .ant-btn-primary'
+		) as HTMLButtonElement;
+		fireEvent.click(confirm);
+		await waitFor(() =>
+			expect((screen.getByLabelText(t('posts.fieldTitle')) as HTMLInputElement).value).toBe(
+				'Server V2'
+			)
+		);
+		expect(button(t('common.save')).disabled).toBe(true);
+	});
+
+	it('preserves new input made while the discarded version is being reloaded', async () => {
+		let finish!: (result: { post: typeof post & { description: string }; etag: string }) => void;
+		vi.mocked(api.listPosts).mockResolvedValue({ posts: [post], total: 1 });
+		vi.mocked(api.getPost)
+			.mockResolvedValueOnce({ post, etag: '"d1"' })
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						finish = resolve;
+					})
+			);
+		vi.mocked(api.putPost).mockRejectedValue(
+			new ApiError(412, 'precondition_failed', 'conflict', null)
+		);
+		mount(<PostsPage />, 'posts');
+		await screen.findByText('Original title');
+		fireEvent.click(button(t('posts.edit')));
+		fireEvent.change(await screen.findByDisplayValue('Original title'), {
+			target: { value: 'Discard me' }
+		});
+		fireEvent.click(button(t('common.save')));
+		await waitFor(() => expect(button(t('posts.discardLocal'))).toBeTruthy());
+		fireEvent.click(button(t('posts.discardLocal')));
+		await screen.findByText(t('posts.discardConfirm'));
+		fireEvent.click(
+			document.querySelector('.ant-popconfirm-buttons .ant-btn-primary') as HTMLButtonElement
+		);
+		await waitFor(() => expect(api.getPost).toHaveBeenCalledTimes(2));
+		const description = screen.getByLabelText(t('posts.fieldDescription')) as HTMLTextAreaElement;
+		fireEvent.change(description, { target: { value: 'Newer edit' } });
+		await act(async () =>
+			finish({
+				post: { ...post, title: 'Server V2', description: 'Server description' },
+				etag: '"d2"'
+			})
+		);
+		await waitFor(() =>
+			expect((screen.getByLabelText(t('posts.fieldTitle')) as HTMLInputElement).value).toBe(
+				'Server V2'
+			)
+		);
+		expect(description.value).toBe('Newer edit');
+		expect(button(t('common.save')).disabled).toBe(false);
+	});
+
 	it('keeps the posts editor read-only for viewers', async () => {
 		vi.mocked(api.getSite).mockResolvedValue({ ...site, role: 'viewer' });
 		vi.mocked(api.listPosts).mockResolvedValue({ posts: [post], total: 1 });
@@ -190,10 +327,9 @@ describe('editing state (R5)', () => {
 
 		const { unmount } = render(
 			<RouterProvider
-				router={createMemoryRouter(
-					[{ path: '/sites/:siteId/friends', element: <FriendsPage /> }],
-					{ initialEntries: [`/sites/${site.siteId}/friends`] }
-				)}
+				router={createMemoryRouter([{ path: '/sites/:siteId/friends', element: <FriendsPage /> }], {
+					initialEntries: [`/sites/${site.siteId}/friends`]
+				})}
 			/>
 		);
 		// The user leaves the page (site switch / unmount) before the slow

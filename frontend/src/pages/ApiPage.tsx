@@ -181,11 +181,11 @@ export default function ApiPage() {
 		)
 	});
 	return (
-		<div className="page-stack api-catalog">
+		<div className="page-stack page-stack--fill api-catalog">
 			<span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
 				{copyStatus}
 			</span>
-			<TablePanel>
+			<TablePanel className="fill-height">
 				<div className="panel-body api-catalog-body">
 					{!header && (
 						<div className="api-catalog-filters">

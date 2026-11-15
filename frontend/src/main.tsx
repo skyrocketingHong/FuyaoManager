@@ -10,6 +10,7 @@ import './styles/shell.css';
 import './styles/sidebar/sidebar.css';
 import './styles/statusbar/statusbar.css';
 import './styles/pages.css';
+import './styles/post-editor.css';
 import './styles/appearance.css';
 import './styles/admin.css';
 

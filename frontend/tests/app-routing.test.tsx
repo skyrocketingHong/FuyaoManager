@@ -58,9 +58,13 @@ vi.mock('../src/lib/sites/site-list', () => ({
 }));
 
 const getSite = vi.fn();
+const getPost = vi.fn();
+const getPostTaxonomy = vi.fn();
 const apiRequest = vi.fn();
 vi.mock('../src/lib/api/management', () => ({
-	getSite: (...args: unknown[]) => getSite(...args)
+	getSite: (...args: unknown[]) => getSite(...args),
+	getPost: (...args: unknown[]) => getPost(...args),
+	getPostTaxonomy: (...args: unknown[]) => getPostTaxonomy(...args)
 }));
 vi.mock('../src/lib/api/client', () => ({
 	currentAuthGeneration: () => 0,
@@ -146,7 +150,36 @@ beforeEach(() => {
 	setLocale('zh-CN');
 	mockSiteListState = { status: 'ready', sites: [siteAbc], errorKey: null };
 	getSite.mockResolvedValue(siteAbc);
+	getPostTaxonomy.mockResolvedValue({
+		directories: [],
+		categories: [],
+		tags: [],
+		postCount: 0,
+		canEdit: true
+	});
+	getPost.mockResolvedValue({
+		post: {
+			path: 'tech/hello.md',
+			category: 'tech',
+			slug: 'hello',
+			title: 'Loaded article',
+			date: '2026-01-01',
+			draft: false,
+			body: 'Body',
+			digest: 'sha256:' + 'a'.repeat(64)
+		},
+		etag: '"sha256:' + 'a'.repeat(64) + '"'
+	});
 	apiRequest.mockImplementation(async (_method: string, path: string) => {
+		if (path === '/api/v1/content')
+			return {
+				data: {
+					canEdit: true,
+					counts: { posts: 0, albums: 0, photos: 0, places: 0, friends: 0 },
+					amap: {}
+				},
+				etag: null
+			};
 		if (path.endsWith('/content-sources'))
 			return {
 				data: {
@@ -249,6 +282,70 @@ describe('guards', () => {
 
 describe('deep links and menu selection', () => {
 	beforeEach(() => authenticated());
+
+	it('renders the real post editor inside the site shell and retries a failed read', async () => {
+		getPost.mockRejectedValueOnce(new Error('offline'));
+		renderAt('/sites/abc/posts/tech%2Fhello.md/edit');
+		const retry = await screen.findByRole('button', {
+			name: (name) => name.replace(/\s/g, '') === zh['common.retry']
+		});
+		fireEvent.click(retry);
+		expect(((await screen.findByLabelText(zh['posts.fieldTitle'])) as HTMLInputElement).value).toBe(
+			'Loaded article'
+		);
+		expect(getPost).toHaveBeenLastCalledWith('abc', 'tech/hello.md');
+		const topbar = document.querySelector('.topbar');
+		expect(topbar?.textContent?.replace(/\s/g, '')).toContain(zh['common.save']);
+		expect(document.querySelector('.ant-menu-item-selected')?.textContent).toContain(
+			zh['nav.posts']
+		);
+	});
+
+	it('renders the platform post editor with platform scope and a single top-bar save action', async () => {
+		renderAt('/content/posts/new');
+		await screen.findByLabelText(zh['posts.fieldTitle']);
+		await waitFor(() =>
+			expect(getPostTaxonomy).toHaveBeenCalledWith({ type: 'platform' }, expect.anything())
+		);
+		expect(document.querySelectorAll('.topbar button').length).toBeGreaterThan(0);
+		expect(
+			screen.getAllByRole('button', {
+				name: (name) => name.replace(/\s/g, '') === zh['common.save']
+			})
+		).toHaveLength(1);
+	});
+
+	it('opens shared site posts as read-only in the real editor', async () => {
+		const fallback = apiRequest.getMockImplementation()!;
+		apiRequest.mockImplementation(async (method: string, path: string, ...rest: unknown[]) => {
+			if (path.endsWith('/content-sources'))
+				return {
+					data: {
+						sources: {
+							posts: 'platform',
+							albums: 'independent',
+							footprints: 'independent',
+							friends: 'independent'
+						},
+						revision: 1
+					},
+					etag: '"sources-1"'
+				};
+			return fallback(method, path, ...rest);
+		});
+		renderAt('/sites/abc/posts/tech%2Fhello.md/edit');
+		const title = (await screen.findByLabelText(zh['posts.fieldTitle'])) as HTMLInputElement;
+		expect(title.value).toBe('Loaded article');
+		expect(title.disabled).toBe(true);
+		expect(
+			(
+				screen.getByRole('button', {
+					name: (name) => name.replace(/\s/g, '') === zh['common.save']
+				}) as HTMLButtonElement
+			).disabled
+		).toBe(true);
+		expect(getPost).toHaveBeenLastCalledWith('abc', 'tech/hello.md');
+	});
 
 	it('renders the themes catalog from the menu-reachable route', async () => {
 		renderAt('/themes');

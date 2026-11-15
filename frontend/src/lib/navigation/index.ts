@@ -18,6 +18,8 @@ export interface NavItem {
 	titleKey: MessageKey;
 	adminOnly?: boolean;
 	menu?: boolean;
+	/** Hidden routes inherit their sidebar entry and content workspace. */
+	parentId?: string;
 }
 
 export const navItems: readonly NavItem[] = [
@@ -36,6 +38,33 @@ export const navItems: readonly NavItem[] = [
 		group: 'content' as const,
 		titleKey: `nav.${resource}` as MessageKey
 	})),
+	{
+		id: 'content.posts.new',
+		path: '/content/posts/new',
+		scope: 'platform',
+		group: 'content',
+		titleKey: 'posts.newTitle',
+		menu: false,
+		parentId: 'content.posts'
+	},
+	{
+		id: 'content.posts.vocabulary',
+		path: '/content/posts/vocabulary',
+		scope: 'platform',
+		group: 'content',
+		titleKey: 'taxonomy.title',
+		menu: false,
+		parentId: 'content.posts'
+	},
+	{
+		id: 'content.posts.edit',
+		path: '/content/posts/:postPath/edit',
+		scope: 'platform',
+		group: 'content',
+		titleKey: 'posts.editTitle',
+		menu: false,
+		parentId: 'content.posts'
+	},
 	{
 		id: 'api',
 		path: '/api-reference',
@@ -111,6 +140,33 @@ export const navItems: readonly NavItem[] = [
 		scope: 'site',
 		group: 'content',
 		titleKey: 'nav.posts'
+	},
+	{
+		id: 'site.posts.new',
+		path: '/sites/:siteId/posts/new',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'posts.newTitle',
+		menu: false,
+		parentId: 'site.posts'
+	},
+	{
+		id: 'site.posts.vocabulary',
+		path: '/sites/:siteId/posts/vocabulary',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'taxonomy.title',
+		menu: false,
+		parentId: 'site.posts'
+	},
+	{
+		id: 'site.posts.edit',
+		path: '/sites/:siteId/posts/:postPath/edit',
+		scope: 'site',
+		group: 'content',
+		titleKey: 'posts.editTitle',
+		menu: false,
+		parentId: 'site.posts'
 	},
 	{
 		id: 'site.friends',
@@ -211,7 +267,7 @@ export interface RouteMatch {
 function patternToRegex(pattern: string): RegExp {
 	const source = pattern
 		.split('/')
-		.map((segment) => (segment === ':siteId' ? '(?<siteId>[^/]+)' : segment))
+		.map((segment) => (segment.startsWith(':') ? `(?<${segment.slice(1)}>[^/]+)` : segment))
 		.join('\\/');
 	return new RegExp(`^${source}\\/?$`);
 }
@@ -237,5 +293,9 @@ export function itemPath(item: NavItem, siteId: string | null): string {
 /** The menu selected key for a pathname (the item's concrete path). */
 export function selectedPath(pathname: string): string | null {
 	const match = matchRoute(pathname);
-	return match ? itemPath(match.item, match.siteId) : null;
+	if (!match) return null;
+	const selected = match.item.parentId
+		? (navItems.find((item) => item.id === match.item.parentId) ?? match.item)
+		: match.item;
+	return itemPath(selected, match.siteId);
 }

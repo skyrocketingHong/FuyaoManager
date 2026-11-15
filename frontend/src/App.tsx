@@ -29,6 +29,8 @@ import type { ContentResource } from './lib/api/content';
 import SettingsPage from './pages/sites/SettingsPage';
 import ThemePage from './pages/sites/ThemePage';
 import PostsPage from './pages/sites/PostsPage';
+import PostEditorPage from './pages/sites/PostEditorPage';
+import PostVocabularyPage from './pages/sites/PostVocabularyPage';
 import FriendsPage from './pages/sites/FriendsPage';
 import SiteConfigPage from './pages/sites/SiteConfigPage';
 import AlbumsPage from './pages/sites/AlbumsPage';
@@ -40,6 +42,9 @@ import ReleasesPage from './pages/sites/ReleasesPage';
  * the same metadata as the sidebar menu, so they cannot drift apart. */
 const pageByNavId: Record<string, ComponentType> = {
 	'content.posts': PostsPage,
+	'content.posts.new': () => <PostEditorPage mode="new" />,
+	'content.posts.edit': () => <PostEditorPage mode="edit" />,
+	'content.posts.vocabulary': PostVocabularyPage,
 	'content.albums': AlbumsPage,
 	'content.footprints': FootprintsPage,
 	'content.friends': FriendsPage,
@@ -53,6 +58,9 @@ const pageByNavId: Record<string, ComponentType> = {
 	'site.settings': SettingsPage,
 	'site.config': SiteConfigPage,
 	'site.posts': PostsPage,
+	'site.posts.new': () => <PostEditorPage mode="new" />,
+	'site.posts.edit': () => <PostEditorPage mode="edit" />,
+	'site.posts.vocabulary': PostVocabularyPage,
 	'site.friends': FriendsPage,
 	'site.albums': AlbumsPage,
 	'site.footprints': FootprintsPage,
@@ -173,14 +181,14 @@ export default function App() {
 													/>
 												) : item.scope === 'site' ? (
 													<SiteBoundary key={item.id}>
-														<SiteRoute page={item.id}>
+														<SiteRoute page={item.parentId ?? item.id}>
 															<Page />
 														</SiteRoute>
 													</SiteBoundary>
 												) : item.id.startsWith('content.') ? (
 													<ContentScopeProvider
-														resource={item.id.slice('content.'.length) as ContentResource}
-														fill={item.id === 'content.posts'}
+														resource={(item.parentId ?? item.id).slice('content.'.length) as ContentResource}
+														fill
 													>
 														<Page />
 													</ContentScopeProvider>

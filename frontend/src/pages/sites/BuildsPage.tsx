@@ -264,7 +264,7 @@ export default function BuildsPage() {
 	const headerActive = usePageHeader({ actions: createButton });
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
@@ -280,12 +280,13 @@ export default function BuildsPage() {
 			{builds === null ? (
 				<PageLoading spec="page" label={t('common.loading')} />
 			) : builds.length === 0 ? (
-				<TablePanel>
+				<TablePanel className="fill-height">
 					<p>{t('builds.empty')}</p>
 				</TablePanel>
 			) : (
-				<TablePanel>
+				<TablePanel className="fill-height">
 					<DataTable<BuildTask>
+						className="builds-table"
 						rowKey="id"
 						dataSource={builds}
 						pagination={false}

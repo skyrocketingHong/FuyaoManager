@@ -333,7 +333,7 @@ export default function AlbumsPage() {
 	const headerActive = usePageHeader({ content: yearTabs, actions: headerActions });
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
@@ -404,12 +404,12 @@ export default function AlbumsPage() {
 			{index === null ? (
 				<PageLoading spec="page" label={t('common.loading')} />
 			) : (
-				<TablePanel>
+				<TablePanel className="fill-height">
 					{doc ? (
 						<Space wrap style={{ marginBottom: 8 }}>
 							<Input
 								size="small"
-								style={{ width: 220 }}
+								style={{ width: 220, maxWidth: '100%' }}
 								placeholder={t('albums.yearTitlePlaceholder')}
 								value={doc.title ?? ''}
 								disabled={!editable}
@@ -417,7 +417,7 @@ export default function AlbumsPage() {
 							/>
 							<Select
 								size="small"
-								style={{ width: 200 }}
+								style={{ width: 200, maxWidth: '100%' }}
 								placeholder={t('albums.coverPlaceholder')}
 								value={doc.cover || undefined}
 								disabled={!editable}
@@ -436,6 +436,7 @@ export default function AlbumsPage() {
 						<Empty description={t('albums.empty')} />
 					) : (
 						<DataTable<AlbumPhotoEntry>
+							className="albums-table"
 							rowKey="filename"
 							size="small"
 							dataSource={doc.photos}

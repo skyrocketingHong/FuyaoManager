@@ -89,14 +89,15 @@ integration tests activate through `FUYAO_TEST_THEME_ROOT`).
 │   ├── src/lib/i18n/          # zh-CN / en-US dictionaries
 │   ├── src/lib/theme/         # persisted light/dark/system mode, accent + semantic tokens
 │   ├── src/lib/session/       # session state: anonymous/restricted/full/error
-│   ├── src/components/        # AppearanceProvider, PageHeader(+PageTabs), Panel/
+│   ├── src/components/        # MarkdownPreview, PostDateInput, AppearanceProvider,
+│   │                          # PageHeader(+PageTabs), Panel/
 │   │                          # TablePanel, DataTable, PageLoading, StatusTag,
 │   │                          # RouteErrorPage, admin/UserDrawer, layout/ (AppShell, TopBar,
 │   │                          # SidebarContent, SidebarInfo/Actions/Nav/Foot)
 │   ├── src/styles/            # base / shell / sidebar / statusbar / pages / appearance CSS (semantic
 │   │                          # variables)
 │   ├── src/pages/             # login, passkey binding, users, logs, account and appearance settings,
-│   │                          # themes catalog, sites, per-site surfaces
+│   │                          # themes catalog, sites, per-site surfaces and routed post editor/vocabulary
 │   └── tests/                 # vitest suites (jsdom)
 ├── contracts/
 │   ├── openapi/openapi.yaml  # authoritative management HTTP contract

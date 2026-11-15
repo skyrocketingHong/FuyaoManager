@@ -199,10 +199,9 @@ export default function FriendsPage() {
 					t('friends.emptyGroup')
 				) : (
 					groupRows.map((row, index) => (
-						<Space key={index} style={{ display: 'flex', marginBottom: 4 }} align="center">
+						<div key={index} className="friends-row">
 							<Input
 								size="small"
-								style={{ width: 140 }}
 								placeholder={t('friends.fieldName')}
 								aria-label={t('friends.fieldName')}
 								value={row.name}
@@ -211,7 +210,6 @@ export default function FriendsPage() {
 							/>
 							<Input
 								size="small"
-								style={{ width: 200 }}
 								placeholder="https://…"
 								aria-label={t('config.linkUrl')}
 								value={row.url}
@@ -220,7 +218,6 @@ export default function FriendsPage() {
 							/>
 							<Input
 								size="small"
-								style={{ width: 180 }}
 								placeholder={t('friends.fieldDescription')}
 								aria-label={t('friends.fieldDescription')}
 								value={row.description ?? ''}
@@ -229,7 +226,6 @@ export default function FriendsPage() {
 							/>
 							<Input
 								size="small"
-								style={{ width: 180 }}
 								placeholder={t('friends.fieldAvatar')}
 								aria-label={t('friends.fieldAvatar')}
 								value={row.avatar ?? ''}
@@ -264,7 +260,7 @@ export default function FriendsPage() {
 									</Popconfirm>
 								</Space>
 							) : null}
-						</Space>
+						</div>
 					))
 				)}
 			</Panel>
@@ -272,7 +268,7 @@ export default function FriendsPage() {
 	}
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
@@ -289,8 +285,10 @@ export default function FriendsPage() {
 			{errorKey !== null ? (
 				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
-			{groupEditor('online')}
-			{groupEditor('offline')}
+			<div className="friends-groups fill-height">
+				{groupEditor('online')}
+				{groupEditor('offline')}
+			</div>
 		</div>
 	);
 }

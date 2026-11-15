@@ -1,17 +1,19 @@
 /* API 接口目录：筛选行 + 统计行 + 折叠列表（行内展开鉴权与契约详情）。 */
 .topbar-api-content {
 	display: flex;
-	flex-wrap: nowrap;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
 }
 .topbar-api-content > .ant-select {
 	width: 132px;
+	max-width: 100%;
 	flex: none;
 }
 .topbar-api-content > .ant-input-affix-wrapper {
 	flex: 1 1 180px;
+	min-width: 0;
 	max-width: 250px;
 }
 .topbar-api-content > .ant-btn {
@@ -19,9 +21,7 @@
 }
 .topbar-api-count,
 .topbar-api-version {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	overflow-wrap: anywhere;
 	color: var(--muted-foreground);
 	font-size: var(--text-caption);
 }
@@ -48,6 +48,12 @@
 }
 .api-catalog-filters > .ant-select {
 	width: 150px;
+	max-width: 100%;
+}
+.api-catalog-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
 }
 
 .api-catalog-meta {
@@ -189,8 +195,8 @@
 	overflow-wrap: anywhere;
 }
 
-@media (max-width: 900px) {
-	.api-row-group {
-		display: none;
+@media (max-width: 991px) {
+	.api-catalog-body {
+		overflow: visible;
 	}
 }

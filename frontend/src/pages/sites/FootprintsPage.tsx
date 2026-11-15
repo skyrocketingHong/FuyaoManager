@@ -383,7 +383,7 @@ export default function FootprintsPage() {
 	const headerActive = usePageHeader({ actions: headerActions });
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
@@ -420,6 +420,7 @@ export default function FootprintsPage() {
 				<Empty description={t('footprints.empty')} />
 			) : (
 				<Collapse
+					className="fill-height footprints-list"
 					items={(state.draft ?? state.baseline)!.cities.map((city, ci) => ({
 						key: ci,
 						label: `${city.name?.zh || city.id} · ${city.visitDate} · ${(city.places ?? []).length}`,

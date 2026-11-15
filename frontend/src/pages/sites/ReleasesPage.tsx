@@ -293,7 +293,7 @@ export default function ReleasesPage() {
 	const headerContent = editable && succeeded.length > 0 && (
 		<Select
 			id="release-candidate"
-			style={{ minWidth: 220 }}
+			style={{ minWidth: 220, maxWidth: '100%' }}
 			value={effectiveCandidate}
 			onChange={setCandidate}
 			options={candidateOptions}
@@ -321,12 +321,12 @@ export default function ReleasesPage() {
 	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
 
 	return (
-		<div className="page-stack">
+		<div className="page-stack page-stack--fill">
 			{contextHolder}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>{headerActions}</div>
 			) : null}
-			<Panel title={<Trans text={t('releases.title')} />}>
+			<Panel className="fill-height releases-panel" title={<Trans text={t('releases.title')} />}>
 				{errorKey !== null ? (
 					<Alert
 						type="error"
@@ -388,8 +388,9 @@ export default function ReleasesPage() {
 								{headerContent}
 							</Space>
 						) : null}
-						<TablePanel>
+						<TablePanel className="fill-height release-history">
 							<DataTable<Release>
+								className="releases-table"
 								rowKey="id"
 								dataSource={releases}
 								pagination={false}

@@ -7,6 +7,7 @@ import { App as AntApp, ConfigProvider } from 'antd';
 import { ContentScopeProvider } from '../src/components/ContentScopeProvider';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
 import PostsPage from '../src/pages/sites/PostsPage';
+import PostEditorPage from '../src/pages/sites/PostEditorPage';
 import AlbumsPage from '../src/pages/sites/AlbumsPage';
 import FriendsPage from '../src/pages/sites/FriendsPage';
 import FootprintsPage from '../src/pages/sites/FootprintsPage';
@@ -405,11 +406,11 @@ it('discards stale taxonomy responses when the scope switches', async () => {
 				</button>
 				{siteScope ? (
 					<ContentScopeProvider site={site()} resource="posts">
-						<PostsPage />
+						<PostEditorPage mode="new" />
 					</ContentScopeProvider>
 				) : (
 					<ContentScopeProvider resource="posts">
-						<PostsPage />
+						<PostEditorPage mode="new" />
 					</ContentScopeProvider>
 				)}
 			</>
