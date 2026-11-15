@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Button, Select, Tooltip } from 'antd';
+import { Button, Select } from 'antd';
 import {
 	Bold, Code, Code2, Heading, Image, IndentDecrease, IndentIncrease, Italic,
 	Link2, List, ListChecks, ListOrdered, ListTree, Minus, Quote, Redo2,
@@ -123,12 +123,10 @@ export default function MarkdownToolbar({ value, disabled, textarea, onChange, o
 				onKeyDown={nativeFocusGroup ? undefined : keyDown}>
 				<div role="group" aria-label={t('posts.toolbar')}>
 					{commands.map(({ key, label, icon: Icon }, index) => (
-						<Tooltip title={label} key={key}>
-							<Button type="text" icon={<Icon size={16} aria-hidden="true" />} aria-label={label}
-								tabIndex={nativeFocusGroup ? undefined : index === focused ? 0 : -1} disabled={disabled}
-								onFocus={nativeFocusGroup ? undefined : () => setFocused(index)}
-								onMouseDown={(event) => event.preventDefault()} onClick={() => apply(key)} />
-						</Tooltip>
+						<Button key={key} type="text" title={label} icon={<Icon size={16} aria-hidden="true" />}
+							aria-label={label} tabIndex={nativeFocusGroup ? undefined : index === focused ? 0 : -1}
+							disabled={disabled} onFocus={nativeFocusGroup ? undefined : () => setFocused(index)}
+							onMouseDown={(event) => event.preventDefault()} onClick={() => apply(key)} />
 					))}
 				</div>
 			</div>
