@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -9,6 +10,45 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
+
+// handleRenamePostTag changes the scoped vocabulary and all usages atomically.
+func (a *API) handleRenamePostTag(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, true)
+	if !ok {
+		return
+	}
+	var body struct {
+		From string          `json:"from"`
+		To   json.RawMessage `json:"to"`
+	}
+	if !decodeJSON(w, r, &body, false) {
+		return
+	}
+	if len(body.To) == 0 {
+		writeProblem(w, http.StatusBadRequest, "validation_error", "A destination or explicit null is required.")
+		return
+	}
+	var to *string
+	if string(body.To) != "null" {
+		var value string
+		if err := json.Unmarshal(body.To, &value); err != nil {
+			writeProblem(w, http.StatusBadRequest, "validation_error", "The destination must be a string or null.")
+			return
+		}
+		to = &value
+	}
+	expected, err := requireDigestIfMatch(w, r)
+	if err != nil {
+		return
+	}
+	count, vocabulary, digest, err := a.content.RenamePostTag(target.ID, body.From, to, expected)
+	if err != nil {
+		writeContentError(w, err, "Failed to update the post tag.")
+		return
+	}
+	w.Header().Set("ETag", `"`+digest+`"`)
+	writeJSON(w, http.StatusOK, map[string]any{"changed": count, "vocabulary": vocabulary, "digest": digest})
+}
 
 // contentProblem maps content-store errors onto stable problem codes.
 func writeContentError(w http.ResponseWriter, err error, writeContext string) {
@@ -23,6 +63,8 @@ func writeContentError(w http.ResponseWriter, err error, writeContext string) {
 		writeProblem(w, http.StatusPreconditionFailed, "precondition_failed", "The content changed after it was read; fetch again and retry with the new ETag.")
 	case errors.Is(err, content.ErrExists):
 		writeProblem(w, http.StatusConflict, "content_exists", "Content already exists at this path.")
+	case errors.Is(err, content.ErrInUse):
+		writeProblem(w, http.StatusConflict, "category_in_use", "The category is used by an article.")
 	default:
 		var field *content.FieldError
 		if errors.As(err, &field) {
@@ -31,6 +73,22 @@ func writeContentError(w http.ResponseWriter, err error, writeContext string) {
 		}
 		writeProblem(w, http.StatusInternalServerError, "internal_error", writeContext)
 	}
+}
+
+func (a *API) handleDeletePostCategory(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	target, ok := a.contentTarget(w, r, auth, true)
+	if !ok {
+		return
+	}
+	expected, err := requireDigestIfMatch(w, r)
+	if err != nil {
+		return
+	}
+	if err := a.content.DeletePostCategory(target.ID, r.PathValue("slug"), expected); err != nil {
+		writeContentError(w, err, "Failed to delete the category.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleListPosts returns a paginated, searchable projection of the site's
@@ -206,7 +264,15 @@ func (a *API) handlePutPost(w http.ResponseWriter, r *http.Request, auth store.A
 		return
 	}
 	if postPath := r.PathValue("postPath"); postPath != "" {
-		body.Category, body.Slug = splitPostPath(postPath)
+		current, err := a.content.GetPost(rec.ID, postPath)
+		if err != nil {
+			writeContentError(w, err, "Failed to read the post.")
+			return
+		}
+		body.Path = postPath
+		if current.ID == "" {
+			body.Category, body.Slug = splitPostPath(postPath)
+		}
 	}
 	saved, err := a.content.SavePost(rec.ID, body, expected)
 	if err != nil {

@@ -20,6 +20,15 @@ type PostVocabulary struct {
 	Tags       []string `json:"tags"`
 }
 
+func (doc PostVocabulary) Validate() error { return validatePostVocabulary(doc) }
+
+func (s *Store) RenamePostTag(scopeID uuid.UUID, from string, to *string, digest string) (int, PostVocabulary, string, error) {
+	if s.Posts == nil {
+		return 0, PostVocabulary{}, "", ErrNotFound
+	}
+	return s.Posts.RenamePostTag(scopeID, from, to, digest)
+}
+
 func emptyPostVocabulary() PostVocabulary {
 	return PostVocabulary{Version: 1, Categories: []string{}, Tags: []string{}}
 }
@@ -50,6 +59,9 @@ func validatePostVocabulary(doc PostVocabulary) error {
 }
 
 func (s *Store) GetPostVocabulary(scopeID uuid.UUID) (PostVocabulary, string, error) {
+	if s.Posts != nil {
+		return s.Posts.GetPostVocabulary(scopeID)
+	}
 	data, digest, err := s.ReadFile(scopeID, RootContent, postVocabularyPath)
 	if errors.Is(err, ErrNotFound) {
 		return emptyPostVocabulary(), Digest(nil), nil
@@ -75,6 +87,9 @@ func (s *Store) GetPostVocabulary(scopeID uuid.UUID) (PostVocabulary, string, er
 // SavePostVocabulary compares the exact catalog revision while holding its
 // file lock. Article frontmatter remains the authority for existing usages.
 func (s *Store) SavePostVocabulary(scopeID uuid.UUID, doc PostVocabulary, expectedDigest string) (PostVocabulary, string, error) {
+	if s.Posts != nil {
+		return s.Posts.SavePostVocabulary(scopeID, doc, expectedDigest)
+	}
 	if err := validatePostVocabulary(doc); err != nil {
 		return PostVocabulary{}, "", err
 	}

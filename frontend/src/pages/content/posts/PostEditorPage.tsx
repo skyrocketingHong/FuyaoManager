@@ -11,7 +11,6 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Alert,
-	AutoComplete,
 	Button,
 	Form,
 	Input,
@@ -35,16 +34,13 @@ import {
 	createPost,
 	getPost,
 	getPostTaxonomy,
-	getPostVocabulary,
 	getSite,
 	putPost,
-	putPostVocabulary,
 	postPreviewImageURL,
 	type Post,
 	type PostTaxonomy,
 	type Site
 } from '../../../lib/api/management';
-import type { ContentTarget } from '../../../lib/api/content';
 import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { t, type MessageKey } from '../../../lib/i18n';
@@ -70,6 +66,8 @@ interface PostForm {
 }
 
 function toForm(post: Partial<Post>): PostForm {
+	const categories = [...(post.categories ?? [])];
+	if (post.category && !categories.includes(post.category)) categories.unshift(post.category);
 	return {
 		category: post.category ?? '',
 		slug: post.slug ?? '',
@@ -77,7 +75,7 @@ function toForm(post: Partial<Post>): PostForm {
 		date: post.date ?? '',
 		lastmod: post.lastmod ?? '',
 		draft: post.draft ?? false,
-		categories: [...(post.categories ?? [])],
+		categories,
 		tags: [...(post.tags ?? [])],
 		description: post.description ?? '',
 		cover: post.cover ?? '',
@@ -89,38 +87,17 @@ function toForm(post: Partial<Post>): PostForm {
 }
 
 function toBody(values: PostForm): Partial<Post> {
+	const categories = (values.categories ?? []).filter((value) => value.trim() !== '');
 	return {
 		...values,
-		categories: (values.categories ?? []).filter((value) => value.trim() !== ''),
+		category: categories[0] ?? '',
+		categories,
 		tags: (values.tags ?? []).filter((value) => value.trim() !== '')
 	};
 }
 
 function sameForm(a: PostForm, b: PostForm): boolean {
 	return JSON.stringify(toBody(a)) === JSON.stringify(toBody(b));
-}
-
-async function registerNewTerms(target: ContentTarget, tags: string[]) {
-	for (let attempt = 0; attempt < 2; attempt++) {
-		const { vocabulary, etag } = await getPostVocabulary(target);
-		const missingTags = tags.filter((tag) => !vocabulary.tags.includes(tag));
-		if (!missingTags.length) return;
-		try {
-			await putPostVocabulary(
-				target,
-				{
-					version: 1,
-					categories: vocabulary.categories,
-					tags: [...vocabulary.tags, ...new Set(missingTags)]
-				},
-				etag
-			);
-			return;
-		} catch (err) {
-			if (attempt === 0 && apiErrorKey(err) === 'error.conflict') continue;
-			throw err;
-		}
-	}
 }
 
 export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
@@ -244,7 +221,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			form.setFieldsValue(values);
 		};
 		if (mode === 'new') {
-			apply(null, toForm({ category: 'tech', date: new Date().toISOString() }), '');
+			apply(null, toForm({ date: new Date().toISOString() }), '');
 		} else if (postPath) {
 			getPost(target, postPath)
 				.then(({ post, etag }) => apply(post, toForm(post), etag))
@@ -276,11 +253,6 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			...original,
 			lastmod: touched.current.has('lastmod') ? original.lastmod : new Date().toISOString()
 		};
-		const knownTags = new Set([
-			...(baseline?.tags ?? []),
-			...(taxonomy?.tags ?? []).map((term) => term.name)
-		]);
-		const newTags = (submitted.tags ?? []).filter((tag) => !knownTags.has(tag));
 		setSaving(true);
 		try {
 			const { post: saved, etag: nextEtag } = editing
@@ -304,19 +276,12 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 			if (newerFields.length) void messageApi.info(t('posts.newerEditsKept'));
 			if (!editing) createdPath.current = saved.path;
 			void messageApi.success(t('posts.saved'));
-			if (newTags.length) {
-				try {
-					await registerNewTerms(target, newTags);
-				} catch {
-					if (epoch === editorEpoch.current)
-						void messageApi.warning(t('posts.vocabularyRegistrationFailed'));
-				}
-			}
 			if (epoch === editorEpoch.current) loadTaxonomy();
 		} catch (err) {
 			if (epoch !== editorEpoch.current) return;
-			if (apiErrorKey(err) === 'error.conflict') setConflict(true);
-			else void messageApi.warning(t(apiErrorKey(err) ?? 'error.generic'));
+			const key = apiErrorKey(err);
+			if (key === 'error.conflict') setConflict(true);
+			else void messageApi.warning(t(key === 'error.contentExists' ? 'posts.identifierExists' : key ?? 'error.generic'));
 		} finally {
 			if (epoch === editorEpoch.current) setSaving(false);
 		}
@@ -416,7 +381,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 	};
 	const categoryOptions = taxonomy?.categoryGroups
 		? taxonomy.categoryGroups.map((group) => ({
-				value: group.aliases.find((alias) => draft?.categories.includes(alias)) ?? group.name,
+				value: group.name,
 				label: group.title
 			}))
 		: [
@@ -483,10 +448,12 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 					}
 				}}
 				onValuesChange={(changed) => {
+					if (changed.categories) form.setFieldValue('category', changed.categories[0] ?? '');
 					setDraft(form.getFieldsValue(true) as PostForm);
 					touched.current = new Set([
 						...touched.current,
-						...(Object.keys(changed) as (keyof PostForm)[])
+						...(Object.keys(changed) as (keyof PostForm)[]),
+						...(changed.categories ? ['category' as const] : [])
 					]);
 				}}
 			>
@@ -497,6 +464,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 				>
 					<Input />
 				</Form.Item>
+				<Form.Item name="category" hidden><Input /></Form.Item>
 				<div className="post-editor-layout">
 					<section className="post-editor-writing">
 						{baseline ? <MarkdownToolbar
@@ -544,54 +512,13 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 						<Form.Item name="lastmod" label={t('posts.fieldLastmod')} rules={[dateRule]}>
 							<PostDateInput label={t('posts.fieldLastmod')} disabled={!editable} />
 						</Form.Item>
-						{editing ? (
-							<Form.Item label={t('posts.fieldPath')}>
-								<Input value={editing.path} disabled />
-							</Form.Item>
-						) : (
-							<div className="form-grid">
-								<Form.Item
-									name="category"
-									label={t('posts.fieldCategory')}
-									rules={[
-										{ required: true },
-										{ pattern: /^[a-z0-9][a-z0-9-]{0,62}$/, message: t('posts.slugPattern') }
-									]}
-								>
-									<AutoComplete
-										showSearch={{
-											filterOption: (input, option) =>
-												String(option?.label ?? '')
-													.toLowerCase()
-													.includes(input.toLowerCase())
-										}}
-										options={[
-											...(taxonomy?.directories ?? []).map((dir) => ({
-												value: dir.slug,
-												label: `${dir.title} (${dir.slug})`
-											})),
-											...(taxonomy?.categories ?? [])
-												.filter(
-													(item) =>
-														/^[a-z0-9][a-z0-9-]{0,62}$/.test(item.name) &&
-														!(taxonomy?.directories ?? []).some((dir) => dir.slug === item.name)
-												)
-												.map((item) => ({ value: item.name, label: item.name }))
-										]}
-									/>
-								</Form.Item>
-								<Form.Item
-									name="slug"
-									label={t('posts.fieldSlug')}
-									rules={[
-										{ required: true },
-										{ pattern: /^[a-z0-9][a-z0-9-]{0,120}$/, message: t('posts.slugPattern') }
-									]}
-								>
-									<Input />
-								</Form.Item>
-							</div>
-						)}
+						<Form.Item name="slug" label={t('posts.fieldSlug')}
+							extra={editing && baseline && draft?.slug !== baseline.slug ? t('posts.identifierLinkChange') : undefined} rules={[
+							{ required: true },
+							{ pattern: /^[a-z0-9][a-z0-9-]{0,120}$/, message: t('posts.slugPattern') }
+						]}>
+							<Input />
+						</Form.Item>
 						<Form.Item name="draft" label={t('posts.fieldDraft')} valuePropName="checked">
 							<Switch checkedChildren={t('posts.draft')} unCheckedChildren={t('posts.published')} />
 						</Form.Item>
@@ -609,6 +536,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 							name="categories"
 							label={t('posts.fieldCategories')}
 							rules={[
+								{ required: true, type: 'array', message: t('posts.categoryRequired') },
 								{
 									validator: async (_, values?: string[]) => {
 										if (values?.some((value) => !value.trim()))

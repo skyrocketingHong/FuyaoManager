@@ -1,12 +1,11 @@
-// Package content is the platform's single authority for per-site editable
-// content: markdown posts, data YAML files, and the site configuration that
-// the frozen-snapshot theme builds consume. All paths are derived from the
-// provisioning root and jailed inside the site's own tree; nothing here
-// trusts browser-supplied paths.
+// Package content provides the editable content models and the legacy file
+// reader. Runtime blog records are delegated to the configured database;
+// other file paths stay jailed inside the selected content scope.
 package content
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -31,6 +30,27 @@ var (
 type Store struct {
 	// SitesRoot is the provisioning root: <root>/<siteID>/{content,config}.
 	SitesRoot string
+	// Posts is the database authority when configured. A nil value is used
+	// only by the legacy reader during migration and by file-backed fixtures.
+	Posts PostRepository
+}
+
+// PostRepository owns blog records for a content scope. Other content kinds
+// continue to use their existing stores.
+type PostRepository interface {
+	ListPosts(uuid.UUID, string, int, int, ...PostSort) ([]Post, int, error)
+	GetPostTaxonomy(uuid.UUID) (PostTaxonomy, error)
+	GetPostVocabulary(uuid.UUID) (PostVocabulary, string, error)
+	SavePostVocabulary(uuid.UUID, PostVocabulary, string) (PostVocabulary, string, error)
+	RenamePostTag(uuid.UUID, string, *string, string) (int, PostVocabulary, string, error)
+	GetPostDirectory(uuid.UUID, string) (PostDirectoryDocument, string, error)
+	SavePostDirectory(uuid.UUID, string, string, string) (PostDirectoryDocument, string, error)
+	DeletePostCategory(uuid.UUID, string, string) error
+	GetPost(uuid.UUID, string) (Post, error)
+	CreatePost(uuid.UUID, Post) (Post, error)
+	SavePost(uuid.UUID, Post, string) (Post, error)
+	DeletePost(uuid.UUID, string, string) error
+	ExportPosts(context.Context, uuid.UUID, string) error
 }
 
 // New assembles the store around the provisioning root.

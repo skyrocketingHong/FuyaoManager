@@ -9,6 +9,8 @@ var (
 	ErrConflict = errors.New("content changed after it was read")
 	// ErrExists means a create would overwrite an existing file.
 	ErrExists = errors.New("content already exists")
+	// ErrInUse prevents removing a category used by an article.
+	ErrInUse = errors.New("content is in use")
 )
 
 // FieldError marks field-level validation failures mapped to 400

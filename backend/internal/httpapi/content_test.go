@@ -333,6 +333,7 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	enq := &lateEnqueuer{}
 	prev := &latePreviews{}
 	var prodRunner *buildrunner.Runner
+	var databaseContent *content.Store
 	env := setupApply(t, func(ctx context.Context, e *testEnv) {
 		if _, err := db.ApplyMigrations(ctx, e.pool); err != nil {
 			t.Fatalf("apply migrations: %v", err)
@@ -348,6 +349,8 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 		}
 		// Production runner: per-site content roots override the fixtures.
 		prodSt := store.New(e.pool)
+		contentStore.Posts = prodSt.Blog
+		databaseContent = contentStore
 		prodRunner = buildrunner.NewRunner(buildrunner.Config{
 			BuildStore: prodSt.Builds,
 			ThemeStore: prodSt.Themes,
@@ -395,11 +398,15 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	if err := provisioner.Provision(site.Site, site.Settings, ""); err != nil {
 		t.Fatalf("provision: %v", err)
 	}
+	if _, _, err := databaseContent.SavePostDirectory(site.Site.ID, "tech", "Technology", content.Digest(nil)); err != nil {
+		t.Fatalf("create database category: %v", err)
+	}
 	registerThemeDir(t, env, themeRoot)
 	selectThemeForSite(t, c, mustUUID(siteID), themeIDAt(t, themeRoot), themeVersionAt(t, themeRoot))
 
 	// Content edits through the API.
 	post := postBody("tech", "published-one", "Published One", false)
+	post["categories"] = []string{"tech"}
 	post["body"] = "## Hello\n\n![Image](/wp-content/uploads/2020/06/managed-1024x227.jpg)"
 	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", post, nil); status != http.StatusCreated {
 		t.Fatalf("create published post: %d %s", status, raw)
@@ -407,7 +414,9 @@ func TestContentAuthorityProductionBuildSlow(t *testing.T) {
 	if status := postMediaUpload(t, c, "/api/v1/sites/"+siteID+"/posts/media", "/wp-content/uploads/2020/06/managed.jpg", tinyJPEGBytes); status != http.StatusCreated {
 		t.Fatalf("upload database image: %d", status)
 	}
-	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", postBody("tech", "hidden-draft", "Hidden Draft", true), nil); status != http.StatusCreated {
+	draft := postBody("tech", "hidden-draft", "Hidden Draft", true)
+	draft["categories"] = []string{"tech"}
+	if status, _, raw := c.do("POST", "/api/v1/sites/"+siteID+"/posts", draft, nil); status != http.StatusCreated {
 		t.Fatalf("create draft post: %d %s", status, raw)
 	}
 	_, _, rawFriends := c.do("GET", "/api/v1/sites/"+siteID+"/content/friends", nil, nil)

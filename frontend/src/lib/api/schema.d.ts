@@ -904,18 +904,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List the site's markdown posts
-         * @description Paginated, searchable projection of the site's posts tree (one
-         *     category nesting level, newest first). The `draft` flag mirrors the
-         *     theme's public-output gate; drafts never reach the built site.
+         * List the site's database posts
+         * @description Paginated, searchable posts in the selected scope, newest first by
+         *     default. The `draft` flag is the theme's public-output gate.
          */
         get: operations["listPosts"];
         put?: never;
         /**
-         * Create a markdown post
-         * @description Writes a new post under `posts/<category>/<slug>.md`. Creating over an
-         *     existing path answers 409; the response carries the digest ETag used
-         *     for later read-modify-write saves.
+         * Create a database-backed post
+         * @description Stores a post in the selected database scope. The slug is unique within
+         *     that scope; a duplicate answers 409. The response carries a stable ID
+         *     and the digest ETag used for later read-modify-write saves.
          */
         post: operations["createPost"];
         delete?: never;
@@ -933,13 +932,10 @@ export interface paths {
         };
         /**
          * Read the site's blog taxonomy
-         * @description Aggregates the posts tree for editor assistance: first-level physical
-         *     directories (with their post counts and `_index.md` display titles),
-         *     registered and frontmatter category and tag vocabularies (counted
-         *     once per post), unified category groups, and the total post count. Drafts and posts with invalid dates
-         *     count; broken files fail the read instead of being skipped. The
-         *     taxonomy follows the site's posts source: shared content reads the
-         *     platform library with `canEdit=false`.
+         * @description Returns unified database categories, tags and per-post counts for the
+         *     selected source, including drafts and historical dates. The legacy
+         *     directories field mirrors categories for older clients. Shared site
+         *     content reads the platform library with `canEdit=false`.
          */
         get: operations["getPostsTaxonomy"];
         put?: never;
@@ -958,17 +954,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read a blog directory title
-         * @description Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+         * Read a blog category
+         * @description Returns the category title and ETag, or a slug fallback for an unused identifier.
          */
         get: operations["getPostDirectory"];
         /**
-         * Create or update a blog directory title
-         * @description Updates the index title and preserves its other YAML fields and Markdown body.
+         * Create or update a blog category
+         * @description Updates the database category while retaining imported index metadata for theme snapshots.
          */
         put: operations["putPostDirectory"];
         post?: never;
-        delete?: never;
+        /** Delete an unused blog category */
+        delete: operations["deletePostCategory"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1033,6 +1030,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/posts/tags/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename or remove a tag across the selected posts scope
+         * @description Atomically updates the vocabulary and every affected post. A null destination removes the tag.
+         */
+        post: operations["renamePostTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/posts/{postPath}": {
         parameters: {
             query?: never;
@@ -1042,16 +1059,15 @@ export interface paths {
         };
         /**
          * Read one editable post
-         * @description Returns one post with its markdown body plus the digest ETag. The
-         *     postPath parameter is `category/slug.md` with the slash URL-encoded
-         *     (`tech%2Fhello.md`).
+         * @description Returns one database post and its digest ETag. The parameter accepts
+         *     its stable ID or an imported legacy path with the slash URL-encoded.
          */
         get: operations["getPost"];
         /**
          * Save a post
          * @description Read-modify-write save: If-Match must carry the digest ETag from the
-         *     previous read (428 missing, 412 stale). The path's category and slug
-         *     win over body values.
+         *     previous read (428 missing, 412 stale). The slug and category in the
+         *     body may change while the stable post ID remains unchanged.
          */
         put: operations["putPost"];
         post?: never;
@@ -1621,8 +1637,8 @@ export interface paths {
         /**
          * Manage content/posts in the platform library
          * @description A full session may read the independent platform content library's
-         *     blog taxonomy: directories, frontmatter categories and tags, and the
-         *     total post count. No site ID is required.
+         *     blog taxonomy: unified categories, tags and total post count. The legacy
+         *     directories field mirrors categories. No site ID is required.
          */
         get: operations["platformGetPostsTaxonomy"];
         put?: never;
@@ -1641,17 +1657,18 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read a blog directory title
-         * @description Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+         * Read a blog category
+         * @description Returns the category title and ETag, or a slug fallback for an unused identifier.
          */
         get: operations["platformGetPostDirectory"];
         /**
-         * Create or update a blog directory title
-         * @description Updates the index title and preserves its other YAML fields and Markdown body.
+         * Create or update a blog category
+         * @description Updates the database category while retaining imported index metadata for theme snapshots.
          */
         put: operations["platformPutPostDirectory"];
         post?: never;
-        delete?: never;
+        /** Delete an unused blog category */
+        delete: operations["platformDeletePostCategory"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1710,6 +1727,26 @@ export interface paths {
         /** Update the platform blog vocabulary */
         put: operations["platformPutPostVocabulary"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/posts/tags/rename": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rename or remove a platform blog tag
+         * @description Atomically updates the vocabulary and every affected post. A null destination removes the tag.
+         */
+        post: operations["platformRenamePostTag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2443,12 +2480,18 @@ export interface components {
             /** @description Optional theme configuration validated against the theme's config schema. */
             themeConfig?: Record<string, never>;
         };
-        /** @description The editable projection of one markdown post; frontmatter fields mirror exactly what the theme's index generator consumes. `draft` is the public-output gate. */
+        /** @description A database-backed post with Markdown body and fields exported to a frozen theme snapshot. `draft` is the public-output gate. */
         Post: {
-            /** @description `category/slug.md` relative to the posts root. */
+            /**
+             * Format: uuid
+             * @description Stable database identity, independent of the editable slug.
+             */
+            id?: string;
+            /** @description Stable post ID; imported legacy paths remain valid for existing clients. */
             path: string;
             category: string;
             title: string;
+            /** @description Editable unique identifier within the selected posts scope. */
             slug: string;
             /**
              * @description Post date. Accepted shapes: `YYYY-MM-DD`, `YYYY-MM-DDTHH:mm`,
@@ -2497,6 +2540,15 @@ export interface components {
             items: components["schemas"]["PostMedia"][];
             canEdit: boolean;
         };
+        PostTagRename: {
+            from: string;
+            to: string | null;
+        };
+        PostTagRenameResult: {
+            changed: number;
+            vocabulary: components["schemas"]["PostVocabularyUpdate"];
+            digest: string;
+        };
         PostDirectoryUpdate: {
             title: string;
         };
@@ -2528,6 +2580,7 @@ export interface components {
         PostVocabularyUpdate: {
             /** @enum {integer} */
             version: 1;
+            /** @description Reserved compatibility field; categories are managed through the category endpoints and this array must be empty. */
             categories: string[];
             tags: string[];
         };
@@ -4958,7 +5011,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Saved directory and its new digest. */
+            /** @description Saved category and its new digest. */
             200: {
                 headers: {
                     /** @description Quoted digest for the next update. */
@@ -4970,6 +5023,46 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    deletePostCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Problem"];
             412: components["responses"]["PreconditionFailed"];
             428: components["responses"]["PreconditionRequired"];
             default: components["responses"]["Problem"];
@@ -5154,6 +5247,54 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    renamePostTag: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostTagRename"];
+            };
+        };
+        responses: {
+            /** @description Number of updated posts and the new vocabulary revision. */
+            200: {
+                headers: {
+                    /** @description Quoted vocabulary digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostTagRenameResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getPost: {
         parameters: {
             query?: never;
@@ -5161,7 +5302,7 @@ export interface operations {
             path: {
                 /** @description Site UUID. */
                 siteId: components["parameters"]["SiteId"];
-                /** @description `category/slug.md`, slash encoded as %2F. */
+                /** @description Stable post ID, or an imported legacy path with slash encoded as %2F. */
                 postPath: string;
             };
             cookie?: never;
@@ -6877,7 +7018,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Saved directory and its new digest. */
+            /** @description Saved category and its new digest. */
             200: {
                 headers: {
                     /** @description Quoted digest for the next update. */
@@ -6889,6 +7030,44 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformDeletePostCategory: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Problem"];
             412: components["responses"]["PreconditionFailed"];
             428: components["responses"]["PreconditionRequired"];
             default: components["responses"]["Problem"];
@@ -7057,12 +7236,57 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    platformRenamePostTag: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description CSRF token bound to the session. */
+                "X-CSRF-Token": components["parameters"]["CSRFTokenHeader"];
+                /**
+                 * @description The exact strong ETag of this site's settings as returned by GET
+                 *     settings (for example `"018f3c1e-...-r3"`). The ETag embeds the site
+                 *     UUID and the revision, so a tag from another site is rejected. The
+                 *     wildcard form `*` is not accepted: updates must not bypass optimistic
+                 *     locking. A missing header is rejected with 428; a foreign, malformed,
+                 *     or stale tag with 412/400 respectively.
+                 */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PostTagRename"];
+            };
+        };
+        responses: {
+            /** @description Number of updated posts and the new vocabulary revision. */
+            200: {
+                headers: {
+                    /** @description Quoted vocabulary digest for the next update. */
+                    ETag?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostTagRenameResult"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+            428: components["responses"]["PreconditionRequired"];
+            default: components["responses"]["Problem"];
+        };
+    };
     platformGetPost: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description `category/slug.md`, slash encoded as %2F. */
+                /** @description Stable post ID, or an imported legacy path with slash encoded as %2F. */
                 postPath: string;
             };
             cookie?: never;

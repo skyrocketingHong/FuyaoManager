@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/contentmigration"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/db"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 )
 
@@ -30,6 +31,30 @@ func runImportContent(ctx context.Context, args []string) error {
 	owner := flags.String("owner", "", "Service account owning newly imported files")
 	if err := flags.Parse(args); err != nil {
 		return err
+	}
+	if *sourceContent != "" {
+		if _, err := os.Stat(filepath.Join(*sourceContent, "posts")); err == nil {
+			pool, _, err := openPool(ctx)
+			if err != nil {
+				return err
+			}
+			defer pool.Close()
+			version, err := db.MigrationsApplied(ctx, pool)
+			if err != nil {
+				return err
+			}
+			if version >= 21 {
+				var complete bool
+				if err := pool.QueryRow(ctx, `SELECT complete FROM blog_migration_state WHERE singleton=true`).Scan(&complete); err != nil {
+					return err
+				}
+				if complete {
+					return fmt.Errorf("legacy post file import is unavailable after the database migration")
+				}
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 	}
 	var id uuid.UUID
 	var err error

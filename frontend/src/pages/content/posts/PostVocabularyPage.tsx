@@ -5,13 +5,14 @@ import DataTable from '../../../components/DataTable';
 import { usePageHeader } from '../../../components/PageHeader';
 import { TablePanel } from '../../../components/Panel';
 import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
-import { updatePostTags } from '../../../features/posts/manageTags';
 import {
+	deletePostCategory,
 	getPostDirectory,
 	getPostTaxonomy,
 	getPostVocabulary,
 	putPostDirectory,
 	putPostVocabulary,
+	renamePostTag,
 	type PostTaxonomy,
 	type PostVocabulary,
 	type PostVocabularyUpdate
@@ -180,28 +181,18 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 		const generation = currentAuthGeneration();
 		const isCurrent = () => current === scopeEpoch.current && generation === currentAuthGeneration();
 		setSaving(true);
-		let changed = 0;
 		try {
-			const result = await updatePostTags(target, from, to, isCurrent);
-			changed = result.changed;
+			const { result, etag: nextEtag } = await renamePostTag(target, from, to, etag);
 			if (!isCurrent()) return;
-			const latest = await getPostTaxonomy(target);
-			if (!isCurrent()) return;
-			const remaining = latest.tags.find((tag) => tag.name === from)?.postCount ?? 0;
-			if (result.failed || remaining) {
-				void messageApi.warning(t('taxonomy.tagPartial', { changed, failed: result.failed, remaining }));
-			} else {
-				const tags = vocabulary.tags.filter((tag) => tag !== from);
-				if (to && !tags.includes(to)) tags.push(to);
-				await putPostVocabulary(target, { version: 1, categories: vocabulary.categories, tags }, etag);
-				if (!isCurrent()) return;
-				void messageApi.success(t('taxonomy.tagUpdated', { count: result.changed }));
-			}
+			setVocabulary({ ...result.vocabulary, digest: result.digest, canEdit: vocabulary.canEdit });
+			setEtag(nextEtag);
+			void messageApi.success(t('taxonomy.tagUpdated', { count: result.changed }));
 			setTagDraft(null);
 			load();
 		} catch (err) {
 			if (isCurrent()) {
-				void messageApi.warning(changed ? t('taxonomy.tagUnverified', { count: changed }) : t(apiErrorKey(err) ?? 'error.generic'));
+				const key = apiErrorKey(err);
+				void messageApi.warning(t(key === 'error.contentExists' ? 'taxonomy.exists' : key === 'error.conflict' ? 'taxonomy.revisionConflict' : key ?? 'error.generic'));
 				load();
 			}
 		} finally {
@@ -285,7 +276,7 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 		} catch (err) {
 			if (current !== scopeEpoch.current) return;
 			const key = apiErrorKey(err) ?? 'error.generic';
-			void messageApi.warning(t(key));
+			void messageApi.warning(t(key === 'error.contentExists' ? 'taxonomy.directoryExists' : key));
 			if (key === 'error.conflict' && !directory.creating) {
 				try {
 					const latest = await getPostDirectory(target, slug);
@@ -298,6 +289,32 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 				} catch {
 					/* Keep the draft for retry. */
 				}
+			}
+		} finally {
+			if (current === scopeEpoch.current) setSaving(false);
+		}
+	}
+
+	async function removeCategory(slug: string, expectedTitle: string) {
+		if (!target || !editable || saving) return;
+		const current = scopeEpoch.current;
+		setSaving(true);
+		try {
+			const latest = await getPostDirectory(target, slug);
+			if (current !== scopeEpoch.current) return;
+			if (latest.directory.title !== expectedTitle) {
+				void messageApi.warning(t('taxonomy.categoryChanged'));
+				load();
+				return;
+			}
+			await deletePostCategory(target, slug, latest.etag);
+			if (current !== scopeEpoch.current) return;
+			void messageApi.success(t('taxonomy.categoryRemoved'));
+			load();
+		} catch (err) {
+			if (current === scopeEpoch.current) {
+				void messageApi.warning(t(apiErrorKey(err) ?? 'error.generic'));
+				load();
 			}
 		} finally {
 			if (current === scopeEpoch.current) setSaving(false);
@@ -453,6 +470,12 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 												>
 													{t('posts.edit')}
 												</Button>
+											) : null}
+											{group.directory && group.postCount === 0 ? (
+												<Popconfirm title={t('taxonomy.removeConfirm')}
+													onConfirm={() => void removeCategory(group.directory!, group.title)}>
+													<Button danger size="small" disabled={!editable || saving}>{t('taxonomy.remove')}</Button>
+												</Popconfirm>
 											) : null}
 											{registered && !group.directory && group.postCount === 0 ? (
 												<Popconfirm

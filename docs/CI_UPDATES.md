@@ -53,11 +53,13 @@ another write. Source and channel changes invalidate checked candidates;
 pinning blocks manual and automatic deployment. Automatic updates are off on
 initial installation; enabling them checks every five minutes.
 
-Database schema changes require a separate operator migration. Automated updates
-and rollback only accept packages with the same schema version as the current
-program. Application rollback does not restore a database backup or website
-content. A legacy program without build metadata remains available for manual
-first-install recovery; it is not presented as a verified rollback candidate.
+Database schema changes require a separate operator migration. For the blog
+database cutover, stop writes and back up the database and legacy content before
+running the candidate migration; verify every scope before switching service.
+Automated updates and rollback only accept packages with the current schema;
+an incompatible previous program is not offered as a rollback candidate.
+Application rollback does not restore a database backup or website content.
+Published websites retain their separate frozen artifacts during this migration.
 
 ## Installation and configuration
 

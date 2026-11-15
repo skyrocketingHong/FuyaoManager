@@ -379,6 +379,10 @@ export async function getPostVocabulary(
 	return { vocabulary: data, etag };
 }
 
+export async function deletePostCategory(target: ContentTarget, slug: string, etag: string): Promise<void> {
+	await api<void>('DELETE', `${contentResourcePath(target, 'posts')}/directories/${encodeURIComponent(slug)}`, { etag });
+}
+
 export async function putPostVocabulary(
 	target: ContentTarget,
 	value: PostVocabularyUpdate,
@@ -391,6 +395,19 @@ export async function putPostVocabulary(
 	);
 	if (!result.etag) throw new Error('Missing post vocabulary ETag');
 	return { vocabulary: result.data, etag: result.etag };
+}
+
+export async function renamePostTag(
+	target: ContentTarget,
+	from: string,
+	to: string | null,
+	etag: string
+): Promise<{ result: components['schemas']['PostTagRenameResult']; etag: string }> {
+	const response = await api<components['schemas']['PostTagRenameResult']>(
+		'POST', `${contentResourcePath(target, 'posts')}/tags/rename`, { body: { from, to }, etag }
+	);
+	if (!response.etag) throw new Error('Missing post vocabulary ETag');
+	return { result: response.data, etag: response.etag };
 }
 
 export type PostListSort = { field: 'title' | 'status' | 'date' | 'tags'; direction: 'asc' | 'desc' };

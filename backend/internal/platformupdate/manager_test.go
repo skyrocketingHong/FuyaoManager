@@ -215,6 +215,34 @@ func TestAdmissionPinsAndOperationExclusion(t *testing.T) {
 	}
 }
 
+func TestPreviousReleaseWithDifferentSchemaIsNotOffered(t *testing.T) {
+	cfg := testConfig(t)
+	previous, _ := fixture(t, cfg, "previous", strings.Repeat("a", 40))
+	current, _ := fixture(t, cfg, "current", strings.Repeat("b", 40))
+	manifest, err := readManifest(current)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest.DatabaseSchema++
+	if err := atomicJSON(filepath.Join(current, "release.json"), manifest); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(current, filepath.Join(cfg.Root, "current")); err != nil {
+		t.Fatal(err)
+	}
+	m, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.state.Previous = previous
+	if m.Info().Previous != nil {
+		t.Fatal("incompatible previous version was offered")
+	}
+	if err := m.Action(t.Context(), Action{Action: "rollback"}); err == nil || !strings.Contains(err.Error(), "incompatible database schema") {
+		t.Fatalf("rollback was not rejected: %v", err)
+	}
+}
+
 func TestGitHubCatalogExcludesForkPRAndFailedRuns(t *testing.T) {
 	runs := []workflowRun{}
 	for _, event := range []string{"push", "pull_request", "workflow_dispatch"} {

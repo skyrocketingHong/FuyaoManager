@@ -84,6 +84,14 @@ func (s *Store) SavePostVocabulary(id uuid.UUID, doc content.PostVocabulary, dig
 	return t.SavePostVocabulary(k, doc, digest)
 }
 
+func (s *Store) RenamePostTag(id uuid.UUID, from string, to *string, digest string) (int, content.PostVocabulary, string, error) {
+	t, k, e := s.target(id, "posts", true)
+	if e != nil {
+		return 0, content.PostVocabulary{}, "", e
+	}
+	return t.RenamePostTag(k, from, to, digest)
+}
+
 func (s *Store) GetPostDirectory(id uuid.UUID, slug string) (content.PostDirectoryDocument, string, error) {
 	t, k, e := s.target(id, "posts", false)
 	if e != nil {
@@ -98,6 +106,14 @@ func (s *Store) SavePostDirectory(id uuid.UUID, slug, title, digest string) (con
 		return content.PostDirectoryDocument{}, "", e
 	}
 	return t.SavePostDirectory(k, slug, title, digest)
+}
+
+func (s *Store) DeletePostCategory(id uuid.UUID, slug, digest string) error {
+	t, k, e := s.target(id, "posts", true)
+	if e != nil {
+		return e
+	}
+	return t.DeletePostCategory(k, slug, digest)
 }
 
 func (s *Store) ListPostMedia(id uuid.UUID) ([]content.PostMedia, error) {

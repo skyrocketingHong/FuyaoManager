@@ -18,6 +18,10 @@ import (
 // Materialize copies the selected sources into one private task directory.
 // Theme prepare may regenerate metadata only in this copy, never the library.
 func Materialize(local, platform *content.Store, id uuid.UUID, sources store.ContentSources, target string) (string, string, string, error) {
+	return materialize(local, platform, id, sources, target, false, nil)
+}
+
+func materialize(local, platform *content.Store, id uuid.UUID, sources store.ContentSources, target string, databasePosts bool, mediaPaths map[string]struct{}) (string, string, string, error) {
 	if !sources.Valid() {
 		return "", "", "", fmt.Errorf("invalid frozen content source selection")
 	}
@@ -30,13 +34,22 @@ func Materialize(local, platform *content.Store, id uuid.UUID, sources store.Con
 	contentRoot := filepath.Join(target, "content")
 	configRoot := filepath.Join(target, "config")
 	fail := func(err error) (string, string, string, error) { _ = os.RemoveAll(target); return "", "", "", err }
-	if err := copyTree(local.ContentRoot(id), contentRoot, false); err != nil {
+	var excludeLocal func(string, fs.DirEntry) bool
+	if databasePosts {
+		excludeLocal = func(rel string, entry fs.DirEntry) bool {
+			return filepath.ToSlash(rel) == "posts" || (sources.Posts != "platform" && databasePostMediaFile("", rel, entry, mediaPaths))
+		}
+	}
+	if err := copyTree(local.ContentRoot(id), contentRoot, false, excludeLocal); err != nil {
 		return fail(err)
 	}
-	if err := copyTree(local.ConfigRoot(id), configRoot, false); err != nil {
+	if err := copyTree(local.ConfigRoot(id), configRoot, false, nil); err != nil {
 		return fail(err)
 	}
 	for _, entry := range []struct{ category, path string }{{"posts", "posts"}, {"albums", "albums"}, {"friends", "data/friends.yaml"}, {"footprints", "data/footprints.yaml"}} {
+		if databasePosts && entry.category == "posts" {
+			continue
+		}
 		if sources.Source(entry.category) != "platform" {
 			continue
 		}
@@ -47,23 +60,43 @@ func Materialize(local, platform *content.Store, id uuid.UUID, sources store.Con
 		if err := os.RemoveAll(dest); err != nil {
 			return fail(err)
 		}
-		if err := copyTree(filepath.Join(platform.ContentRoot(content.PlatformScopeID), entry.path), dest, false); err != nil {
+		if err := copyTree(filepath.Join(platform.ContentRoot(content.PlatformScopeID), entry.path), dest, false, nil); err != nil {
 			return fail(err)
 		}
 	}
 	if platform != nil && (sources.Posts == "platform" || sources.Albums == "platform" || sources.Friends == "platform" || sources.Footprints == "platform") {
-		if sources.Posts == "platform" {
+		if sources.Posts == "platform" && !databasePosts {
 			if err := checkPostMediaConflicts(filepath.Join(platform.ContentRoot(content.PlatformScopeID), "wp-content", "uploads"), filepath.Join(contentRoot, "wp-content", "uploads")); err != nil {
 				return fail(err)
 			}
 		}
 		for _, path := range []string{"images", "wp-content"} {
-			if err := copyTree(filepath.Join(platform.ContentRoot(content.PlatformScopeID), path), filepath.Join(contentRoot, path), true); err != nil && !errors.Is(err, os.ErrNotExist) {
+			var excludePlatform func(string, fs.DirEntry) bool
+			if databasePosts && sources.Posts == "platform" {
+				excludePlatform = func(rel string, entry fs.DirEntry) bool {
+					return databasePostMediaFile(path, rel, entry, mediaPaths)
+				}
+			}
+			if err := copyTree(filepath.Join(platform.ContentRoot(content.PlatformScopeID), path), filepath.Join(contentRoot, path), true, excludePlatform); err != nil && !errors.Is(err, os.ErrNotExist) {
 				return fail(err)
 			}
 		}
 	}
 	return contentRoot, configRoot, filepath.Join(configRoot, "favicon"), nil
+}
+
+// Exclude legacy files belonging to the selected database-backed blog. The
+// shared images directory can also contain unrelated resources, so only
+// database-known paths are excluded there.
+func databasePostMediaFile(prefix, rel string, entry fs.DirEntry, mediaPaths map[string]struct{}) bool {
+	if !entry.Type().IsRegular() {
+		return false
+	}
+	path := "/" + filepath.ToSlash(filepath.Join(prefix, rel))
+	if _, exists := mediaPaths[path]; exists {
+		return true
+	}
+	return strings.HasPrefix(path, "/wp-content/uploads/") && content.CheckPostMediaPath(path) == nil
 }
 
 // Different bytes at a shared post's public URL must never silently resolve
@@ -143,7 +176,7 @@ func equalMediaFiles(a, b string) (bool, error) {
 	}
 	return string(left.Sum(nil)) == string(right.Sum(nil)), nil
 }
-func copyTree(source, target string, keep bool) error {
+func copyTree(source, target string, keep bool, exclude func(string, fs.DirEntry) bool) error {
 	info, err := os.Lstat(source)
 	if err != nil {
 		return err
@@ -161,6 +194,12 @@ func copyTree(source, target string, keep bool) error {
 		rel, err := filepath.Rel(source, path)
 		if err != nil {
 			return err
+		}
+		if exclude != nil && exclude(rel, entry) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if rel != "." && strings.HasPrefix(entry.Name(), ".") {
 			if entry.IsDir() {

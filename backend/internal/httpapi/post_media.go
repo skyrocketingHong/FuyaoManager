@@ -31,7 +31,7 @@ func (a *API) handleListPostMedia(w http.ResponseWriter, r *http.Request, auth s
 		return
 	}
 	legacy, scope, err := a.postMediaTarget(target.ID, false)
-	if err == nil {
+	if err == nil && legacy.Posts == nil {
 		err = contentbind.SyncPostMedia(r.Context(), legacy, a.store.PostMedia, scope)
 	}
 	if err != nil {

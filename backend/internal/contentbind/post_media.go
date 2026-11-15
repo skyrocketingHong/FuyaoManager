@@ -28,6 +28,12 @@ func ReadPostMedia(ctx context.Context, legacy *content.Store, media *store.Post
 	if !errors.Is(err, content.ErrNotFound) {
 		return data, kind, err
 	}
+	if legacy.Posts != nil {
+		if original, ok := content.WordPressOriginalPath(path); ok {
+			return media.Get(ctx, scope, original)
+		}
+		return nil, "", content.ErrNotFound
+	}
 	data, kind, err = legacy.ReadPostMedia(scope, path)
 	if errors.Is(err, content.ErrNotFound) {
 		if original, ok := content.WordPressOriginalPath(path); ok {
@@ -65,9 +71,26 @@ func MaterializeWithMedia(ctx context.Context, local, platform *content.Store, m
 	if err := SyncPostMedia(ctx, legacy, media, scope); err != nil {
 		return "", "", "", err
 	}
-	root, config, favicon, err := Materialize(local, platform, id, sources, target)
+	var mediaPaths map[string]struct{}
+	if legacy.Posts != nil {
+		items, err := media.List(ctx, scope)
+		if err != nil {
+			return "", "", "", err
+		}
+		mediaPaths = make(map[string]struct{}, len(items))
+		for _, item := range items {
+			mediaPaths[item.Path] = struct{}{}
+		}
+	}
+	root, config, favicon, err := materialize(local, platform, id, sources, target, legacy.Posts != nil, mediaPaths)
 	if err != nil {
 		return "", "", "", err
+	}
+	if legacy.Posts != nil {
+		if err := legacy.Posts.ExportPosts(ctx, scope, filepath.Join(root, "posts")); err != nil {
+			_ = os.RemoveAll(target)
+			return "", "", "", err
+		}
 	}
 	if err := ExportPostMedia(ctx, media, scope, root); err != nil {
 		_ = os.RemoveAll(target)
@@ -76,8 +99,9 @@ func MaterializeWithMedia(ctx context.Context, local, platform *content.Store, m
 	return root, config, favicon, nil
 }
 
-// SyncPostMedia adopts existing scoped images automatically and retains the originals.
-// Repeated or interrupted calls are safe because database writes never overwrite.
+// SyncPostMedia imports legacy scoped images before cutover and materializes
+// database-backed WordPress size aliases for referenced images. Repeated calls
+// never overwrite different database bytes.
 func SyncPostMedia(ctx context.Context, legacy *content.Store, media *store.PostMediaStore, scope uuid.UUID) error {
 	existing, err := media.List(ctx, scope)
 	if err != nil {
@@ -87,25 +111,27 @@ func SyncPostMedia(ctx context.Context, legacy *content.Store, media *store.Post
 	for _, item := range existing {
 		seen[item.Path] = struct{}{}
 	}
-	items, err := legacy.ListPostMedia(scope)
-	if err != nil {
-		return err
-	}
-	for _, item := range items {
-		if _, ok := seen[item.Path]; ok {
-			continue
-		}
-		if err := ctx.Err(); err != nil {
+	if legacy.Posts == nil {
+		items, err := legacy.ListPostMedia(scope)
+		if err != nil {
 			return err
 		}
-		data, _, err := legacy.ReadPostMedia(scope, item.Path)
-		if err != nil {
-			return fmt.Errorf("read post media %s: %w", item.Path, err)
+		for _, item := range items {
+			if _, ok := seen[item.Path]; ok {
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			data, _, err := legacy.ReadPostMedia(scope, item.Path)
+			if err != nil {
+				return fmt.Errorf("read post media %s: %w", item.Path, err)
+			}
+			if err := media.Put(ctx, scope, item.Path, data); err != nil {
+				return fmt.Errorf("store post media %s: %w", item.Path, err)
+			}
+			seen[item.Path] = struct{}{}
 		}
-		if err := media.Put(ctx, scope, item.Path, data); err != nil {
-			return fmt.Errorf("store post media %s: %w", item.Path, err)
-		}
-		seen[item.Path] = struct{}{}
 	}
 	posts, _, err := legacy.ListPosts(scope, "", 1, int(^uint(0)>>1))
 	if errors.Is(err, content.ErrNotFound) {
@@ -141,6 +167,32 @@ func SyncPostMedia(ctx context.Context, legacy *content.Store, media *store.Post
 				return err
 			}
 			seen[decoded] = struct{}{}
+		}
+	}
+	return nil
+}
+
+// VerifyLegacyPostMedia detects conflicting bytes before the old files cease
+// to be the authority. Existing database images are never overwritten.
+func VerifyLegacyPostMedia(ctx context.Context, legacy *content.Store, media *store.PostMediaStore, scope uuid.UUID) error {
+	items, err := legacy.ListPostMedia(scope)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		original, _, err := legacy.ReadPostMedia(scope, item.Path)
+		if err != nil {
+			return err
+		}
+		stored, _, err := media.Get(ctx, scope, item.Path)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(original, stored) {
+			return fmt.Errorf("legacy post media conflicts with database: %s", item.Path)
 		}
 	}
 	return nil

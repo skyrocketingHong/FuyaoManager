@@ -19,7 +19,8 @@ import (
 // slug, date, lastmod, draft, categories, tags, description, cover and its
 // variants); `draft` is the generator's public-output gate.
 type Post struct {
-	Path            string   `json:"path"` // category/slug.md
+	ID              string   `json:"id,omitempty"`
+	Path            string   `json:"path"` // stable ID in the database; legacy readers use category/slug.md
 	Category        string   `json:"category"`
 	Title           string   `json:"title"`
 	Slug            string   `json:"slug"`
@@ -48,6 +49,9 @@ var (
 	categoryPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
 	dateTimePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?)?$`)
 )
+
+func ValidPostCategory(value string) bool { return categoryPattern.MatchString(value) }
+func ValidPostSlug(value string) bool     { return slugPattern.MatchString(value) }
 
 // postDateLayouts enumerates the accepted post date shapes; the shape is
 // pinned by dateTimePattern first and the real calendar/time/offset values
@@ -151,6 +155,9 @@ func (p *Post) normalizeDates() error {
 	return nil
 }
 
+// NormalizePostDates validates and normalizes editable datetimes to UTC.
+func (p *Post) NormalizePostDates() error { return p.normalizeDates() }
+
 // Validate checks the editable fields; date accepts the theme's formats.
 func (p *Post) Validate() error {
 	if !categoryPattern.MatchString(p.Category) {
@@ -185,6 +192,9 @@ func (p *Post) Validate() error {
 
 // PostPath is the on-disk relative path of the post.
 func (p *Post) PostPath() string {
+	if p.Category == "" {
+		return p.Slug + ".md"
+	}
 	return p.Category + "/" + p.Slug + ".md"
 }
 
@@ -193,6 +203,22 @@ func (p *Post) PostPath() string {
 // modeled keys; SavePost supplies them from the locked server copy.
 func (p *Post) Render() ([]byte, error) {
 	return renderPost(*p, nil)
+}
+
+// RenderPostWithSource retains unmodeled frontmatter from an imported record.
+func RenderPostWithSource(p Post, source []byte) ([]byte, error) {
+	unknown, err := unknownFrontmatter(source)
+	if err != nil {
+		return nil, err
+	}
+	data, err := renderPost(p, unknown)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := ParsePost(p.PostPath(), data); err != nil {
+		return nil, err
+	}
+	return data, nil
 }
 
 // renderPost writes the modeled fields in frontmatterOrder, then any
@@ -407,6 +433,9 @@ func ValidPostSort(order PostSort) bool {
 
 // ListPosts scans one category level, with stable ordering before pagination.
 func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, ordering ...PostSort) (posts []Post, total int, err error) {
+	if s.Posts != nil {
+		return s.Posts.ListPosts(siteID, query, page, pageSize, ordering...)
+	}
 	order := PostSort{}
 	if len(ordering) > 0 {
 		order = ordering[0]
@@ -467,6 +496,12 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, or
 	if err != nil {
 		return nil, 0, err
 	}
+	posts, total = SortPostsPage(all, page, pageSize, order)
+	return posts, total, nil
+}
+
+// SortPostsPage applies the same stable ordering to database and legacy records.
+func SortPostsPage(all []Post, page, pageSize int, order PostSort) (posts []Post, total int) {
 	// Dates compare by their actual instant; invalid history remains last.
 	dated := make([]datedPost, 0, len(all))
 	for _, p := range all {
@@ -518,7 +553,7 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, or
 	}
 	start := (page - 1) * pageSize
 	if start >= total {
-		return []Post{}, total, nil
+		return []Post{}, total
 	}
 	end := start + pageSize
 	if end > total {
@@ -528,7 +563,7 @@ func (s *Store) ListPosts(siteID uuid.UUID, query string, page, pageSize int, or
 	for _, entry := range dated[start:end] {
 		posts = append(posts, entry.post)
 	}
-	return posts, total, nil
+	return posts, total
 }
 
 // datedPost pairs a listing entry with its parsed sort key; invalid dates
@@ -541,6 +576,9 @@ type datedPost struct {
 
 // GetPost reads one post by its site-relative path.
 func (s *Store) GetPost(siteID uuid.UUID, rel string) (Post, error) {
+	if s.Posts != nil {
+		return s.Posts.GetPost(siteID, rel)
+	}
 	if !ValidPostPath(rel) {
 		return Post{}, ErrInvalidPath
 	}
@@ -561,6 +599,9 @@ func (s *Store) GetPost(siteID uuid.UUID, rel string) (Post, error) {
 // old entry. The merged document is parsed before anything is written, and
 // the returned post and digest describe exactly the bytes this call wrote.
 func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Post, error) {
+	if s.Posts != nil {
+		return s.Posts.SavePost(siteID, post, expectedDigest)
+	}
 	if err := post.Validate(); err != nil {
 		return Post{}, err
 	}
@@ -618,6 +659,9 @@ func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Po
 // existence check and the create run inside one lock, so racing creators of
 // the same path cannot both succeed.
 func (s *Store) CreatePost(siteID uuid.UUID, post Post) (Post, error) {
+	if s.Posts != nil {
+		return s.Posts.CreatePost(siteID, post)
+	}
 	if err := post.Validate(); err != nil {
 		return Post{}, err
 	}
@@ -653,6 +697,9 @@ func (s *Store) CreatePost(siteID uuid.UUID, post Post) (Post, error) {
 // DeletePost removes one post after digest verification; the check and the
 // removal run inside one lock.
 func (s *Store) DeletePost(siteID uuid.UUID, rel, expectedDigest string) error {
+	if s.Posts != nil {
+		return s.Posts.DeletePost(siteID, rel, expectedDigest)
+	}
 	if !ValidPostPath(rel) {
 		return ErrInvalidPath
 	}

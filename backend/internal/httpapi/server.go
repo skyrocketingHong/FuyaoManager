@@ -96,8 +96,10 @@ type ContentStore interface {
 	GetPostTaxonomy(siteID uuid.UUID) (content.PostTaxonomy, error)
 	GetPostVocabulary(siteID uuid.UUID) (content.PostVocabulary, string, error)
 	SavePostVocabulary(siteID uuid.UUID, doc content.PostVocabulary, expectedDigest string) (content.PostVocabulary, string, error)
+	RenamePostTag(siteID uuid.UUID, from string, to *string, expectedDigest string) (int, content.PostVocabulary, string, error)
 	GetPostDirectory(siteID uuid.UUID, slug string) (content.PostDirectoryDocument, string, error)
 	SavePostDirectory(siteID uuid.UUID, slug, title, expectedDigest string) (content.PostDirectoryDocument, string, error)
+	DeletePostCategory(siteID uuid.UUID, slug, expectedDigest string) error
 	ListPostMedia(siteID uuid.UUID) ([]content.PostMedia, error)
 	ReadPostMedia(siteID uuid.UUID, path string) ([]byte, string, error)
 	StorePostMedia(siteID uuid.UUID, path string, reader io.Reader, size int64) (content.PostMedia, error)
@@ -239,8 +241,10 @@ func (a *API) routes() []routeSpec {
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/taxonomy", "getPostsTaxonomy", a.requireFullScope(a.contentRoute(a.handleGetPostsTaxonomy))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/vocabulary", "getPostVocabulary", a.requireFullScope(a.contentRoute(a.handleGetPostVocabulary))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/posts/vocabulary", "putPostVocabulary", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPostVocabulary)))},
+		{http.MethodPost, "/api/v1/sites/{siteId}/posts/tags/rename", "renamePostTag", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleRenamePostTag)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/directories/{slug}", "getPostDirectory", a.requireFullScope(a.contentRoute(a.handleGetPostDirectory))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/posts/directories/{slug}", "putPostDirectory", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutPostDirectory)))},
+		{http.MethodDelete, "/api/v1/sites/{siteId}/posts/directories/{slug}", "deletePostCategory", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleDeletePostCategory)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/media", "listPostMedia", a.requireFullScope(a.contentRoute(a.handleListPostMedia))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/posts/media/file", "getPostMedia", a.requireFullScope(a.contentRoute(a.handleGetPostMedia))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/posts/media", "importPostMedia", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleImportPostMedia)))},

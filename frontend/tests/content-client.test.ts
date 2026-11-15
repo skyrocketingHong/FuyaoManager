@@ -5,6 +5,8 @@ import {
 	getFriends,
 	getPost,
 	getPostDirectory,
+	deletePostCategory,
+	renamePostTag,
 	listPosts,
 	processAlbums,
 	putAlbumYear,
@@ -37,6 +39,12 @@ it('keeps the returned HTTP ETag for consecutive article writes and directory up
 	expect(api).toHaveBeenLastCalledWith('PUT', '/api/v1/content/posts/directories/notes', {
 		body: { title: '笔记' },
 		etag: '"index"'
+	});
+	await deletePostCategory(platformContent, 'notes', '"index"');
+	expect(api).toHaveBeenLastCalledWith('DELETE', '/api/v1/content/posts/directories/notes', { etag: '"index"' });
+	await renamePostTag(platformContent, ' WWDC', 'Apple WWDC', '"terms"');
+	expect(api).toHaveBeenLastCalledWith('POST', '/api/v1/content/posts/tags/rename', {
+		body: { from: ' WWDC', to: 'Apple WWDC' }, etag: '"terms"'
 	});
 });
 

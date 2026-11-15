@@ -1690,11 +1690,10 @@ paths:
     get:
       operationId: listPosts
       tags: [Content]
-      summary: List the site's markdown posts
+      summary: List the site's database posts
       description: |
-        Paginated, searchable projection of the site's posts tree (one
-        category nesting level, newest first). The `draft` flag mirrors the
-        theme's public-output gate; drafts never reach the built site.
+        Paginated, searchable posts in the selected scope, newest first by
+        default. The `draft` flag is the theme's public-output gate.
       security:
         - sessionCookie: []
       parameters:
@@ -1744,11 +1743,11 @@ paths:
     post:
       operationId: createPost
       tags: [Content]
-      summary: Create a markdown post
+      summary: Create a database-backed post
       description: |
-        Writes a new post under `posts/<category>/<slug>.md`. Creating over an
-        existing path answers 409; the response carries the digest ETag used
-        for later read-modify-write saves.
+        Stores a post in the selected database scope. The slug is unique within
+        that scope; a duplicate answers 409. The response carries a stable ID
+        and the digest ETag used for later read-modify-write saves.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -1818,13 +1817,10 @@ paths:
       tags: [Content]
       summary: Read the site's blog taxonomy
       description: |
-        Aggregates the posts tree for editor assistance: first-level physical
-        directories (with their post counts and `_index.md` display titles),
-        registered and frontmatter category and tag vocabularies (counted
-        once per post), unified category groups, and the total post count. Drafts and posts with invalid dates
-        count; broken files fail the read instead of being skipped. The
-        taxonomy follows the site's posts source: shared content reads the
-        platform library with `canEdit=false`.
+        Returns unified database categories, tags and per-post counts for the
+        selected source, including drafts and historical dates. The legacy
+        directories field mirrors categories for older clients. Shared site
+        content reads the platform library with `canEdit=false`.
       security:
         - sessionCookie: []
       parameters:
@@ -1855,8 +1851,8 @@ paths:
     get:
       operationId: getPostDirectory
       tags: [Content]
-      summary: Read a blog directory title
-      description: Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+      summary: Read a blog category
+      description: Returns the category title and ETag, or a slug fallback for an unused identifier.
       security:
         - sessionCookie: []
       parameters:
@@ -1883,8 +1879,8 @@ paths:
     put:
       operationId: putPostDirectory
       tags: [Content]
-      summary: Create or update a blog directory title
-      description: Updates the index title and preserves its other YAML fields and Markdown body.
+      summary: Create or update a blog category
+      description: Updates the database category while retaining imported index metadata for theme snapshots.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -1904,7 +1900,7 @@ paths:
               $ref: '#/components/schemas/PostDirectoryUpdate'
       responses:
         '200':
-          description: Saved directory and its new digest.
+          description: Saved category and its new digest.
           headers:
             ETag:
               description: Quoted digest for the next update.
@@ -1921,6 +1917,30 @@ paths:
           $ref: '#/components/responses/PreconditionRequired'
         default:
           $ref: '#/components/responses/Problem'
+
+    delete:
+      operationId: deletePostCategory
+      tags: [Content]
+      summary: Delete an unused blog category
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Category removed. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        default: { $ref: '#/components/responses/Problem' }
 
   /api/v1/sites/{siteId}/posts/media:
     get:
@@ -2075,15 +2095,50 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/posts/tags/rename:
+    post:
+      operationId: renamePostTag
+      tags: [Content]
+      summary: Rename or remove a tag across the selected posts scope
+      description: Atomically updates the vocabulary and every affected post. A null destination removes the tag.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostTagRename' }
+      responses:
+        '200':
+          description: Number of updated posts and the new vocabulary revision.
+          headers:
+            ETag:
+              description: Quoted vocabulary digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostTagRenameResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        default: { $ref: '#/components/responses/Problem' }
+
   /api/v1/sites/{siteId}/posts/{postPath}:
     get:
       operationId: getPost
       tags: [Content]
       summary: Read one editable post
       description: |
-        Returns one post with its markdown body plus the digest ETag. The
-        postPath parameter is `category/slug.md` with the slash URL-encoded
-        (`tech%2Fhello.md`).
+        Returns one database post and its digest ETag. The parameter accepts
+        its stable ID or an imported legacy path with the slash URL-encoded.
       security:
         - sessionCookie: []
       parameters:
@@ -2092,7 +2147,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-          description: '`category/slug.md`, slash encoded as %2F.'
+          description: 'Stable post ID, or an imported legacy path with slash encoded as %2F.'
       responses:
         '200':
           description: The post.
@@ -2128,8 +2183,8 @@ paths:
       summary: Save a post
       description: |
         Read-modify-write save: If-Match must carry the digest ETag from the
-        previous read (428 missing, 412 stale). The path's category and slug
-        win over body values.
+        previous read (428 missing, 412 stale). The slug and category in the
+        body may change while the stable post ID remains unchanged.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3755,8 +3810,8 @@ paths:
       summary: Manage content/posts in the platform library
       description: |-
         A full session may read the independent platform content library's
-        blog taxonomy: directories, frontmatter categories and tags, and the
-        total post count. No site ID is required.
+        blog taxonomy: unified categories, tags and total post count. The legacy
+        directories field mirrors categories. No site ID is required.
       security:
         - sessionCookie: []
       responses:
@@ -3783,8 +3838,8 @@ paths:
     get:
       operationId: platformGetPostDirectory
       tags: [Content]
-      summary: Read a blog directory title
-      description: Returns the title and ETag of the directory index, or a slug fallback for a directory without an index.
+      summary: Read a blog category
+      description: Returns the category title and ETag, or a slug fallback for an unused identifier.
       security:
         - sessionCookie: []
       parameters:
@@ -3810,8 +3865,8 @@ paths:
     put:
       operationId: platformPutPostDirectory
       tags: [Content]
-      summary: Create or update a blog directory title
-      description: Updates the index title and preserves its other YAML fields and Markdown body.
+      summary: Create or update a blog category
+      description: Updates the database category while retaining imported index metadata for theme snapshots.
       security:
         - sessionCookie: []
           csrfHeader: []
@@ -3830,7 +3885,7 @@ paths:
               $ref: '#/components/schemas/PostDirectoryUpdate'
       responses:
         '200':
-          description: Saved directory and its new digest.
+          description: Saved category and its new digest.
           headers:
             ETag:
               description: Quoted digest for the next update.
@@ -3847,6 +3902,30 @@ paths:
           $ref: '#/components/responses/PreconditionRequired'
         default:
           $ref: '#/components/responses/Problem'
+
+    delete:
+      operationId: platformDeletePostCategory
+      tags: [Platform content]
+      summary: Delete an unused blog category
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '204': { description: Category removed. }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        default: { $ref: '#/components/responses/Problem' }
+      x-required-platform-role: admin
 
   /api/v1/content/posts/media:
     get:
@@ -3993,6 +4072,42 @@ paths:
           $ref: '#/components/responses/Problem'
       x-required-platform-role: admin
 
+  /api/v1/content/posts/tags/rename:
+    post:
+      operationId: platformRenamePostTag
+      tags: [Platform content]
+      summary: Rename or remove a platform blog tag
+      description: Atomically updates the vocabulary and every affected post. A null destination removes the tag.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenHeader'
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostTagRename' }
+      responses:
+        '200':
+          description: Number of updated posts and the new vocabulary revision.
+          headers:
+            ETag:
+              description: Quoted vocabulary digest for the next update.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PostTagRenameResult' }
+        '400': { $ref: '#/components/responses/Problem' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '428': { $ref: '#/components/responses/PreconditionRequired' }
+        default: { $ref: '#/components/responses/Problem' }
+      x-required-platform-role: admin
+
   /api/v1/content/posts/{postPath}:
     get:
       operationId: platformGetPost
@@ -4008,7 +4123,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-          description: '`category/slug.md`, slash encoded as %2F.'
+          description: 'Stable post ID, or an imported legacy path with slash encoded as %2F.'
       responses:
         '200':
           description: The post.
@@ -5647,12 +5762,16 @@ components:
 
     Post:
       type: object
-      description: The editable projection of one markdown post; frontmatter fields mirror exactly what the theme's index generator consumes. `draft` is the public-output gate.
+      description: A database-backed post with Markdown body and fields exported to a frozen theme snapshot. `draft` is the public-output gate.
       required: [path, category, title, slug, date, draft, digest]
       properties:
+        id:
+          type: string
+          format: uuid
+          description: Stable database identity, independent of the editable slug.
         path:
           type: string
-          description: '`category/slug.md` relative to the posts root.'
+          description: Stable post ID; imported legacy paths remain valid for existing clients.
         category:
           type: string
           pattern: '^[a-z0-9][a-z0-9-]{0,62}$'
@@ -5663,6 +5782,7 @@ components:
         slug:
           type: string
           pattern: '^[a-z0-9][a-z0-9-]{0,120}$'
+          description: Editable unique identifier within the selected posts scope.
         date:
           type: string
           description: |
@@ -5733,6 +5853,20 @@ components:
           items:
             $ref: '#/components/schemas/PostMedia'
         canEdit: { type: boolean }
+    PostTagRename:
+      type: object
+      additionalProperties: false
+      required: [from, to]
+      properties:
+        from: { type: string, minLength: 1 }
+        to: { type: string, nullable: true, minLength: 1 }
+    PostTagRenameResult:
+      type: object
+      required: [changed, vocabulary, digest]
+      properties:
+        changed: { type: integer, minimum: 0 }
+        vocabulary: { $ref: '#/components/schemas/PostVocabularyUpdate' }
+        digest: { type: string }
     PostDirectoryUpdate:
       type: object
       additionalProperties: false
@@ -5798,6 +5932,7 @@ components:
         version: { type: integer, enum: [1] }
         categories:
           type: array
+          description: Reserved compatibility field; categories are managed through the category endpoints and this array must be empty.
           items: { type: string }
         tags:
           type: array

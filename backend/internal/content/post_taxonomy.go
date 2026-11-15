@@ -36,6 +36,32 @@ type categoryUsage struct {
 	categories []string
 }
 
+// BuildPostTaxonomy groups imported categories and tags without assuming a
+// filesystem depth. The database importer uses it before retiring files.
+func BuildPostTaxonomy(directories []PostDirectory, posts []Post, vocabulary PostVocabulary, aliases map[string]string) PostTaxonomy {
+	tax := PostTaxonomy{Directories: append([]PostDirectory{}, directories...), Categories: []TaxonomyTerm{}, CategoryGroups: []PostCategoryGroup{}, Tags: []TaxonomyTerm{}, PostCount: len(posts)}
+	dirCounts, categories, tags := map[string]int{}, map[string]int{}, map[string]int{}
+	usage := make([]categoryUsage, 0, len(posts))
+	for _, post := range posts {
+		dirCounts[post.Category]++
+		countTaxonomyTerms(post.Categories, categories)
+		countTaxonomyTerms(post.Tags, tags)
+		usage = append(usage, categoryUsage{directory: post.Category, categories: post.Categories})
+	}
+	for index := range tax.Directories {
+		tax.Directories[index].PostCount = dirCounts[tax.Directories[index].Slug]
+	}
+	for _, name := range sortedTaxonomyNames(categories) {
+		tax.Categories = append(tax.Categories, TaxonomyTerm{Name: name, PostCount: categories[name]})
+	}
+	for _, name := range sortedTaxonomyNames(tags) {
+		tax.Tags = append(tax.Tags, TaxonomyTerm{Name: name, PostCount: tags[name]})
+	}
+	mergePostVocabulary(&tax, vocabulary)
+	buildCategoryGroups(&tax, usage, aliases)
+	return tax
+}
+
 // PostDirectory is one valid first-level physical directory of the posts
 // tree. The display name prefers the non-empty title of the directory's
 // _index.md and falls back to the slug.
@@ -62,6 +88,9 @@ type TaxonomyTerm struct {
 // outside the jailed posts tree is read, symlinked entries are skipped, and
 // the contentbind binding decides which scope a caller may see.
 func (s *Store) GetPostTaxonomy(scopeID uuid.UUID) (PostTaxonomy, error) {
+	if s.Posts != nil {
+		return s.Posts.GetPostTaxonomy(scopeID)
+	}
 	tax := PostTaxonomy{
 		Directories:    []PostDirectory{},
 		Categories:     []TaxonomyTerm{},

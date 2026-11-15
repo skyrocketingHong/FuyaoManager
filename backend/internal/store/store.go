@@ -43,6 +43,7 @@ type Store struct {
 	NetworkEntries *NetworkEntryStore
 	MediaTasks     *MediaTaskStore
 	PostMedia      *PostMediaStore
+	Blog           *BlogStore
 }
 
 // New wires a Store around the given pool.
@@ -62,6 +63,7 @@ func New(pool *pgxpool.Pool) *Store {
 		NetworkEntries: &NetworkEntryStore{pool: pool},
 		MediaTasks:     &MediaTaskStore{pool: pool},
 		PostMedia:      &PostMediaStore{pool: pool},
+		Blog:           NewBlogStore(pool),
 	}
 }
 

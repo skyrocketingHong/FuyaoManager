@@ -108,12 +108,14 @@ func (m *Manager) Info() Status {
 		s.Task = &task
 		s.Updating = task.Status == "running"
 	}
+	currentSchema := 0
 	if p, err := m.currentPath(); err == nil {
 		if manifest, err := readManifest(p); err == nil {
 			s.Current = manifest.Version
+			currentSchema = manifest.DatabaseSchema
 		}
 	}
-	if manifest, err := readManifest(m.state.Previous); err == nil {
+	if manifest, err := readManifest(m.state.Previous); err == nil && currentSchema > 0 && manifest.DatabaseSchema == currentSchema {
 		v := manifest.Version
 		s.Previous = &v
 	}
@@ -199,12 +201,14 @@ func (m *Manager) Action(ctx context.Context, action Action) error {
 			return errors.New("version is pinned")
 		}
 		var selected Version
+		selectedSchema := 0
 		if action.Action == "rollback" {
 			manifest, err := readManifest(m.state.Previous)
 			if err != nil || !m.releasePath(m.state.Previous) {
 				return errors.New("no verified previous release")
 			}
 			selected = manifest.Version
+			selectedSchema = manifest.DatabaseSchema
 		} else {
 			for _, v := range m.versions {
 				if action.Action == "update" || (v.RunID == action.RunID && v.Commit == action.Commit) {
@@ -221,6 +225,9 @@ func (m *Manager) Action(ctx context.Context, action Action) error {
 			return errors.New("current release is outside the managed installation")
 		}
 		current, err := readManifest(previous)
+		if action.Action == "rollback" && (err != nil || selectedSchema != current.DatabaseSchema) {
+			return errors.New("previous release uses an incompatible database schema")
+		}
 		if err == nil && current.Commit == selected.Commit {
 			return errors.New("selected commit is already active")
 		}

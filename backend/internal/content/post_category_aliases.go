@@ -42,6 +42,11 @@ func (s *Store) getCategoryAliases(id uuid.UUID) (map[string]string, error) {
 	return doc.Aliases, nil
 }
 
+// LegacyPostCategoryAliases reads manager metadata during the database import.
+func (s *Store) LegacyPostCategoryAliases(id uuid.UUID) (map[string]string, error) {
+	return s.getCategoryAliases(id)
+}
+
 // The alias map is manager metadata and remains outside published snapshots.
 // Adding aliases before changing an index is safe if the later write fails.
 func (s *Store) rememberCategoryAliases(id uuid.UUID, slug string, names []string) error {

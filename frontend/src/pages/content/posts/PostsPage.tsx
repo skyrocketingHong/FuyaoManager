@@ -12,9 +12,11 @@ import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
 import {
 	deletePost,
 	getPost,
+	getPostTaxonomy,
 	getSite,
 	listPosts,
 	type Post,
+	type PostTaxonomy,
 	type PostListSort,
 	type Site
 } from '../../../lib/api/management';
@@ -29,6 +31,7 @@ export default function PostsPage() {
 	const navigate = useNavigate();
 	const basePath = siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
 	const [site, setSite] = useState<Site | null>(null);
+	const [taxonomy, setTaxonomy] = useState<PostTaxonomy | null>(null);
 	const [posts, setPosts] = useState<Post[] | null>(null);
 	const [total, setTotal] = useState(0);
 	const [page, setPage] = useState(1);
@@ -93,6 +96,7 @@ export default function PostsPage() {
 		scopeEpoch.current++;
 		loadingRef.current = false;
 		setSite(null);
+		setTaxonomy(null);
 		setPosts(null);
 		setErrorKey(null);
 		setPage(1);
@@ -100,6 +104,10 @@ export default function PostsPage() {
 		setQuery('');
 		setSearch('');
 		let active = true;
+		const controller = new AbortController();
+		void getPostTaxonomy(target, controller.signal)
+			.then((value) => { if (active) setTaxonomy(value); })
+			.catch(() => {});
 		if (siteId && scope.canEdit === undefined) {
 			getSite(siteId)
 				.then((value) => {
@@ -109,6 +117,7 @@ export default function PostsPage() {
 		}
 		void refresh(1, '', pageSize, true);
 		return () => {
+			controller.abort();
 			epoch.current++;
 			scopeEpoch.current++;
 			loadingRef.current = false;
@@ -160,6 +169,12 @@ export default function PostsPage() {
 
 	const editable =
 		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
+	function categoryLabels(post: Post): string[] {
+		const groups = taxonomy?.categoryGroups ?? [];
+		return Array.from(new Set([post.category, ...(post.categories ?? [])].filter(Boolean).map((name) =>
+			groups.find((group) => group.name === name || group.directory === name || group.aliases.includes(name))?.title ?? name
+		)));
+	}
 	const searchBox = (
 		<Space wrap>
 			<Input.Search
@@ -249,9 +264,10 @@ export default function PostsPage() {
 							render: (_, post) => (
 								<>
 									<div>{post.title}</div>
-									<Typography.Text type="secondary" className="text-caption">
-										{post.path}
-									</Typography.Text>
+									<div className="post-row-meta">
+										{categoryLabels(post).map((label) => <StatusTag key={label} kind="neutral">{label}</StatusTag>)}
+										<Typography.Text type="secondary" className="post-identifier">{post.slug}</Typography.Text>
+									</div>
 								</>
 							)
 						},

@@ -27,6 +27,7 @@ const codeToKey: Record<string, MessageKey> = {
 	slug_taken: 'error.slugTaken',
 	content_unavailable: 'error.contentUnavailable',
 	content_exists: 'error.contentExists',
+	category_in_use: 'taxonomy.inUse',
 	invalid_content_path: 'error.validation',
 	photo_in_use: 'error.photoInUse',
 	provisioning_unavailable: 'error.provisioningUnavailable',
