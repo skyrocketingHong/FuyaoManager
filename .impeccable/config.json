@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "frontend/src/styles/post-editor.css"
+        ],
+        "createdAt": "2026-11-15T02:59:19.653Z",
+        "reason": "Codex: Markdown blockquote uses a neutral border to identify quoted content; it is not a card accent."
+      }
+    ]
+  }
+}
