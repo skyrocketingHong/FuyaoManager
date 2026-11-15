@@ -206,3 +206,6 @@ site/static/wp-content/**
 
 # Python maintenance tests
 scripts/**/__pycache__/
+
+# Agent instructions are kept locally.
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
