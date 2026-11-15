@@ -182,6 +182,7 @@ afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
 	vi.unstubAllEnvs();
+	vi.unstubAllGlobals();
 });
 
 it('recovers a failed user list through the real header and error controls', async () => {
@@ -314,6 +315,69 @@ it('never applies a prior account list after the account generation changes', as
 		old.resolve({ users: [member], total: 1, page: 1, pageSize: 50 });
 	});
 	expect(screen.queryByRole('button', { name: 'Manage' })).toBeNull();
+});
+
+it('loads user batches without pagination and resets them when sorting changes', async () => {
+	vi.mocked(service.listUsers).mockImplementation(async (query) => {
+		const params = new URLSearchParams(query);
+		const page = Number(params.get('page'));
+		return { users: [page === 1 ? member : { ...member, id: 'second', username: 'second' }], total: 100, page, pageSize: 50 };
+	});
+	mount();
+	await screen.findByText('member');
+	expect(screen.queryByLabelText('Page 2')).toBeNull();
+	fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+	expect(await screen.findByText('second')).toBeDefined();
+	fireEvent.click(screen.getByRole('columnheader', { name: /Username/ }));
+	await waitFor(() => {
+		const params = new URLSearchParams(vi.mocked(service.listUsers).mock.calls.at(-1)?.[0]);
+		expect(params.get('page')).toBe('1');
+		expect(params.get('sort')).toBe('username');
+		expect(params.get('order')).toBe('asc');
+	});
+	await waitFor(() => expect(screen.queryByText('second')).toBeNull());
+});
+
+it('requests another user batch when the last row enters view', async () => {
+	let notify: IntersectionObserverCallback | undefined;
+	const observe = vi.fn();
+	vi.stubGlobal('IntersectionObserver', class {
+		constructor(callback: IntersectionObserverCallback) { notify = callback; }
+		observe = observe;
+		disconnect = vi.fn();
+	});
+	vi.mocked(service.listUsers).mockImplementation(async (query) => {
+		const page = Number(new URLSearchParams(query).get('page'));
+		return { users: [{ ...member, id: `id-${page}`, username: `account-${page}` }], total: 100, page, pageSize: 50 };
+	});
+	mount();
+	await screen.findByText('account-1');
+	await waitFor(() => expect(observe).toHaveBeenCalledWith(screen.getByText('account-1').closest('tr')));
+	act(() => notify?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver));
+	expect(await screen.findByText('account-2')).toBeDefined();
+});
+
+it('loads audit batches and preserves the selected order on subsequent requests', async () => {
+	vi.mocked(service.listAudit).mockImplementation(async (query) => {
+		const params = new URLSearchParams(query);
+		const page = Number(params.get('page'));
+		return { entries: [{
+			id: `event-${page}`, createdAt: member.createdAt, actorId: member.id,
+			actorName: `actor-${page}`, operation: 'setUserRole', resourceId: member.id,
+			siteId: null, method: 'PUT', route: '/test', peerIp: '', status: 200,
+			outcome: 'success', details: {}
+		}], total: 100, page, pageSize: 50, operations: [] };
+	});
+	mount(LogsPage);
+	await screen.findByText('actor-1');
+	fireEvent.click(screen.getByRole('columnheader', { name: /Operator/ }));
+	await waitFor(() => expect(new URLSearchParams(vi.mocked(service.listAudit).mock.calls.at(-1)?.[0]).get('sort')).toBe('actorName'));
+	fireEvent.click(await screen.findByRole('button', { name: 'Load more' }));
+	expect(await screen.findByText('actor-2')).toBeDefined();
+	const params = new URLSearchParams(vi.mocked(service.listAudit).mock.calls.at(-1)?.[0]);
+	expect(params.get('page')).toBe('2');
+	expect(params.get('order')).toBe('asc');
+	expect(screen.queryByLabelText('Page 2')).toBeNull();
 });
 
 it('filters logs by outcome and expands metadata without inventing record details', async () => {

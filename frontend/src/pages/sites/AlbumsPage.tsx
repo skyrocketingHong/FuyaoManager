@@ -47,7 +47,6 @@ export default function AlbumsPage() {
 	const [doc, setDoc] = useState<AlbumYear | null>(null);
 	const [digest, setDigest] = useState('');
 	const [dirty, setDirty] = useState(false);
-	const [page, setPage] = useState(1);
 	const [tasks, setTasks] = useState<MediaTask[]>([]);
 	const [uploading, setUploading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -178,7 +177,6 @@ export default function AlbumsPage() {
 	function mutateDoc(updater: (photos: AlbumPhotoEntry[]) => AlbumPhotoEntry[]) {
 		if (!doc) return;
 		setDirty(true);
-		setPage(1);
 		setDoc({ ...doc, photos: updater(doc.photos) });
 	}
 
@@ -442,12 +440,7 @@ export default function AlbumsPage() {
 							rowKey="filename"
 							size="small"
 							dataSource={doc.photos}
-							pagination={{
-								current: page,
-								pageSize: 20,
-								showSizeChanger: false,
-								onChange: setPage
-							}}
+							pagination={false}
 							columns={[
 								{
 									title: t('albums.photoColumn'),

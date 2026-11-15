@@ -710,7 +710,7 @@
 	"api.copyError": "无法访问剪贴板，请选择并复制接口路径。",
 	"api.otherGroup": "其他接口",
 	"audit.recordDetail": "记录详情",
-	"audit.pageSize": "每页条数",
+	"audit.pageSize": "每次加载条数",
 	"audit.pageRows": "每页 {count} 条",
 	"audit.before": "变更前",
 	"audit.after": "变更后",

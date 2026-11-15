@@ -710,7 +710,7 @@
 	"api.copyError": "Clipboard unavailable. Select and copy the operation path.",
 	"api.otherGroup": "Other operations",
 	"audit.recordDetail": "Record details",
-	"audit.pageSize": "Rows per page",
+	"audit.pageSize": "Rows per load",
 	"audit.pageRows": "{count} per page",
 	"audit.before": "Before",
 	"audit.after": "After",

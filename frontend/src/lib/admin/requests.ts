@@ -69,6 +69,42 @@ export function useAdminQuery<T>(load: (signal: AbortSignal) => Promise<T>) {
 	};
 }
 
+export function useAdminBatches<T extends { total: number; pageSize: number }, Row>(
+	identity: string,
+	loadPage: (page: number, signal: AbortSignal) => Promise<T>,
+	rowsOf: (data: T) => Row[],
+	keyOf: (row: Row) => string
+) {
+	useSyncExternalStore(subscribeSession, sessionSnapshot);
+	const scope = `${currentAuthGeneration()}:${identity}`;
+	const [cursor, setCursor] = useState({ scope: '', page: 1 });
+	const page = cursor.scope === scope ? cursor.page : 1;
+	const load = useCallback((signal: AbortSignal) => loadPage(page, signal), [loadPage, page]);
+	const query = useAdminQuery(load);
+	const [cache, setCache] = useState<{ scope: string; page: number; data: T; rows: Row[] }>();
+	useEffect(() => {
+		if (!query.data) return;
+		const data = query.data;
+		setCache((previous) => {
+			const incoming = rowsOf(data);
+			if (page === 1 || previous?.scope !== scope) return { scope, page, data, rows: incoming };
+			const seen = new Set(previous.rows.map(keyOf));
+			return { scope, page, data, rows: [...previous.rows, ...incoming.filter((row) => !seen.has(keyOf(row)))] };
+		});
+	}, [query.data, scope, page, rowsOf, keyOf]);
+	const current = cache?.scope === scope ? cache : undefined;
+	const hasMore = Boolean(current && current.page * current.data.pageSize < current.data.total);
+	const loadMore = () => {
+		if (!current || !hasMore || query.loading || query.error) return;
+		setCursor({ scope, page: current.page + 1 });
+	};
+	const reload = () => {
+		if (page === 1) query.reload();
+		else setCursor({ scope, page: 1 });
+	};
+	return { data: current?.data ?? null, rows: current?.rows ?? [], loading: query.loading, error: query.error, hasMore, loadMore, reload, retry: query.reload };
+}
+
 export type RunAdminMutation = <T>(
 	task: () => Promise<T>,
 	after?: (value: T) => void | Promise<void>

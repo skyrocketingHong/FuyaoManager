@@ -3,14 +3,18 @@ import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Alert, DatePicker, Input, Select, Space } from 'antd';
 import ActionButton from '../components/ActionButton';
 import PageLoading from '../components/PageLoading';
+import LoadMore from '../components/LoadMore';
 import { DataTable, TablePanel, Tag, VersionText, timeText } from '../components/Widgets';
 import { usePageHeader } from '../components/PageHeader';
-import { useAdminQuery } from '../lib/admin/requests';
+import { useAdminBatches } from '../lib/admin/requests';
 import { auditLabels, changeValueText, operationText } from '../lib/admin/presentation';
 import { t } from '../lib/i18n';
-import { listAudit, queryString, type AuditEvent } from '../lib/api/admin';
+import { listAudit, queryString, type AuditEvent, type AuditPage } from '../lib/api/admin';
 import { selectedTableSort, sortColumn, type TableSort } from '../lib/table-sort';
 import '../styles/logs.css';
+
+const entriesOf = (data: AuditPage) => data.entries;
+const entryKey = (event: AuditEvent) => event.id;
 
 function recordDetail(event: AuditEvent) {
 	const field = event.details?.field;
@@ -75,7 +79,6 @@ export default function LogsPage() {
 	const [operation, setOperation] = useState('');
 	const [outcome, setOutcome] = useState('');
 	const [range, setRange] = useState<ComponentProps<typeof DatePicker.RangePicker>['value']>(null);
-	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(50);
 	const [ordering, setOrdering] = useState<TableSort>();
 	useEffect(() => {
@@ -83,7 +86,6 @@ export default function LogsPage() {
 		const timer = setTimeout(() => {
 			setQuery(search);
 			setActor(actorInput);
-			setPage(1);
 		}, 250);
 		return () => clearTimeout(timer);
 	}, [search, actorInput, q, actor]);
@@ -92,16 +94,15 @@ export default function LogsPage() {
 		actor,
 		operation,
 		outcome,
-		page,
 		pageSize,
 		sort: ordering?.field,
 		order: ordering?.direction,
 		from: range?.[0]?.toISOString(),
 		until: range?.[1]?.toISOString()
 	});
-	const load = useCallback((signal: AbortSignal) => listAudit(params, signal), [params]);
-	const query = useAdminQuery(load);
-	const entries = query.data?.entries ?? [];
+	const load = useCallback((page: number, signal: AbortSignal) => listAudit(`${params}&page=${page}`, signal), [params]);
+	const query = useAdminBatches(params, load, entriesOf, entryKey);
+	const entries = query.rows;
 	const operations = [...new Set([...Object.keys(auditLabels), ...(query.data?.operations ?? [])])];
 	const filters = (
 		<>
@@ -115,7 +116,6 @@ export default function LogsPage() {
 				options={operations.map((value) => ({ value, label: operationText(value) }))}
 				onChange={(value) => {
 					setOperation(value ?? '');
-					setPage(1);
 				}}
 			/>
 			<Select
@@ -129,7 +129,6 @@ export default function LogsPage() {
 				]}
 				onChange={(value) => {
 					setOutcome(value ?? '');
-					setPage(1);
 				}}
 			/>
 			<Input
@@ -141,7 +140,6 @@ export default function LogsPage() {
 				onChange={(event) => setActorInput(event.target.value)}
 				onPressEnter={() => {
 					setActor(actorInput);
-					setPage(1);
 				}}
 			/>
 			<Input
@@ -153,7 +151,6 @@ export default function LogsPage() {
 				onChange={(event) => setSearch(event.target.value)}
 				onPressEnter={() => {
 					setQuery(search);
-					setPage(1);
 				}}
 			/>
 			<DatePicker.RangePicker
@@ -162,7 +159,6 @@ export default function LogsPage() {
 				value={range}
 				onChange={(value) => {
 					setRange(value);
-					setPage(1);
 				}}
 			/>
 			<Select
@@ -170,7 +166,6 @@ export default function LogsPage() {
 				value={pageSize}
 				onChange={(value) => {
 					setPageSize(value);
-					setPage(1);
 				}}
 				options={[25, 50, 100, 200].map((value) => ({
 					value,
@@ -203,7 +198,7 @@ export default function LogsPage() {
 					type="error"
 					showIcon
 					title={t(query.error)}
-					action={<ActionButton onClick={query.reload}>{t('common.retry')}</ActionButton>}
+					action={<ActionButton onClick={query.retry}>{t('common.retry')}</ActionButton>}
 				/>
 			)}
 			<DataTable<AuditEvent>
@@ -217,16 +212,9 @@ export default function LogsPage() {
 				onChange={(_, __, sorter, extra) => {
 					if (extra.action === 'sort') {
 						setOrdering(selectedTableSort(sorter));
-						setPage(1);
 					}
 				}}
-				pagination={{
-					current: page,
-					pageSize,
-					total: query.data?.total ?? 0,
-					showSizeChanger: false,
-					onChange: (next) => setPage(next)
-				}}
+				pagination={false}
 				columns={[
 					{ title: t('audit.time'), dataIndex: 'createdAt', width: 164, ...sortColumn('createdAt', ordering), render: timeText },
 					{ title: t('audit.actor'), dataIndex: 'actorName', width: 140, ...sortColumn('actorName', ordering), render: (value: string) => <VersionText>{value || t('audit.anonymous')}</VersionText> },
@@ -240,6 +228,7 @@ export default function LogsPage() {
 					{ title: t('audit.peer'), dataIndex: 'peerIp', width: 175, ...sortColumn('peerIp', ordering), render: (value: string) => <VersionText className="log-address">{value || t('admin.never')}</VersionText> }
 				]}
 			/>
+			<LoadMore table=".operation-logs-table" rowCount={query.rows.length} active={query.hasMore && !query.error} loading={query.loading} onLoad={query.loadMore} />
 		</TablePanel></div>
 	);
 }

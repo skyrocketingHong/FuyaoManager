@@ -5,6 +5,7 @@ import { RefreshCw, UserPlus } from 'lucide-react';
 import DataTable from '../components/DataTable';
 import UserDrawer from '../components/admin/UserDrawer';
 import PageLoading from '../components/PageLoading';
+import LoadMore from '../components/LoadMore';
 import StatusTag from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
 import { usePageHeader } from '../components/PageHeader';
@@ -13,10 +14,13 @@ import { currentAuthGeneration } from '../lib/api/client';
 import { loadSiteList } from '../lib/sites/site-list';
 import { sessionSnapshot, subscribeSession } from '../lib/session';
 import { t, type MessageKey } from '../lib/i18n';
-import { useAdminMutation, useAdminQuery } from '../lib/admin/requests';
+import { useAdminBatches, useAdminMutation } from '../lib/admin/requests';
 import { timeText } from '../lib/admin/presentation';
 import * as service from '../lib/api/admin';
 import { selectedTableSort, sortColumn, type TableSort } from '../lib/table-sort';
+
+const usersOf = (data: service.AdminUserPage) => data.users;
+const userKey = (user: service.AdminUser) => user.id;
 
 export default function UsersPage() {
 	const { modal } = App.useApp();
@@ -26,20 +30,14 @@ export default function UsersPage() {
 	const [q, setQuery] = useState('');
 	const [role, setRole] = useState('');
 	const [status, setStatus] = useState('');
-	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(50);
 	const [ordering, setOrdering] = useState<TableSort>();
-	const queryString = service.queryString({ q, role, status, page, pageSize, sort: ordering?.field, order: ordering?.direction });
+	const queryString = service.queryString({ q, role, status, pageSize, sort: ordering?.field, order: ordering?.direction });
 	const load = useCallback(
-		(signal: AbortSignal) => service.listUsers(queryString, signal),
+		(page: number, signal: AbortSignal) => service.listUsers(`${queryString}&page=${page}`, signal),
 		[queryString]
 	);
-	const query = useAdminQuery(load);
-	useEffect(() => {
-		if (!query.data) return;
-		const lastPage = Math.max(1, Math.ceil(query.data.total / pageSize));
-		if (page > lastPage) setPage(lastPage);
-	}, [query.data?.total, page, pageSize]);
+	const query = useAdminBatches(queryString, load, usersOf, userKey);
 	const mutation = useAdminMutation();
 	const [selected, setSelected] = useState<string | null>(null);
 	const [drawerDirty, setDrawerDirty] = useState(false);
@@ -109,7 +107,6 @@ export default function UsersPage() {
 				onChange={(event) => setSearch(event.target.value)}
 				onSearch={(value) => {
 					setQuery(value);
-					setPage(1);
 				}}
 				className="admin-search"
 			/>
@@ -121,7 +118,6 @@ export default function UsersPage() {
 				value={role || undefined}
 				onChange={(value) => {
 					setRole(value ?? '');
-					setPage(1);
 				}}
 				options={[
 					{ value: 'admin', label: t('admin.role.admin') },
@@ -136,12 +132,17 @@ export default function UsersPage() {
 				value={status || undefined}
 				onChange={(value) => {
 					setStatus(value ?? '');
-					setPage(1);
 				}}
 				options={(['active', 'disabled', 'pending', 'deleted'] as const).map((value) => ({
 					value,
 					label: t(`admin.status.${value}`)
 				}))}
+			/>
+			<Select
+				aria-label={t('audit.pageSize')}
+				value={pageSize}
+				onChange={setPageSize}
+				options={[25, 50, 100, 200].map((value) => ({ value, label: t('audit.pageRows', { count: value }) }))}
 			/>
 		</Space>
 	);
@@ -182,7 +183,7 @@ export default function UsersPage() {
 					type="error"
 					showIcon
 					title={t(query.error)}
-					action={<Button onClick={query.reload}>{t('common.retry')}</Button>}
+					action={<Button onClick={query.retry}>{t('common.retry')}</Button>}
 				/>
 			)}
 			{mutation.error && !selected && !createOpen && (
@@ -194,16 +195,16 @@ export default function UsersPage() {
 				query.data && (
 					<TablePanel className="fill-height">
 						<DataTable<service.AdminUser>
+							className="users-table"
 							manualSorting
 							scroll={{ x: 'max-content' }}
 							styles={{ content: { overflowY: 'auto' } }}
 							rowKey="id"
-							dataSource={query.data.users}
+							dataSource={query.rows}
 							loading={query.loading}
 							onChange={(_, __, sorter, extra) => {
 								if (extra.action === 'sort') {
 									setOrdering(selectedTableSort(sorter));
-									setPage(1);
 								}
 							}}
 							locale={{
@@ -211,16 +212,7 @@ export default function UsersPage() {
 									<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('admin.noUsers')} />
 								)
 							}}
-							pagination={{
-								current: page,
-								pageSize,
-								total: query.data.total,
-								showSizeChanger: true,
-								onChange: (next, size) => {
-									setPage(next);
-									setPageSize(size);
-								}
-							}}
+							pagination={false}
 							columns={[
 								{ title: t('admin.username'), dataIndex: 'username', ...sortColumn('username', ordering) },
 								{ title: t('admin.displayName'), dataIndex: 'displayName', ...sortColumn('displayName', ordering) },
@@ -262,6 +254,7 @@ export default function UsersPage() {
 								}
 							]}
 						/>
+						<LoadMore table=".users-table" rowCount={query.rows.length} active={query.hasMore && !query.error} loading={query.loading} onLoad={query.loadMore} />
 					</TablePanel>
 				)
 			)}
