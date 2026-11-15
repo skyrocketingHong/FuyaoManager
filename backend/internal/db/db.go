@@ -18,6 +18,7 @@ func OpenPool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("parse database URL: %w", err)
 	}
 	cfg.MaxConns = 8
+	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
 	cfg.MaxConnLifetime = time.Hour
 	cfg.MaxConnIdleTime = 15 * time.Minute
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
@@ -36,6 +37,7 @@ func OpenPoolWithSearchPath(ctx context.Context, dsn, schema string) (*pgxpool.P
 		return nil, fmt.Errorf("parse database URL: %w", err)
 	}
 	cfg.MaxConns = 8
+	cfg.ConnConfig.RuntimeParams["timezone"] = "UTC"
 	cfg.ConnConfig.RuntimeParams["search_path"] = schema
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

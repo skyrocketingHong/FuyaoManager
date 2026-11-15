@@ -101,10 +101,9 @@ func TestValidateDateFields(t *testing.T) {
 	}
 }
 
-// TestSavePostKeepsOriginalDateStrings proves a save writes the submitted
-// date strings verbatim — no seconds padding, no offset normalization, no Z
-// rewrite — and an impossible date fails with the stored bytes untouched.
-func TestSavePostKeepsOriginalDateStrings(t *testing.T) {
+// TestSavePostPreservesUTCPrecisionAndRejectsInvalidDates covers date-only
+// values, UTC precision and refusal to write invalid dates.
+func TestSavePostPreservesUTCPrecisionAndRejectsInvalidDates(t *testing.T) {
 	s, id := concurrencyWorld(t)
 	original := []byte("---\ntitle: base\nslug: d\ndate: 2026-01-02\nlastmod: 2026-01-03T09:00Z\ndraft: true\n---\nbody\n")
 	if _, err := s.WriteFile(id, RootContent, "posts/tech/d.md", original); err != nil {
@@ -131,9 +130,7 @@ func TestSavePostKeepsOriginalDateStrings(t *testing.T) {
 	if err != nil || digest != saved.Digest {
 		t.Fatalf("stored bytes disagree with the returned digest: %v", err)
 	}
-	// The date strings survive verbatim at the value level; the YAML
-	// representation may quote a digit-leading scalar, but the parsed key
-	// values are exactly what the request submitted.
+	// Date-only and already-UTC values retain their submitted precision.
 	fm, _, err := SplitFrontmatter(raw)
 	if err != nil {
 		t.Fatal(err)
@@ -164,6 +161,39 @@ func TestSavePostKeepsOriginalDateStrings(t *testing.T) {
 	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/d.md")
 	if err != nil || afterDigest != beforeDigest || string(after) != string(before) {
 		t.Fatalf("rejected save must not touch the stored file: %v %s", err, afterDigest)
+	}
+}
+
+func TestPostWritesNormalizeDatetimesToUTC(t *testing.T) {
+	s, id := concurrencyWorld(t)
+	post := Post{Category: "tech", Slug: "utc", Title: "UTC", Date: "2026-11-13T00:00:45.123456789123+08:00", Lastmod: "2026-01-01T01:00-02:30"}
+	created, err := s.CreatePost(id, post)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Date != "2026-11-12T16:00:45.123456789123Z" || created.Lastmod != "2026-01-01T03:30Z" {
+		t.Fatalf("created timestamps: %q %q", created.Date, created.Lastmod)
+	}
+	created.Date = "2026-11-12T10:30"
+	created.Lastmod = "2026-11-12T10:31:20.005+00:00"
+	saved, err := s.SavePost(id, created, created.Digest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.Date != "2026-11-12T10:30Z" || saved.Lastmod != "2026-11-12T10:31:20.005Z" {
+		t.Fatalf("saved timestamps: %q %q", saved.Date, saved.Lastmod)
+	}
+	before, digest, err := s.ReadFile(id, RootContent, "posts/tech/utc.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved.Date = "0000-01-01T00:00+00:01"
+	if _, err := s.SavePost(id, saved, digest); err == nil {
+		t.Fatal("out-of-range UTC year was accepted")
+	}
+	after, afterDigest, err := s.ReadFile(id, RootContent, "posts/tech/utc.md")
+	if err != nil || string(before) != string(after) || digest != afterDigest {
+		t.Fatal("invalid conversion changed the article")
 	}
 }
 

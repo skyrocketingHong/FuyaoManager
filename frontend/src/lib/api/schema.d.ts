@@ -2375,8 +2375,10 @@ export interface components {
              *     Impossible calendar dates, hours, minutes, seconds, or offsets
              *     are rejected instead of rolled over; offsets range within
              *     `±23:59` at most (hours 00-23, minutes 00-59). Values without an
-             *     offset sort as UTC; the submitted string is stored verbatim and
-             *     never rewritten.
+             *     offset are interpreted as UTC. Date-only values remain dates;
+             *     saved datetimes are normalized to UTC with a `Z` suffix, retaining
+             *     the submitted fractional precision. Historical values are not
+             *     rewritten until the article is saved.
              */
             date: string;
             /**

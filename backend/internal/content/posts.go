@@ -68,7 +68,7 @@ var postDateLayouts = []string{
 // instead of letting the parser roll them over. Values without an offset
 // (date-only and naive datetimes) and date-only values are interpreted as
 // UTC so every comparison happens on one clock; values with an offset keep
-// their actual point in time. The original string is never rewritten. An
+// their actual point in time. Reading does not rewrite historical data. An
 // explicit numeric offset is range-checked on the input string because the
 // generic-layout parse accepts an offset hour of 24 and an offset minute of
 // 60; Z, date-only, and naive values carry no offset and skip the check.
@@ -106,6 +106,50 @@ func parsePostDate(value string) (time.Time, error) {
 		}
 	}
 	return time.Time{}, lastErr
+}
+
+// utcPostDate preserves date-only values and fractional precision while
+// expressing datetimes in UTC. Naive values have always been interpreted as UTC.
+func utcPostDate(value string) (string, error) {
+	parsed, err := parsePostDate(value)
+	if err != nil {
+		return "", err
+	}
+	if len(value) == len("2006-01-02") {
+		return value, nil
+	}
+	if parsed.Year() < 0 || parsed.Year() > 9999 {
+		return "", errors.New("UTC date is outside the four-digit year range")
+	}
+	layout := "2006-01-02T15:04"
+	if len(value) > 16 && value[16] == ':' {
+		layout += ":05"
+	}
+	fraction := ""
+	if dot := strings.IndexByte(value, '.'); dot >= 0 {
+		end := dot + 1
+		for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+			end++
+		}
+		fraction = value[dot:end]
+	}
+	return parsed.UTC().Format(layout) + fraction + "Z", nil
+}
+
+func (p *Post) normalizeDates() error {
+	date, err := utcPostDate(p.Date)
+	if err != nil {
+		return fieldError("date", err.Error())
+	}
+	lastmod := ""
+	if p.Lastmod != "" {
+		lastmod, err = utcPostDate(p.Lastmod)
+		if err != nil {
+			return fieldError("lastmod", err.Error())
+		}
+	}
+	p.Date, p.Lastmod = date, lastmod
+	return nil
 }
 
 // Validate checks the editable fields; date accepts the theme's formats.
@@ -475,6 +519,9 @@ func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Po
 	if err := post.Validate(); err != nil {
 		return Post{}, err
 	}
+	if err := post.normalizeDates(); err != nil {
+		return Post{}, err
+	}
 	rel := post.PostPath()
 	var saved Post
 	err := s.withFileLock(siteID, "posts", "posts/"+rel, func() error {
@@ -527,6 +574,9 @@ func (s *Store) SavePost(siteID uuid.UUID, post Post, expectedDigest string) (Po
 // the same path cannot both succeed.
 func (s *Store) CreatePost(siteID uuid.UUID, post Post) (Post, error) {
 	if err := post.Validate(); err != nil {
+		return Post{}, err
+	}
+	if err := post.normalizeDates(); err != nil {
 		return Post{}, err
 	}
 	rel := post.PostPath()

@@ -19,13 +19,6 @@ import {
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
 
-function postDateText(value: string): string {
-	if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$/.test(value)) {
-		return value.replace('T', ' ');
-	}
-	return timeText(value);
-}
-
 export default function PostsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const scope = useContentScope();
@@ -257,7 +250,7 @@ export default function PostsPage() {
 							width: 170,
 							render: (_, post) => (
 								<time dateTime={post.date} title={post.date}>
-									{postDateText(post.date)}
+									{timeText(post.date)}
 								</time>
 							)
 						},

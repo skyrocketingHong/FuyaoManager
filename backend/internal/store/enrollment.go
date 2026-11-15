@@ -89,7 +89,7 @@ func (s *Store) CompleteEnrollment(ctx context.Context, permitID uuid.UUID, user
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		newUUID(), user.ID, credential.RPID, credential.CredentialID, credential.PublicKey, credential.AttestationType,
 		credential.AttestationFormat, credential.Transports, credential.SignCount, credential.BackupEligible,
-		credential.BackupState, credential.UserVerified, credential.AAGUID, credential.LastUsedAt, time.Now(),
+		credential.BackupState, credential.UserVerified, credential.AAGUID, credential.LastUsedAt, time.Now().UTC(),
 	); err != nil {
 		return model.User{}, err
 	}

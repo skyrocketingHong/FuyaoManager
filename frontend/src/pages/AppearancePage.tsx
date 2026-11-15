@@ -4,8 +4,10 @@ import { Button, ColorPicker, Radio } from 'antd';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';
 import { Panel } from '../components/Panel';
 import StatusTag from '../components/StatusTag';
+import DateTimeSettings from '../features/settings/DateTimeSettings';
 import { usePageHeader } from '../components/PageHeader';
 import { t, type MessageKey } from '../lib/i18n';
+import { resetTimePreferences } from '../lib/time';
 import {
 	accentPresets,
 	resetAppearance,
@@ -26,7 +28,16 @@ export default function AppearancePage() {
 			</StatusTag>
 		</div>
 	);
-	const actions = <Button onClick={resetAppearance}>{t('appearance.reset')}</Button>;
+	const actions = (
+		<Button
+			onClick={() => {
+				resetAppearance();
+				resetTimePreferences();
+			}}
+		>
+			{t('appearance.reset')}
+		</Button>
+	);
 	const inHeader = usePageHeader({ content, actions });
 	return (
 		<div className="page-stack appearance-page">
@@ -104,6 +115,7 @@ export default function AppearancePage() {
 							</ColorPicker>
 						</div>
 					</section>
+					<DateTimeSettings />
 				</div>
 			</Panel>
 		</div>

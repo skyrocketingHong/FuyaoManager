@@ -21,6 +21,7 @@ import {
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { currentAuthGeneration } from '../../lib/api/client';
 import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
+import { timeText } from '../../lib/admin/presentation';
 import { upsertSite } from '../../lib/sites/site-list';
 import PageLoading from '../../components/PageLoading';
 import StatusTag from '../../components/StatusTag';
@@ -40,7 +41,7 @@ type EdgeFacts = { kind: 'loading' } | { kind: 'error' } | { kind: 'ready'; stat
 export default function SiteDetailPage() {
 	const { siteId } = useParams<{ siteId: string }>();
 	const boundarySite = useCurrentSite();
-	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
+	useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const [messageApi, contextHolder] = message.useMessage();
 	const [switching, setSwitching] = useState(false);
 	const [retrying, setRetrying] = useState(false);
@@ -219,7 +220,11 @@ export default function SiteDetailPage() {
 									{t(`site.provision.${site.provisionState}` as never)}
 								</StatusTag>
 								{site.provisionState === 'failed' ? (
-									<Button size="small" loading={retrying} onClick={() => void handleRetryProvision()}>
+									<Button
+										size="small"
+										loading={retrying}
+										onClick={() => void handleRetryProvision()}
+									>
 										{t('sites.retryProvision')}
 									</Button>
 								) : null}
@@ -247,11 +252,11 @@ export default function SiteDetailPage() {
 					</div>
 					<div>
 						<dt>{t('site.updatedAt')}</dt>
-						<dd>{new Date(site.updatedAt).toLocaleString(locale)}</dd>
+						<dd>{timeText(site.updatedAt)}</dd>
 					</div>
 					<div>
 						<dt>{t('site.createdAt')}</dt>
-						<dd>{new Date(site.createdAt).toLocaleString(locale)}</dd>
+						<dd>{timeText(site.createdAt)}</dd>
 					</div>
 				</dl>
 			</Panel>
@@ -349,7 +354,7 @@ export default function SiteDetailPage() {
 						)}
 					</Space>
 				)}
-				</Panel>
-			</div>
-		);
-	}
+			</Panel>
+		</div>
+	);
+}

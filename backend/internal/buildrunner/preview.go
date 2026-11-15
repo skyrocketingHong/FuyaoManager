@@ -324,7 +324,7 @@ func (p *PreviewServer) issue(siteID, buildID uuid.UUID, wrapperHost string) (ur
 			return "", time.Time{}, err
 		}
 		p.leases[leaseToken] = PreviewLease{SiteID: siteID, BuildID: buildID, Host: wrapperHost, InstanceID: origin.instanceID, ExpiresAt: expiresAt}
-		return p.cfg.ExternalBase + "/" + wrapperHost + "/?lease=" + leaseToken, expiresAt, nil
+		return p.cfg.ExternalBase + "/" + wrapperHost + "/?lease=" + leaseToken, expiresAt.UTC(), nil
 	}
 	// The URL always carries the externally reachable base; the listener's
 	// own address (loopback or private bind) is never leaked to browsers.
@@ -332,7 +332,7 @@ func (p *PreviewServer) issue(siteID, buildID uuid.UUID, wrapperHost string) (ur
 	if err != nil {
 		return "", time.Time{}, err
 	}
-	return base + "/__preview__/" + token, expiresAt, nil
+	return base + "/__preview__/" + token, expiresAt.UTC(), nil
 }
 
 // CloseOrigin tears down one build's preview: every issued token is revoked,

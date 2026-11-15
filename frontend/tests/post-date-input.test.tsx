@@ -4,8 +4,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { ConfigProvider } from 'antd';
 import PostDateInput, { isValidPostDate } from '../src/components/PostDateInput';
 import { setLocale } from '../src/lib/i18n';
+import { resetTimePreferences, setTimePreferences } from '../src/lib/time';
 
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	resetTimePreferences();
+});
 
 describe('post date control', () => {
 	it('accepts the content contract and rejects impossible dates and offsets', () => {
@@ -30,8 +34,9 @@ describe('post date control', () => {
 		}
 	});
 
-	it('keeps the original time and offset when a date is changed', async () => {
+	it('displays the chosen timezone and writes the changed date in UTC', async () => {
 		setLocale('en-US');
+		setTimePreferences({ timezone: 'Asia/Shanghai' });
 		const change = vi.fn();
 		render(
 			<ConfigProvider theme={{ token: { motion: false } }}>
@@ -48,7 +53,7 @@ describe('post date control', () => {
 		expect(change).not.toHaveBeenCalled();
 		fireEvent.change(input, { target: { value: '2026-11-13' } });
 		fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
-		await waitFor(() => expect(change).toHaveBeenCalledWith('2026-11-13T10:00:45.123+08:00'));
+		await waitFor(() => expect(change).toHaveBeenCalledWith('2026-11-13T02:00:45.123Z'));
 		expect(screen.getByLabelText('Published Time')).toBeDefined();
 	});
 
@@ -60,6 +65,27 @@ describe('post date control', () => {
 			</ConfigProvider>
 		);
 		expect((document.querySelector('#ancient-date') as HTMLInputElement).value).toBe('0099-01-01');
+		expect(change).not.toHaveBeenCalled();
+	});
+
+	it('shows UTC instants in the selected display timezone without rewriting them', () => {
+		setTimePreferences({ timezone: 'Asia/Shanghai' });
+		const change = vi.fn();
+		render(
+			<ConfigProvider>
+				<PostDateInput
+					id="converted-date"
+					label="Published"
+					value="2026-11-12T20:00:00Z"
+					onChange={change}
+				/>
+			</ConfigProvider>
+		);
+		expect((document.querySelector('#converted-date') as HTMLInputElement).value).toBe(
+			'2026-11-13'
+		);
+		expect((screen.getByLabelText('Published Time') as HTMLInputElement).value).toBe('04:00:00');
+		expect(screen.getByText('UTC+08:00')).toBeDefined();
 		expect(change).not.toHaveBeenCalled();
 	});
 });

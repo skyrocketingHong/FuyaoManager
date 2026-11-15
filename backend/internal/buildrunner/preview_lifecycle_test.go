@@ -112,6 +112,17 @@ func lifecycleServer(t *testing.T, ttl time.Duration, maxOrigins int, ports Port
 	return p, dir
 }
 
+func TestPreviewIssueReturnsUTCExpiry(t *testing.T) {
+	p, _ := lifecycleServer(t, time.Hour, 1, nil, 0, 0)
+	_, expiry, err := p.Issue(uuid.New(), uuid.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expiry.Location() != time.UTC {
+		t.Fatalf("expiry timezone: %s", expiry.Location())
+	}
+}
+
 // TestPreviewExpiryReleasesCapacity proves an expired preview is reclaimed
 // automatically: after the TTL passes, a new build can take the origin slot
 // without any service restart.

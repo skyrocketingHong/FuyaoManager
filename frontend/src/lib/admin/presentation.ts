@@ -1,9 +1,9 @@
-import { i18nSnapshot, t, type MessageKey } from '../i18n';
+import { t, type MessageKey } from '../i18n';
+import { formatTime } from '../time';
 
 export function timeText(value: string | null): string {
 	if (!value) return t('admin.never');
-	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? value : date.toLocaleString(i18nSnapshot().locale);
+	return formatTime(value);
 }
 
 // Same action-label lookup pattern as robot-platform/settings/LogsPage.tsx;

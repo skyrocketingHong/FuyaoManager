@@ -10,6 +10,7 @@ import StatusTag from '../components/StatusTag';
 import { usePageHeader } from '../components/PageHeader';
 import { t, type MessageKey } from '../lib/i18n';
 import { useUpdateManager } from '../lib/updates/useUpdateManager';
+import { timeText } from '../lib/admin/presentation';
 import type { UpdateAction, UpdateVersion } from '../lib/api/updates';
 import '../styles/updates.css';
 
@@ -163,7 +164,7 @@ export default function UpdatesPage() {
 								{
 									key: 'check',
 									label: t('updates.lastCheck'),
-									children: data.lastCheck ? new Date(data.lastCheck).toLocaleString() : '—'
+									children: data.lastCheck ? timeText(data.lastCheck) : '—'
 								}
 							]}
 						/>
@@ -222,7 +223,7 @@ export default function UpdatesPage() {
 								disabled={disabled}
 								options={data.versions.map((v) => ({
 									value: versionKey(v),
-									label: `${short(v.commit)} · #${v.runId} · ${new Date(v.createdAt).toLocaleString()}`
+									label: `${short(v.commit)} · #${v.runId} · ${timeText(v.createdAt)}`
 								}))}
 								onChange={setSelected}
 							/>

@@ -13,6 +13,7 @@ import { initTheme } from './lib/theme';
 import { navItems } from './lib/navigation';
 import { useDocumentTitle } from './lib/title';
 import { loadSession, sessionSnapshot, subscribeSession } from './lib/session';
+import { initTimePreferences, subscribeTime, timeSnapshot } from './lib/time';
 import LoginPage from './pages/LoginPage';
 import BindPasskeyPage from './pages/BindPasskeyPage';
 import AccountSettingsPage from './pages/AccountSettingsPage';
@@ -104,13 +105,18 @@ function RequireFull({ status, children }: { status: Status; children: ReactNode
 
 export default function App() {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
+	useSyncExternalStore(subscribeTime, timeSnapshot);
 	useDocumentTitle(session.status);
 
 	useEffect(() => {
 		initLocale();
 		const stopTheme = initTheme();
+		const stopTime = initTimePreferences();
 		void loadSession();
-		return () => stopTheme?.();
+		return () => {
+			stopTheme?.();
+			stopTime();
+		};
 	}, []);
 
 	if (session.status === 'loading') {
@@ -187,7 +193,9 @@ export default function App() {
 													</SiteBoundary>
 												) : item.id.startsWith('content.') ? (
 													<ContentScopeProvider
-														resource={(item.parentId ?? item.id).slice('content.'.length) as ContentResource}
+														resource={
+															(item.parentId ?? item.id).slice('content.'.length) as ContentResource
+														}
 														fill
 													>
 														<Page />

@@ -69,7 +69,7 @@ func (s *Store) CompletePasskeyBind(ctx context.Context, sessionID, userID uuid.
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
 		newUUID(), pk.UserID, pk.RPID, pk.CredentialID, pk.PublicKey, pk.AttestationType, pk.AttestationFormat,
 		pk.Transports, pk.SignCount, pk.BackupEligible, pk.BackupState, pk.UserVerified, pk.AAGUID,
-		pk.LastUsedAt, time.Now(),
+		pk.LastUsedAt, time.Now().UTC(),
 	); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
