@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { DatePicker, Input, TimePicker } from 'antd';
 import dayjs from 'dayjs';
-import { t } from '../lib/i18n';
+import { t } from '../../lib/i18n';
 import {
 	dateTimeValue,
 	displayTimezone,
@@ -9,7 +9,7 @@ import {
 	timeSnapshot,
 	postDateParts,
 	wallTimeToUTC
-} from '../lib/time';
+} from '../../lib/time';
 
 function pickerDate(value: string) {
 	const [year, month, day] = value.split('-').map(Number);

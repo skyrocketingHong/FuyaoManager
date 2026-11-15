@@ -16,10 +16,10 @@ import {
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { PageHeaderProvider, usePageHeaderContent } from '../src/components/PageHeader';
-import PostsPage from '../src/pages/sites/PostsPage';
-import PostEditorPage from '../src/pages/sites/PostEditorPage';
-import PostVocabularyPage from '../src/pages/sites/PostVocabularyPage';
-import PostMediaPage from '../src/pages/sites/PostMediaPage';
+import PostsPage from '../src/pages/content/posts/PostsPage';
+import PostEditorPage from '../src/pages/content/posts/PostEditorPage';
+import PostVocabularyPage from '../src/pages/content/posts/PostVocabularyPage';
+import PostMediaPage from '../src/pages/content/posts/PostMediaPage';
 import * as management from '../src/lib/api/management';
 import type { Site } from '../src/lib/api/management';
 import { initLocale } from '../src/lib/i18n';

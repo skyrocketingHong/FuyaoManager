@@ -6,6 +6,10 @@ The platform content library owns blogs, albums, places and friends independentl
 
 Each managed website chooses platform or independent content separately for the four categories. Site members can read the resolved data. Shared data remains read-only in the site workspace and links to the platform editor; editors do not gain platform-write permission through a site or background media task. Switching sources changes only the mapping, guarded by its own revision ETag. Independent data and site configuration stay available when switching back.
 
+The blog workspace groups articles, categories, tags and media. Existing directory and category terms can be imported together while article references remain compatible with themes. The media view imports files or folders: selecting the old `uploads` folder preserves paths below `/wp-content/uploads/`. JPEG, PNG, WebP and GIF are supported; existing paths are never overwritten, and failures are listed. Rebuild after import to freeze these images into the published snapshot; conflicting source paths fail the build. Existing files still need to be imported.
+
+Article date-times are saved in UTC; date-only values retain their calendar date. Display time zone and date formats are browser preferences.
+
 ```mermaid
 flowchart LR
   Library[Platform content] --> Sources[Per-site source selection]

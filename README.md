@@ -40,8 +40,7 @@ platform development history preserved; see
 - **User management and audit**: administrator-only account lifecycle, site
   memberships, passkey/session revocation, one-time enrollment/recovery codes,
   and searchable operation history. See [Administration](./docs/ADMINISTRATION.md).
-- **Console appearance**: light/dark/system modes, twelve accent presets,
-  custom colors, browser persistence and synchronized tabs.
+- **Console preferences**: light/dark/system modes, colors, display time zone and date formats, persisted in the browser.
 
 - **Passkey authentication**: everyday sign-in is a discoverable passkey
   (WebAuthn, user verification required); sessions are cookie-based with
@@ -53,7 +52,7 @@ platform development history preserved; see
   operator-approved recovery entry.
 - **In-browser site creation**: per-site content, config, and favicon trees
   provisioned on disk with explicit state and idempotent retry.
-- **Content authority**: posts (frontmatter-aware, draft-gated), friends,
+- **Content authority**: posts with Markdown preview, generated contents, shared taxonomy and managed legacy image imports; friends,
   social links, visual site configuration with a write-only AMap security
   code, footprint points — all writes go through one jailed content store
   with digest ETags and atomic writes.
@@ -186,8 +185,16 @@ Node tooling).
 
 ## Project structure
 
-See [PROJECT_STRUCTURE.md](./PROJECT_STRUCTURE.md). The iteration ledger is
-[docs/ROADMAP.md](./docs/ROADMAP.md) (bilingual under `docs/`).
+```text
+backend/               Go service, CLI, storage and tests
+frontend/src/pages/    Route pages: content/ for shared content, sites/ for site workspaces
+frontend/src/features/ Feature-specific UI and behavior
+frontend/src/components/  Shared controls and application shell
+contracts/             HTTP and theme contracts
+scripts/               Repository maintenance and version tooling
+deploy/                Service and proxy templates
+docs/                  Administration, content and deployment guides
+```
 
 ## Deployment
 
@@ -196,8 +203,7 @@ live in [deploy/fuyao-admin/](./deploy/fuyao-admin/); the bilingual README
 there documents the low-memory build constraints and the managed-snippet
 topology. Production was switched to the standalone FuyaoManager build on
 2026-11-12: the public entrance serves a separate static page and the
-Tailscale entrance serves the console over the same HTTPS hostname. The
-roadmap records deployment verification and the remaining manual acceptance.
+Tailscale entrance serves the console over the same HTTPS hostname. Deployment requires the target server configuration and the verified CI bundle.
 
 ## License
 

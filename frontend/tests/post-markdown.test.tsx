@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import MarkdownPreview from '../src/components/MarkdownPreview';
+import MarkdownPreview from '../src/features/posts/MarkdownPreview';
 import { buildTableOfContents } from '../src/features/posts/markdown';
 
 afterEach(() => {

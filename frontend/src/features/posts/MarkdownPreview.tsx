@@ -2,7 +2,7 @@ import { useId, useMemo, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { PluggableList } from 'unified';
-import { remarkPreviewHeadings } from '../features/posts/markdown';
+import { remarkPreviewHeadings } from './markdown';
 
 export default function MarkdownPreview({
 	source,

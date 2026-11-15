@@ -12,13 +12,11 @@
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
 | `components/platform/sidebar/SideMenu.tsx`、`SidebarActions.tsx`                     | `src/components/layout/AppShell.tsx`、`SidebarActions.tsx` | 208px 侧栏，品牌、信息、固定操作、滚动菜单、页脚的顺序；返回入口与菜单分离 |
 | `components/platform/sidebar/InfoCard.tsx`、`SidebarFoot.tsx`                        | `SidebarInfo.tsx`、`SidebarFoot.tsx`                       | 信息标题与双列统计、版本区、渐隐分隔线                                     |
-| `components/platform/statusbar/TopBar.tsx`、`styles/statusbar/statusbar.css`         | `TopBar.tsx`、`src/styles/statusbar/statusbar.css`         | 44px 单行顶栏、32px 控件、页面内容和操作插槽、分层背景、账号按钮           |
-| `components/platform/shared/Widgets.tsx`                                             | `src/components/DataTable.tsx`                             | `size="small"` 与 `data-table` 表面；保留本仓类型化行、稳定键、排序和分页  |
+| `components/platform/statusbar/TopBar.tsx`、`styles/statusbar/statusbar.css`         | `TopBar.tsx`、`src/styles/statusbar/statusbar.css`         | 响应式顶栏、页面控件、分层背景和账号按钮                                   |
+| `components/platform/shared/Widgets.tsx`                                             | `src/components/DataTable.tsx`                             | `size="small"` 与 `data-table` 表面，使用类型化行、稳定键及排序             |
 | `styles/shared/panel.css`、`forms.css`、`controls.css`、`styles/sidebar/sidebar.css` | `src/styles/pages.css`、`src/styles/sidebar/sidebar.css`   | 面板结构、表格密度、表单网格、输入与按钮样式、侧栏分区                     |
 | 应用入口的 `StyleProvider layer`                                                     | `src/main.tsx`                                             | 将 antd CSS 放入样式层，使上述共享 CSS 获得预期优先级                      |
 
 功能图标使用与参考项目相同的 Lucide 1.31.0，品牌图标仍使用 Simple Icons。管理台保留 React 18 和既有路由、认证及语言状态；未复制设备控制器、遥测、公司品牌或固定 16:9 舞台。窄屏继续采用响应式工作区。
 
 信息区读取调用者可访问的真实站点列表和站点角色；加载及失败状态不显示虚构数字。列表缓存按会话代数隔离，旧账号响应不能带入新账号。页面构造函数随语言变化重新渲染，草稿不因语言切换卸载。站点资料保存时锁定编辑，成功后采用服务器返回的规范值。
-
-本轮同时修复站点资料页在加载后才调用 `usePageHeader` 导致的 React #310，并加入可重试的路由错误页。验收覆盖源码、类型、真实路由和顶部插槽下的状态转换测试及生产构建；实际视觉与真实认证器操作由用户验收。

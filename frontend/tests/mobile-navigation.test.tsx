@@ -143,7 +143,7 @@ vi.mock('../src/pages/LogsPage', () => ({ default: () => <div>page-logs</div> })
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 // The posts marker carries the real guard too, so the brand link's
 // cross-page navigation (site page → platform home) can be blocked.
-vi.mock('../src/pages/sites/PostsPage', async () => {
+vi.mock('../src/pages/content/posts/PostsPage', async () => {
 	const { useState } = await import('react');
 	const { useUnsavedGuard } = await import('../src/lib/editing/useUnsavedGuard');
 	return {

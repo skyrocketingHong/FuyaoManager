@@ -26,11 +26,11 @@ FuyaoManager 是自托管的站点与内容管理平台：管理站点、内容�
 - **流量快照**：可选复用运维绑定的 loopback 来源展示 Cloudflare 最新单日统计，明确缓存状态。
 
 - **用户管理及审计**：管理员管理账号生命周期、逐站授权、密钥及会话撤销、登记和恢复验证码，并检索操作记录。见 [管理说明](./docs/ADMINISTRATION_ZH.md)。
-- **管理台外观**：日间、夜间、跟随系统、12 种预设颜色、自定义颜色、浏览器持久化及标签页同步。
+- **管理台设置**：日间和夜间模式、主题颜色、展示时区及日期格式，设置保存在浏览器中。
 
 - **通行密钥认证**：日常登录使用 discoverable 通行密钥（WebAuthn，要求用户验证）；Cookie 会话配合 CSRF 与 Origin 校验。首次运行由 `fuyao-admin init-admin` 签发一次性码，浏览器兑换后绑定通行密钥完成激活——账号在当前 RP 下无凭据时，兑换只获得短有效期受限登记会话，完成绑定仪式后才放开业务。`fuyao-admin login-code` 保留为运维批准的恢复入口。
 - **网页建站**：逐站内容、配置与 favicon 目录落盘，供应状态显式记录，支持幂等重试。
-- **内容权威源**：文章（frontmatter 感知、草稿门控）、友链、社交链接、可视化站点配置（高德安全码只写不读）、足迹点位——全部写入经由同一个受限内容库，带摘要 ETag 与原子写。
+- **内容权威源**：文章支持 Markdown 预览、生成目录、分类标签管理及旧图片导入；友链、社交链接、可视化站点配置（高德安全码只写不读）、足迹点位——全部写入经由同一个受限内容库，带摘要 ETag 与原子写。
 - **相册与媒体任务**：服务端可控路径的上传、所选主题自己的 Node 索引器只读执行、年文档按 filename 编辑、删除受发布引用保护。
 - **主题登记**：由运维经 `fuyao-admin register-theme` 登记，theme.json 与配置 schema 依权威契约校验；逐站选择配合 If-Match。
 - **构建**：由主题自身准备冻结输入快照，构建运行在任务私有源码副本中（绝不写注册源），记录逐文件源码清单，校验能力与 URL 约定。
@@ -136,13 +136,21 @@ FUYAO_TEST_THEME_ROOT=/path/to/FuyaoHomepage/site \
 
 ## 项目结构
 
-见 [PROJECT_STRUCTURE_ZH.md](./PROJECT_STRUCTURE_ZH.md)。迭代台账见
-[docs/ROADMAP_ZH.md](./docs/ROADMAP_ZH.md)。
+```text
+backend/               Go 服务、CLI、存储与测试
+frontend/src/pages/    路由页面：content/ 为共享内容，sites/ 为站点工作区
+frontend/src/features/ 功能专属界面与行为
+frontend/src/components/  共用控件与应用框架
+contracts/             HTTP 与主题契约
+scripts/               仓库维护和版本工具
+deploy/                服务及反向代理模板
+docs/                  管理、内容和部署说明
+```
 
 ## 部署
 
 服务器模板（systemd 单元、环境样例、Caddy apply 辅助脚本）位于
-[deploy/fuyao-admin/](./deploy/fuyao-admin/)；该处双语 README 说明小内存构建约束与受管片段拓扑。2026-11-12 已切换至独立 FuyaoManager 构建：公网入口提供独立静态页，Tailscale 入口经同一 HTTPS 域名提供管理台。部署验证及剩余人工验收见路线图。
+[deploy/fuyao-admin/](./deploy/fuyao-admin/)；该处双语 README 说明小内存构建约束与受管片段拓扑。2026-11-12 已切换至独立 FuyaoManager 构建：公网入口提供独立静态页，Tailscale 入口经同一 HTTPS 域名提供管理台。部署使用目标服务器配置及经验证的 CI 程序包。
 
 ## 许可证
 

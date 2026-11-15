@@ -24,12 +24,12 @@ import {
 } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { PageTabs, usePageHeader } from '../../components/PageHeader';
-import { useContentScope } from '../../components/ContentScopeProvider';
-import PostDateInput, { isValidPostDate } from '../../components/PostDateInput';
-import PageLoading from '../../components/PageLoading';
-import StatusTag from '../../components/StatusTag';
-import MarkdownToolbar from '../../features/posts/MarkdownToolbar';
+import { PageTabs, usePageHeader } from '../../../components/PageHeader';
+import { useContentScope } from '../../../components/ContentScopeProvider';
+import PostDateInput, { isValidPostDate } from '../../../features/posts/PostDateInput';
+import PageLoading from '../../../components/PageLoading';
+import StatusTag from '../../../components/StatusTag';
+import MarkdownToolbar from '../../../features/posts/MarkdownToolbar';
 import {
 	createPost,
 	getPost,
@@ -42,13 +42,13 @@ import {
 	type Post,
 	type PostTaxonomy,
 	type Site
-} from '../../lib/api/management';
-import type { ContentTarget } from '../../lib/api/content';
-import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
-import { apiErrorKey } from '../../lib/i18n/errors';
-import { t, type MessageKey } from '../../lib/i18n';
+} from '../../../lib/api/management';
+import type { ContentTarget } from '../../../lib/api/content';
+import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
+import { apiErrorKey } from '../../../lib/i18n/errors';
+import { t, type MessageKey } from '../../../lib/i18n';
 
-const MarkdownPreview = lazy(() => import('../../components/MarkdownPreview'));
+const MarkdownPreview = lazy(() => import('../../../features/posts/MarkdownPreview'));
 
 interface PostForm {
 	category: string;

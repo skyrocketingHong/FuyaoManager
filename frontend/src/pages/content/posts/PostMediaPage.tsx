@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Input, Space, Typography, message } from 'antd';
 import { Copy, FolderUp, Upload } from 'lucide-react';
-import { useContentScope } from '../../components/ContentScopeProvider';
-import DataTable from '../../components/DataTable';
-import { usePageHeader } from '../../components/PageHeader';
-import { TablePanel } from '../../components/Panel';
-import PostWorkspaceTabs from '../../features/posts/PostWorkspaceTabs';
+import { useContentScope } from '../../../components/ContentScopeProvider';
+import DataTable from '../../../components/DataTable';
+import { usePageHeader } from '../../../components/PageHeader';
+import { TablePanel } from '../../../components/Panel';
+import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
 import {
 	importPostMedia,
 	listPostMedia,
 	postMediaURL,
 	type PostMedia,
 	type PostMediaList
-} from '../../lib/api/management';
-import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
-import { apiErrorKey } from '../../lib/i18n/errors';
-import { t, type MessageKey } from '../../lib/i18n';
+} from '../../../lib/api/management';
+import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
+import { apiErrorKey } from '../../../lib/i18n/errors';
+import { t, type MessageKey } from '../../../lib/i18n';
 
 function legacyPath(file: File): string | undefined {
 	if (!file.webkitRelativePath) return undefined;

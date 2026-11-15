@@ -13,7 +13,7 @@ FuyaoManager was extracted from the FuyaoHomepage repository
   layout:
   - `admin/backend/` → `backend/`
   - `admin/frontend/` → `frontend/`
-  - `admin/ROADMAP.md` / `admin/ROADMAP_ZH.md` → `docs/ROADMAP.md` / `docs/ROADMAP_ZH.md`
+  - Historical `admin/ROADMAP*` records were imported and later removed from the current tree.
   - `contracts/` → `contracts/` (management OpenAPI + theme contracts)
   - `deploy/fuyao-admin/` → `deploy/fuyao-admin/`
   - `.github/workflows/ci.yml` (rewritten for the platform-only jobs)

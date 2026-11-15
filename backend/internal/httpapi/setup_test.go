@@ -51,7 +51,7 @@ func testThemeRoot(t *testing.T) string {
 	t.Helper()
 	root := os.Getenv("FUYAO_TEST_THEME_ROOT")
 	if root == "" {
-		t.Skip("FUYAO_TEST_THEME_ROOT unset: real-first-theme integration tests need a FuyaoHomepage site/ checkout (see docs/ROADMAP.md)")
+		t.Skip("FUYAO_TEST_THEME_ROOT unset: real-first-theme integration tests need a FuyaoHomepage site/ checkout")
 	}
 	if _, err := os.Stat(filepath.Join(root, "theme.json")); err != nil {
 		t.Fatalf("FUYAO_TEST_THEME_ROOT %s has no theme.json: %v", root, err)

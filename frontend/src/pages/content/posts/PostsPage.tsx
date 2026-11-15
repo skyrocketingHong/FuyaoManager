@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Input, Popconfirm, Select, Space, Typography, message } from 'antd';
-import Trans from '../../components/i18n/Trans';
-import { usePageHeader } from '../../components/PageHeader';
-import DataTable from '../../components/DataTable';
-import { timeText } from '../../components/Widgets';
-import StatusTag from '../../components/StatusTag';
-import { TablePanel } from '../../components/Panel';
-import { useContentScope } from '../../components/ContentScopeProvider';
-import PostWorkspaceTabs from '../../features/posts/PostWorkspaceTabs';
+import Trans from '../../../components/i18n/Trans';
+import { usePageHeader } from '../../../components/PageHeader';
+import DataTable from '../../../components/DataTable';
+import { timeText } from '../../../components/Widgets';
+import StatusTag from '../../../components/StatusTag';
+import { TablePanel } from '../../../components/Panel';
+import { useContentScope } from '../../../components/ContentScopeProvider';
+import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
 import {
 	deletePost,
 	getPost,
@@ -17,9 +17,9 @@ import {
 	type Post,
 	type PostListSort,
 	type Site
-} from '../../lib/api/management';
-import { apiErrorKey } from '../../lib/i18n/errors';
-import { t, type MessageKey } from '../../lib/i18n';
+} from '../../../lib/api/management';
+import { apiErrorKey } from '../../../lib/i18n/errors';
+import { t, type MessageKey } from '../../../lib/i18n';
 
 export default function PostsPage() {
 	const { siteId } = useParams<{ siteId: string }>();

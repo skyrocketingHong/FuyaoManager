@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ConfigProvider } from 'antd';
-import PostDateInput, { isValidPostDate } from '../src/components/PostDateInput';
+import PostDateInput, { isValidPostDate } from '../src/features/posts/PostDateInput';
 import { setLocale } from '../src/lib/i18n';
 import { resetTimePreferences, setTimePreferences } from '../src/lib/time';
 

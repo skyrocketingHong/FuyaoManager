@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Alert, Button, Input, Modal, Popconfirm, Space, message } from 'antd';
-import { useContentScope } from '../../components/ContentScopeProvider';
-import DataTable from '../../components/DataTable';
-import { usePageHeader } from '../../components/PageHeader';
-import { TablePanel } from '../../components/Panel';
-import PostWorkspaceTabs from '../../features/posts/PostWorkspaceTabs';
+import { useContentScope } from '../../../components/ContentScopeProvider';
+import DataTable from '../../../components/DataTable';
+import { usePageHeader } from '../../../components/PageHeader';
+import { TablePanel } from '../../../components/Panel';
+import PostWorkspaceTabs from '../../../features/posts/PostWorkspaceTabs';
 import {
 	getPostDirectory,
 	getPostTaxonomy,
@@ -15,10 +15,10 @@ import {
 	type PostTaxonomy,
 	type PostVocabulary,
 	type PostVocabularyUpdate
-} from '../../lib/api/management';
-import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
-import { apiErrorKey } from '../../lib/i18n/errors';
-import { t, type MessageKey } from '../../lib/i18n';
+} from '../../../lib/api/management';
+import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
+import { apiErrorKey } from '../../../lib/i18n/errors';
+import { t, type MessageKey } from '../../../lib/i18n';
 
 type CategoryGroup = NonNullable<PostTaxonomy['categoryGroups']>[number];
 type DirectoryDraft = {

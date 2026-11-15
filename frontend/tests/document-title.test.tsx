@@ -101,10 +101,10 @@ vi.mock('../src/pages/AppearancePage', () => ({ default: () => <div>page-appeara
 vi.mock('../src/pages/sites/SiteDetailPage', () => ({ default: () => <div>page-overview</div> }));
 vi.mock('../src/pages/sites/SettingsPage', () => ({ default: () => <div>page-settings</div> }));
 vi.mock('../src/pages/sites/SiteConfigPage', () => ({ default: () => <div>page-config</div> }));
-vi.mock('../src/pages/sites/PostsPage', () => ({ default: () => <div>page-posts</div> }));
-vi.mock('../src/pages/sites/FriendsPage', () => ({ default: () => <div>page-friends</div> }));
-vi.mock('../src/pages/sites/AlbumsPage', () => ({ default: () => <div>page-albums</div> }));
-vi.mock('../src/pages/sites/FootprintsPage', () => ({ default: () => <div>page-footprints</div> }));
+vi.mock('../src/pages/content/posts/PostsPage', () => ({ default: () => <div>page-posts</div> }));
+vi.mock('../src/pages/content/FriendsPage', () => ({ default: () => <div>page-friends</div> }));
+vi.mock('../src/pages/content/AlbumsPage', () => ({ default: () => <div>page-albums</div> }));
+vi.mock('../src/pages/content/FootprintsPage', () => ({ default: () => <div>page-footprints</div> }));
 vi.mock('../src/pages/sites/ThemePage', () => ({ default: () => <div>page-theme</div> }));
 vi.mock('../src/pages/sites/BuildsPage', () => ({ default: () => <div>page-builds</div> }));
 vi.mock('../src/pages/sites/ReleasesPage', () => ({ default: () => <div>page-releases</div> }));
