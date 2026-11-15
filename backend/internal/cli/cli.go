@@ -279,6 +279,11 @@ func runServe(ctx context.Context) error {
 		return err
 	}
 	boundContent := &contentbind.Store{Store: contentStore, Platform: platformContent, Resolve: st.GetContentSources}
+	go func() {
+		if err := contentbind.SyncPostMedia(ctx, platformContent, st.PostMedia, content.PlatformScopeID); err != nil && ctx.Err() == nil {
+			logger.Error("platform post media initialization failed", "error", err)
+		}
+	}()
 	scopeContent := func(id uuid.UUID) *content.Store {
 		if id == content.PlatformScopeID {
 			return platformContent
