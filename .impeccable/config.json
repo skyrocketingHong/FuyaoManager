@@ -10,7 +10,7 @@
           "frontend/src/styles/post-editor.css"
         ],
         "createdAt": "2026-11-15T02:59:19.653Z",
-        "reason": "Codex: Markdown blockquote uses a neutral border to identify quoted content; it is not a card accent."
+        "reason": "Repository review: semantic Markdown blockquote uses a neutral rule, not a card accent."
       }
     ]
   }

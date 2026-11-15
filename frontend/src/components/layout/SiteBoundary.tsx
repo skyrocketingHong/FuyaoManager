@@ -11,6 +11,7 @@ import { Button, Result, Spin } from 'antd';
 import { ApiError } from '../../lib/api/client';
 import { getSite, type Site } from '../../lib/api/management';
 import { t } from '../../lib/i18n';
+import { RetryButton } from '../ActionButton';
 
 const SiteContext = createContext<Site | null>(null);
 
@@ -64,9 +65,7 @@ export default function SiteBoundary({ children }: { children: ReactNode }) {
 				extra={
 					<>
 						{!phase.notFound ? (
-							<Button type="primary" onClick={() => setEpoch((n) => n + 1)}>
-								{t('common.retry')}
-							</Button>
+							<RetryButton type="primary" onClick={() => setEpoch((n) => n + 1)} />
 						) : null}
 						<Link to="/sites">
 							<Button>{t('site.boundary.backToSites')}</Button>

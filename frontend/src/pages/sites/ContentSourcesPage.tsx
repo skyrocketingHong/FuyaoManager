@@ -5,6 +5,7 @@ import { useCurrentSite } from '../../components/layout/SiteBoundary';
 import { usePageHeader } from '../../components/PageHeader';
 import { Panel } from '../../components/Panel';
 import PageLoading from '../../components/PageLoading';
+import { RefreshButton, RetryButton } from '../../components/ActionButton';
 import { useAdminMutation, useAdminQuery } from '../../lib/admin/requests';
 import {
 	getContentSources,
@@ -98,9 +99,7 @@ function ContentSourcesEditor({ siteId }: { siteId: string }) {
 	}
 	const actions = (
 		<Space size={8}>
-			<Button disabled={mutation.busy || query.loading} onClick={refresh}>
-				{t('admin.refresh')}
-			</Button>
+			<RefreshButton disabled={mutation.busy} loading={query.loading} onClick={refresh} />
 			<Button
 				type="primary"
 				disabled={!editable || !dirty}
@@ -120,7 +119,7 @@ function ContentSourcesEditor({ siteId }: { siteId: string }) {
 					type="error"
 					title={t(query.error)}
 					showIcon
-					action={<Button onClick={refresh}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={refresh} />}
 				/>
 			)}
 			{mutation.error && !state.conflict && (

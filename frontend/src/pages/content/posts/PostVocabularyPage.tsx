@@ -21,6 +21,7 @@ import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { currentAuthGeneration } from '../../../lib/api/client';
 import { t, type MessageKey } from '../../../lib/i18n';
+import { RetryButton } from '../../../components/ActionButton';
 
 type CategoryGroup = NonNullable<PostTaxonomy['categoryGroups']>[number];
 type DirectoryDraft = {
@@ -412,7 +413,7 @@ export default function PostVocabularyPage() {
 					type="error"
 					showIcon
 					title={t(errorKey)}
-					action={<Button onClick={load}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={load} />}
 				/>
 			) : null}
 			<TablePanel className="fill-height">

@@ -1,7 +1,7 @@
 // Generic table, filters and inline detail anatomy from robot-platform's LogsPage.
 import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Alert, DatePicker, Input, Select, Space } from 'antd';
-import ActionButton from '../components/ActionButton';
+import { RefreshButton, RetryButton } from '../components/ActionButton';
 import PageLoading from '../components/PageLoading';
 import LoadMore from '../components/LoadMore';
 import { DataTable, TablePanel, Tag, VersionText, timeText } from '../components/Widgets';
@@ -175,9 +175,7 @@ export default function LogsPage() {
 		</>
 	);
 	const actions = (
-		<ActionButton onClick={query.reload} loading={query.loading}>
-			{t('admin.refresh')}
-		</ActionButton>
+		<RefreshButton onClick={query.reload} loading={query.loading} />
 	);
 	const header = usePageHeader({
 		content: <div className="topbar-log-content">{filters}</div>,
@@ -198,7 +196,7 @@ export default function LogsPage() {
 					type="error"
 					showIcon
 					title={t(query.error)}
-					action={<ActionButton onClick={query.retry}>{t('common.retry')}</ActionButton>}
+					action={<RetryButton onClick={query.retry} />}
 				/>
 			)}
 			<DataTable<AuditEvent>

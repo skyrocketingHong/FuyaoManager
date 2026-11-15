@@ -16,6 +16,7 @@ import {
 import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { t, type MessageKey } from '../../../lib/i18n';
+import { RetryButton } from '../../../components/ActionButton';
 
 function legacyPath(file: File): string | undefined {
 	if (!file.webkitRelativePath) return undefined;
@@ -181,7 +182,7 @@ export default function PostMediaPage() {
 					type="error"
 					showIcon
 					title={t(error)}
-					action={<Button onClick={load}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={load} />}
 				/>
 			) : null}
 			{failures.length ? (

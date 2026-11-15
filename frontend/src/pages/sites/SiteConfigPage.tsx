@@ -24,6 +24,7 @@ import {
 } from '../../lib/api/management';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
+import { RetryButton } from '../../components/ActionButton';
 
 interface ConfigForm {
 	siteUrl: string;
@@ -350,7 +351,7 @@ export default function SiteConfigPage() {
 						type="error"
 						showIcon
 						title={t(errorKey)}
-						action={<Button onClick={() => void load()}>{t('session.retry')}</Button>}
+						action={<RetryButton onClick={() => void load()} />}
 					/>
 				) : (
 					<PageLoading spec="page" label={t('common.loading')} />

@@ -20,6 +20,7 @@ import {
 } from '../../../lib/api/management';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { t, type MessageKey } from '../../../lib/i18n';
+import { RetryButton } from '../../../components/ActionButton';
 
 export default function PostsPage() {
 	const { siteId } = useParams<{ siteId: string }>();
@@ -217,9 +218,7 @@ export default function PostsPage() {
 					showIcon
 					title={t(errorKey)}
 					action={
-						<Button onClick={() => void refresh(failedPage, query, pageSize, failedPage === 1, ordering)}>
-							{t('common.retry')}
-						</Button>
+						<RetryButton onClick={() => void refresh(failedPage, query, pageSize, failedPage === 1, ordering)} />
 					}
 				/>
 			) : null}

@@ -39,6 +39,7 @@ import AlbumsPage from './pages/content/AlbumsPage';
 import FootprintsPage from './pages/content/FootprintsPage';
 import BuildsPage from './pages/sites/BuildsPage';
 import ReleasesPage from './pages/sites/ReleasesPage';
+import { RetryButton } from './components/ActionButton';
 
 /** Page components keyed by navigation item id; the route table consumes
  * the same metadata as the sidebar menu, so they cannot drift apart. */
@@ -139,9 +140,7 @@ export default function App() {
 						title={t('session.errorTitle')}
 						subTitle={t('session.errorBody')}
 						extra={
-							<Button type="primary" onClick={() => void loadSession()}>
-								{t('session.retry')}
-							</Button>
+							<RetryButton type="primary" onClick={() => void loadSession()} />
 						}
 					/>
 				</Card>

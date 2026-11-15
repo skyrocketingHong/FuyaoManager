@@ -7,7 +7,7 @@
  * is never disguised as an empty catalog.
  */
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Empty, Tooltip, Typography } from 'antd';
+import { Alert, Empty, Tooltip, Typography } from 'antd';
 import DataTable from '../components/DataTable';
 import type { ColumnsType } from 'antd/es/table';
 import { listThemes, type Theme } from '../lib/api/management';
@@ -17,6 +17,7 @@ import { sessionSnapshot, subscribeSession } from '../lib/session';
 import { useSyncExternalStore } from 'react';
 import StatusTag from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
+import { RetryButton } from '../components/ActionButton';
 
 export default function ThemesCatalogPage() {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
@@ -106,15 +107,13 @@ export default function ThemesCatalogPage() {
 					showIcon
 					title={t(errorKey)}
 					action={
-						<Button
+						<RetryButton
 							size="small"
 							onClick={() => {
 								setThemes(null);
 								load();
 							}}
-						>
-							{t('common.retry')}
-						</Button>
+						 />
 					}
 				/>
 			) : null}

@@ -1,7 +1,8 @@
 // Table, editor lifecycle and request guards adapted from the reference UsersPage.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, App, Button, Empty, Input, Modal, Select, Space, Typography } from 'antd';
-import { RefreshCw, UserPlus } from 'lucide-react';
+import { UserPlus } from 'lucide-react';
+import { RefreshButton, RetryButton } from '../components/ActionButton';
 import DataTable from '../components/DataTable';
 import UserDrawer from '../components/admin/UserDrawer';
 import PageLoading from '../components/PageLoading';
@@ -148,13 +149,7 @@ export default function UsersPage() {
 	);
 	const actions = (
 		<Space wrap size={8}>
-			<Button
-				icon={<RefreshCw size={16} />}
-				onClick={query.reload}
-				disabled={query.loading || mutation.busy}
-			>
-				{t('admin.refresh')}
-			</Button>
+			<RefreshButton onClick={query.reload} loading={query.loading} disabled={mutation.busy} />
 			<Button
 				type="primary"
 				icon={<UserPlus size={16} />}
@@ -183,7 +178,7 @@ export default function UsersPage() {
 					type="error"
 					showIcon
 					title={t(query.error)}
-					action={<Button onClick={query.retry}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={query.retry} />}
 				/>
 			)}
 			{mutation.error && !selected && !createOpen && (

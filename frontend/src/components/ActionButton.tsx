@@ -1,5 +1,7 @@
 import { Button, Tooltip, type ButtonProps } from 'antd';
 import { useId } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { t } from '../lib/i18n';
 
 // robot-platform/components/platform/shared/ActionButton.tsx.
 export default function ActionButton({
@@ -28,5 +30,31 @@ export default function ActionButton({
 		</Tooltip>
 	) : (
 		button
+	);
+}
+
+type StandardActionProps = Omit<ButtonProps, 'children' | 'icon'> & { disabledReason?: string };
+
+export function RefreshButton(props: StandardActionProps) {
+	return (
+		<ActionButton
+			{...props}
+			aria-label={props['aria-label'] ?? t('common.refresh')}
+			icon={<RefreshCw size={16} aria-hidden="true" />}
+		>
+			{t('common.refresh')}
+		</ActionButton>
+	);
+}
+
+export function RetryButton(props: StandardActionProps) {
+	return (
+		<ActionButton
+			{...props}
+			aria-label={props['aria-label'] ?? t('common.retry')}
+			icon={<RefreshCw size={16} aria-hidden="true" />}
+		>
+			{t('common.retry')}
+		</ActionButton>
 	);
 }

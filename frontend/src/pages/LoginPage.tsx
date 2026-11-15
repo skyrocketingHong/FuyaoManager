@@ -5,7 +5,7 @@
  * be redeemed right here. A code redemption for an account without a
  * credential lands on the binding page instead of the console.
  */
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Divider, Form, Input, Typography } from 'antd';
@@ -98,9 +98,11 @@ function CodeRedeemForm({ onDone }: { onDone: (status: string) => void }) {
 			<Button type={session.platformInitialized ? 'default' : 'primary'} htmlType="submit" block loading={busy}>
 				{t('login.action')}
 			</Button>
-			<Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-				{t('login.codeHint')}
-			</Typography.Paragraph>
+			{session.platformInitialized ? (
+				<Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+					{t('login.codeHint')}
+				</Typography.Paragraph>
+			) : null}
 		</Form>
 	);
 }
@@ -110,6 +112,8 @@ export default function LoginPage() {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const [busy, setBusy] = useState(false);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
+	const [showRecovery, setShowRecovery] = useState(false);
+	const recoveryId = useId();
 
 	function handleDone(status: string) {
 		navigate(status === 'restricted' ? '/register-passkey' : '/sites', { replace: true });
@@ -159,8 +163,19 @@ export default function LoginPage() {
 				<Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
 					{session.passkeyAvailable ? t('login.passkeyHint') : t('login.passkeyUnavailable')}
 				</Typography.Paragraph>
-				<Divider style={{ margin: '16px 0' }} />
-				<CodeRedeemForm onDone={handleDone} />
+				<Button
+					type="link"
+					aria-expanded={showRecovery}
+					aria-controls={recoveryId}
+					style={{ paddingInline: 0, marginTop: 8 }}
+					onClick={() => setShowRecovery((open) => !open)}
+				>
+					{t(showRecovery ? 'login.hideRecovery' : 'login.useRecovery')}
+				</Button>
+				<div id={recoveryId} hidden={!showRecovery}>
+					<Divider style={{ margin: '16px 0' }} />
+					<CodeRedeemForm onDone={handleDone} />
+				</div>
 			</Card>
 		</div>
 	);

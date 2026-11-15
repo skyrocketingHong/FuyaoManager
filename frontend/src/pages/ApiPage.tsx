@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Input, Select } from 'antd';
 import DataTable from '../components/DataTable';
+import { RefreshButton, RetryButton } from '../components/ActionButton';
 import { TablePanel, Tag } from '../components/Widgets';
 import PageLoading from '../components/PageLoading';
 import { usePageHeader } from '../components/PageHeader';
@@ -172,9 +173,7 @@ export default function ApiPage() {
 		),
 		actions: (
 			<>
-				<Button onClick={result.reload} loading={result.loading}>
-					{t('admin.refresh')}
-				</Button>
+				<RefreshButton onClick={result.reload} loading={result.loading} />
 				<Button onClick={downloadContract} disabled={!catalog}>
 					{t('api.download')}
 				</Button>
@@ -192,9 +191,7 @@ export default function ApiPage() {
 						<div className="api-catalog-filters">
 							{searchInput}
 							{filterControls}
-							<Button onClick={result.reload} loading={result.loading}>
-								{t('admin.refresh')}
-							</Button>
+							<RefreshButton onClick={result.reload} loading={result.loading} />
 							<Button onClick={downloadContract} disabled={!catalog}>
 								{t('api.download')}
 							</Button>
@@ -205,7 +202,7 @@ export default function ApiPage() {
 							type="error"
 							showIcon
 							title={t(result.error)}
-							action={<Button onClick={result.reload}>{t('common.retry')}</Button>}
+							action={<RetryButton onClick={result.reload} />}
 						/>
 					)}
 					{result.loading && !catalog && <PageLoading label={t('api.loading')} />}

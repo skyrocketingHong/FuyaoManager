@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Alert, Button } from 'antd';
+import { Alert } from 'antd';
 import { useAdminQuery } from '../lib/admin/requests';
 import {
 	getContentSources,
@@ -13,6 +13,7 @@ import {
 import type { Site } from '../lib/api/management';
 import { t } from '../lib/i18n';
 import PageLoading from './PageLoading';
+import { RetryButton } from './ActionButton';
 
 interface ContentScope {
 	target: ContentTarget | undefined;
@@ -64,7 +65,7 @@ export function ContentScopeProvider({
 						type="error"
 						showIcon
 						title={t(query.error)}
-						action={<Button onClick={query.reload}>{t('common.retry')}</Button>}
+						action={<RetryButton onClick={query.reload} />}
 					/>
 				)}
 				{shared && (

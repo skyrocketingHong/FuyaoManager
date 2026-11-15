@@ -11,6 +11,7 @@ import { t, type MessageKey } from '../../lib/i18n';
 import { timeText } from '../../lib/admin/presentation';
 import { useAdminQuery, type useAdminMutation } from '../../lib/admin/requests';
 import * as service from '../../lib/api/admin';
+import { RetryButton } from '../ActionButton';
 
 type Props = {
 	id: string;
@@ -105,7 +106,7 @@ export default function UserDrawer({
 						type="error"
 						showIcon
 						title={t(query.error)}
-						action={<Button onClick={query.reload}>{t('common.retry')}</Button>}
+						action={<RetryButton onClick={query.reload} />}
 					/>
 				)}
 				{query.loading && !data && <PageLoading label={t('common.loading')} />}

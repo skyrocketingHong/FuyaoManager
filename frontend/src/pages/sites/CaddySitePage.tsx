@@ -8,6 +8,7 @@ import CaddyIcon from '../../components/CaddyIcon';
 import { useCurrentSite } from '../../components/layout/SiteBoundary';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
+import { RefreshButton, RetryButton } from '../../components/ActionButton';
 import { useAdminMutation, useAdminQuery } from '../../lib/admin/requests';
 import { timeText } from '../../lib/admin/presentation';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
@@ -162,9 +163,7 @@ function CaddySiteEditor({ siteId }: { siteId: string }) {
 	}
 	const actions = (
 		<Space size={8}>
-			<Button onClick={refresh} disabled={busy}>
-				{t('admin.refresh')}
-			</Button>
+			<RefreshButton onClick={refresh} disabled={busy} />
 			{owner && capabilities?.convert && (
 				<Button type="primary" onClick={() => confirm('convert')} disabled={blocked || !etag}>
 					{t('caddy.convert')}
@@ -263,7 +262,7 @@ function CaddySiteEditor({ siteId }: { siteId: string }) {
 					type="error"
 					showIcon
 					title={t(query.error)}
-					action={<Button onClick={refresh}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={refresh} />}
 				/>
 			)}
 			{mutation.error && <Alert type="error" showIcon title={t(mutation.error)} />}

@@ -84,9 +84,13 @@
 	min-height: 0;
 }
 .post-editor-source .ant-form-item-row,
-.post-editor-source .ant-form-item-control {
+.post-editor-source .ant-form-item-control,
+.post-editor-source .ant-form-item-control-input-content {
 	width: 100%;
 	max-width: 100%;
+}
+.post-editor-source .ant-form-item-control-input {
+	align-items: stretch;
 }
 .post-editor-source textarea {
 	flex: 1 1 auto;

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Alert, Button, Space, Typography } from 'antd';
+import { Alert, Space, Typography } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { useCurrentSite } from '../../components/layout/SiteBoundary';
 import { Panel } from '../../components/Panel';
@@ -14,6 +14,7 @@ import CaddySitePage from './CaddySitePage';
 import StatusTag from '../../components/StatusTag';
 import { getCurrentRelease } from '../../lib/api/management';
 import { ApiError } from '../../lib/api/client';
+import { RetryButton } from '../../components/ActionButton';
 
 type Analytics = SiteOverview['analytics'];
 function TrafficStatistics({
@@ -62,9 +63,7 @@ function TrafficStatistics({
 					showIcon
 					title={t('overview.trafficUnavailable')}
 					action={
-						<Button loading={loading} onClick={reload}>
-							{t('common.retry')}
-						</Button>
+						<RetryButton loading={loading} onClick={reload} />
 					}
 				/>
 			)}
@@ -109,7 +108,7 @@ function CaddyCurrentRelease({ siteId }: { siteId: string }) {
 						type="error"
 						showIcon
 						title={t(query.error)}
-						action={<Button onClick={query.reload}>{t('common.retry')}</Button>}
+						action={<RetryButton onClick={query.reload} />}
 					/>
 				) : current ? (
 					<Space wrap>
@@ -155,7 +154,7 @@ export default function SiteOverviewPage() {
 					type="error"
 					title={t(query.error)}
 					showIcon
-					action={<Button onClick={query.reload}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={query.reload} />}
 				/>
 			)}
 			<Panel title={t('overview.content')}>

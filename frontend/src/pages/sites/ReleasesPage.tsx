@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Modal, Select, Space, Typography, message } from 'antd';
 import DataTable from '../../components/DataTable';
-import ActionButton from '../../components/ActionButton';
+import ActionButton, { RetryButton } from '../../components/ActionButton';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -368,9 +368,7 @@ export default function ReleasesPage() {
 								showIcon
 								title={t('edge.loadFailed')}
 								action={
-									<Button size="small" onClick={() => void refreshEdge()}>
-										{t('common.retry')}
-									</Button>
+									<RetryButton size="small" onClick={() => void refreshEdge()} />
 								}
 								style={{ marginBottom: 16 }}
 							/>

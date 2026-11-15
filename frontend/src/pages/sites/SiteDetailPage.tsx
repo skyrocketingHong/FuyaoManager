@@ -27,6 +27,7 @@ import PageLoading from '../../components/PageLoading';
 import StatusTag from '../../components/StatusTag';
 import { Panel } from '../../components/Panel';
 import { useCurrentSite } from '../../components/layout/SiteBoundary';
+import { RetryButton } from '../../components/ActionButton';
 
 type ReleaseState =
 	| { kind: 'loading' }
@@ -265,9 +266,7 @@ export default function SiteDetailPage() {
 				{edge.kind === 'error' ? (
 					<Space wrap>
 						<Typography.Text type="danger">{t('edge.loadFailed')}</Typography.Text>
-						<Button size="small" onClick={() => void refreshEdge()}>
-							{t('common.retry')}
-						</Button>
+						<RetryButton size="small" onClick={() => void refreshEdge()} />
 					</Space>
 				) : !trustedEdge ? (
 					// Loading, or a payload that does not belong to this site: no

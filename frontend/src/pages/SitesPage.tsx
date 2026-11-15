@@ -34,6 +34,7 @@ import { Panel, TablePanel } from '../components/Panel';
 import CaddyIcon from '../components/CaddyIcon';
 import ContentStatistics from '../components/ContentStatistics';
 import { getPlatformContent } from '../lib/api/content';
+import { RetryButton } from '../components/ActionButton';
 
 function managementMode(site: Site): 'platform' | 'caddy' | 'unknown' {
 	if (
@@ -137,9 +138,7 @@ export default function SitesPage() {
 				showIcon
 				title={t(errorKey)}
 				action={
-					<Button size="small" onClick={() => void reloadSites()}>
-						{t('common.retry')}
-					</Button>
+					<RetryButton size="small" onClick={() => void reloadSites()} />
 				}
 			/>
 		);
@@ -223,7 +222,7 @@ export default function SitesPage() {
 						type="error"
 						showIcon
 						title={t(library.error ?? 'error.generic')}
-						action={<Button onClick={library.reload}>{t('common.retry')}</Button>}
+						action={<RetryButton onClick={library.reload} />}
 					/>
 				)}
 			</Panel>

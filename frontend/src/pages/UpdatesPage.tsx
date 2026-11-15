@@ -3,7 +3,7 @@
 // version selection and durable task polling, adapted to this console's API.
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Empty, Input, Select, Space, Switch } from 'antd';
-import { RefreshCw } from 'lucide-react';
+import { RefreshButton, RetryButton } from '../components/ActionButton';
 import { Panel } from '../components/Panel';
 import PageLoading from '../components/PageLoading';
 import StatusTag from '../components/StatusTag';
@@ -80,9 +80,7 @@ export default function UpdatesPage() {
 	};
 	const actions = (
 		<Space wrap>
-			<Button icon={<RefreshCw size={16} />} onClick={() => void manager.refresh()} disabled={busy}>
-				{t('common.refresh')}
-			</Button>
+			<RefreshButton onClick={() => void manager.refresh()} disabled={busy} />
 			<Button
 				onClick={() => void manager.run({ action: 'check' })}
 				disabled={disabled}
@@ -112,7 +110,7 @@ export default function UpdatesPage() {
 					type="warning"
 					showIcon
 					title={manager.error}
-					action={<Button onClick={() => void manager.refresh()}>{t('common.retry')}</Button>}
+					action={<RetryButton onClick={() => void manager.refresh()} />}
 				/>
 			)}
 			{confirmationError && <Alert type="warning" showIcon title={confirmationError} />}

@@ -47,6 +47,7 @@ import type { ContentTarget } from '../../../lib/api/content';
 import { useUnsavedGuard } from '../../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { t, type MessageKey } from '../../../lib/i18n';
+import { RetryButton } from '../../../components/ActionButton';
 
 const MarkdownPreview = lazy(() => import('../../../features/posts/MarkdownPreview'));
 
@@ -421,7 +422,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 					showIcon
 					title={t(errorKey)}
 					action={
-						<Button onClick={() => setReload((value) => value + 1)}>{t('common.retry')}</Button>
+						<RetryButton onClick={() => setReload((value) => value + 1)} />
 					}
 				/>
 			) : null}
@@ -584,9 +585,7 @@ export default function PostEditorPage({ mode }: { mode: 'new' | 'edit' }) {
 								showIcon
 								title={t('posts.taxonomyError')}
 								action={
-									<Button size="small" onClick={loadTaxonomy}>
-										{t('common.retry')}
-									</Button>
+									<RetryButton size="small" onClick={loadTaxonomy} />
 								}
 							/>
 						) : null}

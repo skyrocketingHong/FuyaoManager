@@ -106,6 +106,13 @@ describe('LoginPage', () => {
 		mountPage(<LoginPage />, '/login');
 		expect(screen.getByText(zh['login.passkeyAction'])).toBeDefined();
 		expect(screen.queryByText(zh['login.initTitle'])).toBeNull();
+		const recovery = screen.getByRole('button', { name: zh['login.useRecovery'] });
+		expect(recovery.getAttribute('aria-expanded')).toBe('false');
+		expect(screen.queryByRole('textbox', { name: zh['login.recoveryLabel'] })).toBeNull();
+		expect(screen.getByText(zh['login.codeHint']).closest('[hidden]')).not.toBeNull();
+		fireEvent.click(recovery);
+		expect(screen.getByRole('button', { name: zh['login.hideRecovery'] }).getAttribute('aria-expanded')).toBe('true');
+		expect(screen.getByRole('textbox', { name: zh['login.recoveryLabel'] })).toBeDefined();
 	});
 
 	it('disables the passkey entry when ceremonies are unavailable', () => {
@@ -122,6 +129,8 @@ describe('LoginPage', () => {
 			.find((b) => (b.textContent ?? '').includes(zh['login.passkeyAction']));
 		expect((button as HTMLButtonElement | undefined)?.disabled).toBe(true);
 		expect(screen.getByText(zh['login.passkeyUnavailable'])).toBeDefined();
+		fireEvent.click(screen.getByRole('button', { name: zh['login.useRecovery'] }));
+		expect(screen.getByRole('textbox', { name: zh['login.recoveryLabel'] })).toBeDefined();
 	});
 
 	it('redeems a code through the store', async () => {
@@ -134,6 +143,7 @@ describe('LoginPage', () => {
 		};
 		mockSignInWithCode.mockResolvedValue('restricted');
 		mountPage(<LoginPage />, '/login');
+		fireEvent.click(screen.getByRole('button', { name: zh['login.useRecovery'] }));
 		fireEvent.change(screen.getByPlaceholderText('XXXX-XXXX-XXXX-XXXX'), {
 			target: { value: 'AB2C-D4EF-GH2J-KL3M' }
 		});
