@@ -7,6 +7,12 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.8.0 - 2026-11-15
+
+- Added a responsive blog editor with Markdown preview, formatting controls, in-page anchors, a generated table of contents and a unified taxonomy workspace.
+- Stored blog images in PostgreSQL, adopting existing scoped images automatically and freezing them at their public paths for builds. Schema migration `0020` is required; database backups include these images.
+- Added UTC article timestamp storage, configurable display time zones and formats, continuous table loading, and three-state sorting. The top bar now groups page controls and update checks use notifications.
+
 ## 0.7.0 - 2026-11-15
 
 ### Added
