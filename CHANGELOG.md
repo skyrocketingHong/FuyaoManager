@@ -7,6 +7,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.8.1 - 2026-11-15
+
+- Fixed the Markdown editor width and synchronized split-view scrolling and cursor position. Expanded the formatting toolbar.
+- Unified refresh and retry actions and made the recovery-code form optional on initialized installations.
+
 ## 0.8.0 - 2026-11-15
 
 - Added a responsive blog editor with Markdown preview, formatting controls, in-page anchors, a generated table of contents and a unified taxonomy workspace.
