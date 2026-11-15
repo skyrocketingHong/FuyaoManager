@@ -354,6 +354,14 @@ describe('PostsPage', () => {
 	});
 
 	it('picks taxonomy candidates in the editor and saves arrays, refreshing after the save', async () => {
+		let finishCreate!: () => void;
+		vi.mocked(management.createPost).mockImplementationOnce(async (_target, post) => {
+			await new Promise<void>((resolve) => { finishCreate = resolve; });
+			return {
+				post: { ...samplePost, ...post, digest: 'sha256:' + 'c'.repeat(64) },
+				etag: '"sha256:' + 'c'.repeat(64) + '"'
+			};
+		});
 		vi.mocked(management.getPostTaxonomy).mockResolvedValue({
 			directories: [{ slug: 'tech', title: 'Tech', postCount: 2 }],
 			categories: [
@@ -394,6 +402,9 @@ describe('PostsPage', () => {
 		expect(body.categories).toEqual(['tech', 'go']);
 		expect(body.tags).toEqual(['newtag']);
 		expect(management.putPostVocabulary).not.toHaveBeenCalled();
+		expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/new`);
+		expect(management.getPost).not.toHaveBeenCalled();
+		await act(async () => { finishCreate(); });
 
 		// The saved article refreshes the taxonomy for the next editor.
 		await waitFor(() =>
@@ -407,6 +418,7 @@ describe('PostsPage', () => {
 		await waitFor(() =>
 			expect(management.getPost).toHaveBeenCalledWith(ownerSite.siteId, 'tech/hello.md')
 		);
+		await waitFor(() => expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Hello'));
 		expect(screen.queryByRole('button', { name: 'Keep editing' })).toBeNull();
 	}, 15000);
 
