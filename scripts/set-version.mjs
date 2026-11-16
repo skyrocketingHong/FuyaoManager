@@ -3,10 +3,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 const version = process.argv[2];
 if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version ?? ''))
 	throw new Error('Expected Y.M.P');
-for (const file of ['package.json', 'frontend/package.json', 'frontend/package-lock.json']) {
+for (const file of ['package.json', 'frontend/package.json']) {
 	const data = JSON.parse(await readFile(new URL(`../${file}`, import.meta.url), 'utf8'));
 	data.version = version;
-	if (data.packages?.['']) data.packages[''].version = version;
 	await writeFile(new URL(`../${file}`, import.meta.url), JSON.stringify(data, null, '\t') + '\n');
 }
 await writeFile(

@@ -58,7 +58,7 @@ Program and data are separated: replacing `current` never touches content, relea
    cp -R deploy/fuyao-admin/static-page "$manager_stage/static-page"
    chmod 0755 "$manager_stage/fuyao-admin"
    ```
-   Run `npm --prefix frontend ci` first for a fresh checkout or changed lockfile. Stop packaging on any failure and keep the live pointer unchanged. Remove the temporary directory when verification is finished.
+   Run `npm --prefix frontend install` first for a fresh checkout or changed dependencies. Stop packaging on any failure and keep the live pointer unchanged. Remove the temporary directory when verification is finished.
 2. Keep every registered theme version under `/srv/fuyao-admin/themes/<theme-id>/<version>/`, including its source, package.json, lockfile and installed dependencies. Retain versions referenced by sites. Install dependencies as the service user, or restore ownership after a root install.
 3. Upload into a new `/srv/fuyao-admin/releases/<sha>/`, verify the binary digest and executable mode, and install the public page into its separate `static-page/` directory. When retaining an old environment file, repoint `FUYAO_ADMIN_THEME_CONTRACTS` to the new release's `contracts/theme`, not the pre-split `theme/contracts/theme`.
 4. Stop the management service. From a new-release working directory accessible to the service user, load the operator environment and run the new binary's `migrate`; then run `register-theme` with explicit `--contracts` and each theme package's `site/` path. Only after success, atomically replace `current` and start the service. Do not start a binary requiring unapplied migrations or invoke the service user's CLI from an inaccessible root working directory.

@@ -58,7 +58,7 @@ Fuyao 管理平台在目标服务器上的部署产物。部署刻意采用文�
    cp -R deploy/fuyao-admin/static-page "$manager_stage/static-page"
    chmod 0755 "$manager_stage/fuyao-admin"
    ```
-   新检出或锁文件变化时先执行 `npm --prefix frontend ci`。任一步失败时停止打包，不替换线上指针；验证结束后可删除该临时目录。
+   新检出或依赖变化时先执行 `npm --prefix frontend install`。任一步失败时停止打包，不替换线上指针；验证结束后可删除该临时目录。
 2. 将已登记的每个主题版本保存在 `/srv/fuyao-admin/themes/<theme-id>/<version>/`，包含主题自身源码、package.json、锁文件与已安装依赖；保留仍被站点引用的版本。依赖由服务用户安装，root 安装后须恢复属主。
 3. 上传到全新的 `/srv/fuyao-admin/releases/<sha>/`，核对二进制摘要和执行权限；静态页放入独立 `static-page/`。复用旧配置时，将 `FUYAO_ADMIN_THEME_CONTRACTS` 指向新版本的 `contracts/theme`，不能保留拆分前的 `theme/contracts/theme`。
 4. 停止管理服务后，在服务用户可进入的新 release 目录中，加载运维环境并以新二进制执行 `migrate`；再用显式 `--contracts` 和每个主题包的 `site/` 路径执行 `register-theme`。成功后再原子切换 `current` 并启动服务。不能先重启一个要求新迁移的程序，也不能从不可访问的 root 私有目录运行服务用户 CLI。

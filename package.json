@@ -1,9 +1,9 @@
 {
 	"name": "fuyao-manager",
 	"private": true,
-	"version": "0.9.0",
+	"version": "0.9.1",
 	"type": "module",
-	"description": "Convenience scripts for the FuyaoManager repository; the frontend owns its own isolated lockfile.",
+	"description": "Convenience scripts for the FuyaoManager repository; frontend dependencies are managed independently.",
 	"scripts": {
 		"version:set": "node scripts/set-version.mjs",
 		"frontend:dev": "npm --prefix frontend run dev",

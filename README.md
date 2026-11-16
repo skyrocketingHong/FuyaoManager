@@ -104,7 +104,7 @@ platform development history preserved; see
 
 ```bash
 # Console (frontend/)
-cd frontend && npm ci
+cd frontend && npm install
 npm run api:generate   # types from ../contracts/openapi/openapi.yaml
 npm run build
 

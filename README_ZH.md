@@ -60,7 +60,7 @@ FuyaoManager 是自托管的站点与内容管理平台：管理站点、内容�
 
 ```bash
 # 管理台（frontend/）
-cd frontend && npm ci
+cd frontend && npm install
 npm run api:generate   # 由 ../contracts/openapi/openapi.yaml 生成类型
 npm run build
 

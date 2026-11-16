@@ -7,6 +7,10 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.9.1 - 2026-11-16
+
+- Resolve frontend dependencies from compatible version ranges without an npm lockfile; update the installation, CI and version synchronization workflows.
+
 ## 0.9.0 - 2026-11-15
 
 - Store blog articles, categories, tags and images in PostgreSQL. The first startup imports existing content and preserves publication paths and unmodeled frontmatter; builds generate private Markdown and media snapshots.
