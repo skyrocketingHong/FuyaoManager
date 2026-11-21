@@ -190,10 +190,14 @@
 	width: 260px;
 	max-width: 100%;
 }
-.posts-load-more {
+.table-load-more {
 	display: flex;
 	justify-content: center;
 	padding: var(--space-2);
+}
+
+.data-table .ant-table-content[role='region']:focus-visible {
+	outline-offset: -2px;
 }
 
 @media (max-width: 991px) {

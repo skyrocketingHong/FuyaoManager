@@ -1,6 +1,12 @@
-import { Table, type TableProps } from 'antd';
+import { useEffect, useRef, type RefObject } from 'react';
+import { Table, type TableProps, type TableRef } from 'antd';
+import LoadMore, { type LoadMoreControls } from './LoadMore';
 
-type SortableTableProps<Row extends object> = TableProps<Row> & { manualSorting?: boolean };
+type SortableTableProps<Row extends object> = TableProps<Row> & {
+	manualSorting?: boolean;
+	tableRef?: RefObject<TableRef>;
+	loadMore?: LoadMoreControls & { scrollLabel: string };
+};
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function compareTableValues(left: unknown, right: unknown): number {
@@ -31,17 +37,43 @@ function sortableColumns<Row extends object>(columns: NonNullable<TableProps<Row
 	});
 }
 
+export function tableScrollContent(table: TableRef | null) {
+	return table?.nativeElement.querySelector<HTMLDivElement>('.ant-table-content');
+}
+
 // robot-platform's Widgets.DataTable uses small tables and a shared surface.
 // Keep the manager's typed rows, stable keys, sorting, and server pagination.
 export default function DataTable<Row extends object>(props: SortableTableProps<Row>) {
-	const { className, manualSorting = false, columns, ...tableProps } = props;
+	const { className, manualSorting = false, columns, tableRef, loadMore, ...tableProps } = props;
+	const internalRef = useRef<TableRef>(null);
+	const ref = tableRef ?? internalRef;
+	const scrollLabel = loadMore?.scrollLabel;
+	useEffect(() => {
+		if (!scrollLabel) return;
+		const content = tableScrollContent(ref.current);
+		if (!content) return;
+		// The Table API styles this scroll container but doesn't expose its DOM attributes.
+		content.tabIndex = 0;
+		content.setAttribute('role', 'region');
+		content.setAttribute('aria-label', scrollLabel);
+		return () => {
+			content.removeAttribute('tabindex');
+			content.removeAttribute('role');
+			content.removeAttribute('aria-label');
+		};
+	}, [ref, scrollLabel]);
+
 	return (
-		<Table<Row>
-			size="small"
-			{...tableProps}
-			sortDirections={['ascend', 'descend']}
-			columns={columns && !manualSorting ? sortableColumns(columns) : columns}
-			className={['data-table', className].filter(Boolean).join(' ')}
-		/>
+		<>
+			<Table<Row>
+				ref={loadMore || tableRef ? ref : undefined}
+				size="small"
+				{...tableProps}
+				sortDirections={['ascend', 'descend']}
+				columns={columns && !manualSorting ? sortableColumns(columns) : columns}
+				className={['data-table', className].filter(Boolean).join(' ')}
+			/>
+			{loadMore && <LoadMore {...loadMore} tableRef={ref} rows={tableProps.dataSource} />}
+		</>
 	);
 }

@@ -6,7 +6,6 @@ import { RefreshButton, RetryButton } from '../components/ActionButton';
 import DataTable from '../components/DataTable';
 import UserDrawer from '../components/admin/UserDrawer';
 import PageLoading from '../components/PageLoading';
-import LoadMore from '../components/LoadMore';
 import StatusTag from '../components/StatusTag';
 import { TablePanel } from '../components/Panel';
 import { usePageHeader } from '../components/PageHeader';
@@ -208,6 +207,12 @@ export default function UsersPage() {
 								)
 							}}
 							pagination={false}
+							loadMore={{
+								active: query.hasMore && !query.error,
+								loading: query.loading,
+								onLoad: query.loadMore,
+								scrollLabel: t('nav.users')
+							}}
 							columns={[
 								{ title: t('admin.username'), dataIndex: 'username', ...sortColumn('username', ordering) },
 								{ title: t('admin.displayName'), dataIndex: 'displayName', ...sortColumn('displayName', ordering) },
@@ -249,7 +254,6 @@ export default function UsersPage() {
 								}
 							]}
 						/>
-						<LoadMore table=".users-table" rowCount={query.rows.length} active={query.hasMore && !query.error} loading={query.loading} onLoad={query.loadMore} />
 					</TablePanel>
 				)
 			)}

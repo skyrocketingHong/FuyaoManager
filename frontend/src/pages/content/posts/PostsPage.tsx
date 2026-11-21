@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Input, Popconfirm, Select, Space, Typography, message } from 'antd';
+import { Alert, Button, Input, Popconfirm, Select, Space, Typography, message, type TableRef } from 'antd';
 import Trans from '../../../components/i18n/Trans';
 import { usePageHeader } from '../../../components/PageHeader';
-import DataTable from '../../../components/DataTable';
+import DataTable, { tableScrollContent } from '../../../components/DataTable';
 import { timeText } from '../../../components/Widgets';
 import StatusTag from '../../../components/StatusTag';
 import { TablePanel } from '../../../components/Panel';
@@ -22,6 +22,7 @@ import {
 } from '../../../lib/api/management';
 import { apiErrorKey } from '../../../lib/i18n/errors';
 import { t, type MessageKey } from '../../../lib/i18n';
+import { selectedTableSort, sortColumn } from '../../../lib/table-sort';
 import { RetryButton } from '../../../components/ActionButton';
 
 export default function PostsPage() {
@@ -43,6 +44,7 @@ export default function PostsPage() {
 	const [failedPage, setFailedPage] = useState(1);
 	const [loading, setLoading] = useState(false);
 	const [messageApi, contextHolder] = message.useMessage();
+	const tableRef = useRef<TableRef>(null);
 	const epoch = useRef(0);
 	const scopeEpoch = useRef(0);
 	const loadingRef = useRef(false);
@@ -59,7 +61,7 @@ export default function PostsPage() {
 				setPosts(null);
 				setTotal(0);
 				setPage(1);
-				const content = document.querySelector<HTMLElement>('.posts-table .ant-table-content');
+				const content = tableScrollContent(tableRef.current);
 				if (content) content.scrollTop = 0;
 			}
 			try {
@@ -130,27 +132,6 @@ export default function PostsPage() {
 		if (!hasMore || loading || errorKey) return;
 		void refresh(page + 1, query, pageSize, false, ordering);
 	}, [hasMore, loading, errorKey, page, query, pageSize, ordering, refresh]);
-
-	useEffect(() => {
-		if (
-			!hasMore ||
-			loading ||
-			errorKey ||
-			!posts?.length ||
-			typeof IntersectionObserver === 'undefined'
-		)
-			return;
-		const row = document.querySelector('.posts-table tbody tr[data-row-key]:last-of-type');
-		if (!row) return;
-		const observer = new IntersectionObserver(
-			(entries) => {
-				if (entries.some((entry) => entry.isIntersecting)) loadMore();
-			},
-			{ rootMargin: '200px 0px' }
-		);
-		observer.observe(row);
-		return () => observer.disconnect();
-	}, [hasMore, loading, errorKey, posts, loadMore]);
 
 	async function handleDelete(post: Post) {
 		if (!target) return;
@@ -240,27 +221,28 @@ export default function PostsPage() {
 			<TablePanel className="fill-height">
 				<DataTable<Post>
 					className="posts-table"
+					tableRef={tableRef}
 					manualSorting
 					rowKey="path"
 					dataSource={posts ?? []}
 					loading={loading && posts === null}
 					pagination={false}
+					loadMore={{
+						active: hasMore && !errorKey,
+						loading,
+						onLoad: loadMore,
+						scrollLabel: t('nav.posts')
+					}}
 					onChange={(_, __, sorter, extra) => {
 						if (extra.action !== 'sort') return;
-						const selected = Array.isArray(sorter) ? sorter[0] : sorter;
-						const field = selected?.columnKey as PostListSort['field'] | undefined;
-						const next = field && selected.order
-							? { field, direction: selected.order === 'ascend' ? 'asc' as const : 'desc' as const }
-							: undefined;
+						const next = selectedTableSort(sorter) as PostListSort | undefined;
 						setOrdering(next);
 						void refresh(1, query, pageSize, true, next);
 					}}
 					columns={[
 						{
 							title: t('posts.titleColumn'),
-							key: 'title',
-							sorter: true,
-							sortOrder: ordering?.field === 'title' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
+							...sortColumn('title', ordering),
 							render: (_, post) => (
 								<>
 									<div>{post.title}</div>
@@ -273,9 +255,7 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.draftColumn'),
-							key: 'status',
-							sorter: true,
-							sortOrder: ordering?.field === 'status' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
+							...sortColumn('status', ordering),
 							dataIndex: 'draft',
 							width: 90,
 							render: (isDraft: boolean) =>
@@ -287,9 +267,7 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.dateColumn'),
-							key: 'date',
-							sorter: true,
-							sortOrder: ordering?.field === 'date' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
+							...sortColumn('date', ordering),
 							dataIndex: 'date',
 							width: 170,
 							render: (_, post) => (
@@ -300,9 +278,7 @@ export default function PostsPage() {
 						},
 						{
 							title: t('posts.tagsColumn'),
-							key: 'tags',
-							sorter: true,
-							sortOrder: ordering?.field === 'tags' ? (ordering.direction === 'asc' ? 'ascend' : 'descend') : null,
+							...sortColumn('tags', ordering),
 							dataIndex: 'tags',
 							render: (tags: string[]) => (
 								<span className="panel-tags">
@@ -340,13 +316,6 @@ export default function PostsPage() {
 						}
 					]}
 				/>
-				{hasMore && !errorKey ? (
-					<div className="posts-load-more">
-						<Button loading={loading} onClick={loadMore}>
-							{t('posts.loadMore')}
-						</Button>
-					</div>
-				) : null}
 			</TablePanel>
 		</div>
 	);

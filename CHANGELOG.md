@@ -7,6 +7,10 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.9.2 - 2026-11-21
+
+- Share batch loading across posts, user management, and operation logs. Scope automatic loading to each table, ignore expired observer callbacks, and make table scrolling keyboard-accessible.
+
 ## 0.9.1 - 2026-11-16
 
 - Resolve frontend dependencies from compatible version ranges without an npm lockfile; update the installation, CI and version synchronization workflows.

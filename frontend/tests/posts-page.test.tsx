@@ -248,15 +248,22 @@ describe('PostsPage', () => {
 	});
 
 	it('loads further batches without pagination and resets after search and size changes', async () => {
+		vi.stubGlobal('IntersectionObserver', undefined);
 		vi.mocked(management.listPosts).mockResolvedValue({ posts: [samplePost], total: 25 });
 		mountPosts();
 		await screen.findByText('Hello');
 		expect(vi.mocked(management.listPosts).mock.calls[0]).toEqual([expect.anything(), '', 1, 20]);
+		const scrollRegion = screen.getByRole('region', { name: 'Posts' });
+		expect(scrollRegion.tabIndex).toBe(0);
+		scrollRegion.focus();
+		expect(document.activeElement).toBe(scrollRegion);
+		scrollRegion.scrollTop = 120;
 
 		// Searching returns to page one with the typed query.
 		const search = screen.getByPlaceholderText('Search title / slug / tag');
 		fireEvent.change(search, { target: { value: 'hello' } });
 		fireEvent.keyDown(search, { key: 'Enter' });
+		expect(scrollRegion.scrollTop).toBe(0);
 		await waitFor(() =>
 			expect(vi.mocked(management.listPosts).mock.calls.at(-1)).toEqual([
 				expect.anything(),
@@ -342,15 +349,24 @@ describe('PostsPage', () => {
 				posts: [{ ...samplePost, path: 'tech/20.md', title: 'Post 20' }],
 				total: 21
 			});
-		mountPosts();
-		await screen.findByText('Post 19');
-		await waitFor(() => expect(observe).toHaveBeenCalled());
-		act(() =>
-			trigger?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver)
+		render(
+			<div className="posts-table">
+				<table>
+					<tbody><tr data-row-key="unrelated"><td>Unrelated row</td></tr></tbody>
+				</table>
+			</div>
 		);
+		mountPosts();
+		const lastRow = (await screen.findByText('Post 19')).closest('tr');
+		await waitFor(() => expect(observe).toHaveBeenCalledWith(lastRow));
+		const notify = trigger!;
+		const entries = [{ isIntersecting: true } as IntersectionObserverEntry];
+		act(() => notify(entries, {} as IntersectionObserver));
 		expect(await screen.findByText('Post 20')).toBeDefined();
 		expect(management.listPosts).toHaveBeenLastCalledWith(ownerSite.siteId, '', 2, 20);
 		expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+		act(() => notify(entries, {} as IntersectionObserver));
+		expect(management.listPosts).toHaveBeenCalledTimes(2);
 	});
 
 	it('picks taxonomy candidates in the editor and saves arrays, refreshing after the save', async () => {

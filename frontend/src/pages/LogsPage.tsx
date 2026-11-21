@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState, type ComponentProps } from 'react';
 import { Alert, DatePicker, Input, Select, Space } from 'antd';
 import { RefreshButton, RetryButton } from '../components/ActionButton';
 import PageLoading from '../components/PageLoading';
-import LoadMore from '../components/LoadMore';
 import { DataTable, TablePanel, Tag, VersionText, timeText } from '../components/Widgets';
 import { usePageHeader } from '../components/PageHeader';
 import { useAdminBatches } from '../lib/admin/requests';
@@ -110,8 +109,7 @@ export default function LogsPage() {
 				aria-label={t('audit.operation')}
 				placeholder={t('audit.operation')}
 				allowClear
-				showSearch
-				optionFilterProp="label"
+				showSearch={{ optionFilterProp: 'label' }}
 				value={operation || undefined}
 				options={operations.map((value) => ({ value, label: operationText(value) }))}
 				onChange={(value) => {
@@ -213,6 +211,12 @@ export default function LogsPage() {
 					}
 				}}
 				pagination={false}
+				loadMore={{
+					active: query.hasMore && !query.error,
+					loading: query.loading,
+					onLoad: query.loadMore,
+					scrollLabel: t('nav.logs')
+				}}
 				columns={[
 					{ title: t('audit.time'), dataIndex: 'createdAt', width: 164, ...sortColumn('createdAt', ordering), render: timeText },
 					{ title: t('audit.actor'), dataIndex: 'actorName', width: 140, ...sortColumn('actorName', ordering), render: (value: string) => <VersionText>{value || t('audit.anonymous')}</VersionText> },
@@ -226,7 +230,6 @@ export default function LogsPage() {
 					{ title: t('audit.peer'), dataIndex: 'peerIp', width: 175, ...sortColumn('peerIp', ordering), render: (value: string) => <VersionText className="log-address">{value || t('admin.never')}</VersionText> }
 				]}
 			/>
-			<LoadMore table=".operation-logs-table" rowCount={query.rows.length} active={query.hasMore && !query.error} loading={query.loading} onLoad={query.loadMore} />
 		</TablePanel></div>
 	);
 }
