@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Input, Popconfirm, Space, message } from 'antd';
-import { ArrowDown, ArrowUp, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, GripVertical, X } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
@@ -20,12 +20,136 @@ import { EditableDoc } from '../../lib/editing/EditableDoc';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { apiErrorKey } from '../../lib/i18n/errors';
 import { t, type MessageKey } from '../../lib/i18n';
+import { useFriendsReorder } from './useFriendsReorder';
 
 type Group = 'online' | 'offline';
 
 interface FriendsRows {
 	online: Friend[];
 	offline: Friend[];
+}
+
+function FriendsList({
+	rows,
+	editable,
+	label,
+	rowKeys,
+	onUpdate,
+	onRemove,
+	onMove
+}: {
+	rows: Friend[];
+	editable: boolean;
+	label: string;
+	rowKeys: WeakMap<Friend, number>;
+	onUpdate: (index: number, patch: Partial<Friend>) => void;
+	onRemove: (index: number) => void;
+	onMove: (from: number, to: number) => void;
+}) {
+	const keys = rows.map((row) => rowKeys.get(row)!);
+	const { listRef, instructionsId, announcement, handleProps, cancel } = useFriendsReorder(
+		editable,
+		onMove
+	);
+
+	function move(index: number, delta: -1 | 1) {
+		const to = index + delta;
+		if (to < 0 || to >= rows.length) return;
+		cancel();
+		onMove(index, to);
+	}
+
+	return (
+		<>
+			<div ref={listRef} className="friends-list" role="list" aria-label={label}>
+				{rows.map((row, index) => {
+					const name = row.name.trim() || t('friends.reorderUnnamed', { position: index + 1 });
+					return (
+						<div key={keys[index]} className="friends-row" role="listitem">
+							<Input
+								size="small"
+								placeholder={t('friends.fieldName')}
+								aria-label={t('friends.fieldName')}
+								value={row.name}
+								disabled={!editable}
+								onChange={(e) => onUpdate(index, { name: e.target.value })}
+							/>
+							<Input
+								size="small"
+								placeholder="https://…"
+								aria-label={t('config.linkUrl')}
+								value={row.url}
+								disabled={!editable}
+								onChange={(e) => onUpdate(index, { url: e.target.value })}
+							/>
+							<Input
+								size="small"
+								placeholder={t('friends.fieldDescription')}
+								aria-label={t('friends.fieldDescription')}
+								value={row.description ?? ''}
+								disabled={!editable}
+								onChange={(e) => onUpdate(index, { description: e.target.value })}
+							/>
+							<Input
+								size="small"
+								placeholder={t('friends.fieldAvatar')}
+								aria-label={t('friends.fieldAvatar')}
+								value={row.avatar ?? ''}
+								disabled={!editable}
+								onChange={(e) => onUpdate(index, { avatar: e.target.value })}
+							/>
+							{editable ? (
+								<Space size={0}>
+									{rows.length > 1 ? (
+										<Button
+											size="small"
+											type="text"
+											className="friends-drag-handle"
+											aria-label={t('friends.reorderHandle', { name })}
+											{...handleProps(name)}
+										>
+											<GripVertical size={14} aria-hidden="true" />
+										</Button>
+									) : null}
+									<Button
+										size="small"
+										type="text"
+										aria-label={t('common.moveUp')}
+										onClick={() => move(index, -1)}
+									>
+										<ArrowUp size={14} aria-hidden="true" />
+									</Button>
+									<Button
+										size="small"
+										type="text"
+										aria-label={t('common.moveDown')}
+										onClick={() => move(index, 1)}
+									>
+										<ArrowDown size={14} aria-hidden="true" />
+									</Button>
+									<Popconfirm title={t('friends.removeConfirm')} onConfirm={() => onRemove(index)}>
+										<Button size="small" type="text" danger aria-label={t('common.remove')}>
+											<X size={14} aria-hidden="true" />
+										</Button>
+									</Popconfirm>
+								</Space>
+							) : null}
+						</div>
+					);
+				})}
+			</div>
+			{editable && (
+				<>
+					<span id={instructionsId} className="sr-only">
+						{t('friends.reorderInstructions')}
+					</span>
+					<span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+						{announcement}
+					</span>
+				</>
+			)}
+		</>
+	);
 }
 
 export default function FriendsPage() {
@@ -43,6 +167,28 @@ export default function FriendsPage() {
 	const state = useSyncExternalStore(editor.subscribe, editor.getSnapshot);
 	const dirty = editor.isDirty();
 	const epoch = useRef(0);
+	const rowKeys = useMemo(() => new WeakMap<Friend, number>(), [editor]);
+	const nextRowKey = useRef(0);
+	// Identity belongs to the editor, so editable fields and duplicate links can
+	// retain their DOM nodes without adding identifiers to the saved document.
+	const identifyRow = useCallback(
+		(row: Friend, previous?: Friend) => {
+			rowKeys.set(row, (previous && rowKeys.get(previous)) ?? ++nextRowKey.current);
+			return row;
+		},
+		[rowKeys]
+	);
+	const identifyRows = useCallback(
+		(friends: Partial<FriendsRows>, previous?: FriendsRows): FriendsRows => ({
+			online: (friends.online ?? []).map((row, index) =>
+				identifyRow({ ...row }, previous?.online[index])
+			),
+			offline: (friends.offline ?? []).map((row, index) =>
+				identifyRow({ ...row }, previous?.offline[index])
+			)
+		}),
+		[identifyRow]
+	);
 
 	const load = useCallback(async () => {
 		if (!target) return;
@@ -51,7 +197,7 @@ export default function FriendsPage() {
 		try {
 			const { friends, digest } = await getFriends(target);
 			if (my !== epoch.current) return;
-			editor.load({ online: friends.online ?? [], offline: friends.offline ?? [] }, digest);
+			editor.load(identifyRows(friends), digest);
 			setErrorKey(null);
 		} catch (err) {
 			if (my !== epoch.current) return;
@@ -62,7 +208,7 @@ export default function FriendsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [target, navigate, editor]);
+	}, [target, navigate, editor, identifyRows]);
 
 	useEffect(() => {
 		if (!target) return;
@@ -91,23 +237,24 @@ export default function FriendsPage() {
 	}
 
 	function updateRow(group: Group, index: number, patch: Partial<Friend>) {
-		mutate(group, (rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+		mutate(group, (rows) =>
+			rows.map((row, i) => (i === index ? identifyRow({ ...row, ...patch }, row) : row))
+		);
 	}
 
 	function addRow(group: Group) {
-		mutate(group, (rows) => [...rows, { name: '', url: '' }]);
+		mutate(group, (rows) => [...rows, identifyRow({ name: '', url: '' })]);
 	}
 
 	function removeRow(group: Group, index: number) {
 		mutate(group, (rows) => rows.filter((_, i) => i !== index));
 	}
 
-	function moveRow(group: Group, index: number, delta: -1 | 1) {
+	function moveRow(group: Group, from: number, to: number) {
 		mutate(group, (rows) => {
+			if (from === to || !rows[from] || !rows[to]) return rows;
 			const next = [...rows];
-			const target = index + delta;
-			if (target < 0 || target >= next.length) return next;
-			[next[index], next[target]] = [next[target], next[index]];
+			next.splice(to, 0, ...next.splice(from, 1));
 			return next;
 		});
 	}
@@ -118,10 +265,7 @@ export default function FriendsPage() {
 		if (snapshot === null) return;
 		try {
 			const saved = await putFriends(target, snapshot, state.etag);
-			editor.resolveSave(
-				{ online: saved.friends.online ?? [], offline: saved.friends.offline ?? [] },
-				saved.digest
-			);
+			editor.resolveSave(identifyRows(saved.friends, snapshot), saved.digest);
 			void messageApi.success(t('friends.saved'));
 		} catch (err) {
 			if (apiErrorKey(err) === 'error.conflict') {
@@ -142,10 +286,7 @@ export default function FriendsPage() {
 		try {
 			const { friends, digest } = await getFriends(target);
 			if (my !== epoch.current) return;
-			editor.syncAfterConflict(
-				{ online: friends.online ?? [], offline: friends.offline ?? [] },
-				digest
-			);
+			editor.syncAfterConflict(identifyRows(friends), digest);
 			void messageApi.info(t('friends.conflictSynced'));
 		} catch (err) {
 			const key = apiErrorKey(err);
@@ -182,9 +323,10 @@ export default function FriendsPage() {
 
 	function groupEditor(group: Group) {
 		const groupRows = rows ? rows[group] : null;
+		const label = group === 'online' ? t('friends.online') : t('friends.offline');
 		return (
 			<Panel
-				title={group === 'online' ? t('friends.online') : t('friends.offline')}
+				title={label}
 				tags={
 					editable ? (
 						<Button size="small" onClick={() => addRow(group)}>
@@ -198,70 +340,16 @@ export default function FriendsPage() {
 				) : groupRows.length === 0 ? (
 					t('friends.emptyGroup')
 				) : (
-					groupRows.map((row, index) => (
-						<div key={index} className="friends-row">
-							<Input
-								size="small"
-								placeholder={t('friends.fieldName')}
-								aria-label={t('friends.fieldName')}
-								value={row.name}
-								disabled={!editable}
-								onChange={(e) => updateRow(group, index, { name: e.target.value })}
-							/>
-							<Input
-								size="small"
-								placeholder="https://…"
-								aria-label={t('config.linkUrl')}
-								value={row.url}
-								disabled={!editable}
-								onChange={(e) => updateRow(group, index, { url: e.target.value })}
-							/>
-							<Input
-								size="small"
-								placeholder={t('friends.fieldDescription')}
-								aria-label={t('friends.fieldDescription')}
-								value={row.description ?? ''}
-								disabled={!editable}
-								onChange={(e) => updateRow(group, index, { description: e.target.value })}
-							/>
-							<Input
-								size="small"
-								placeholder={t('friends.fieldAvatar')}
-								aria-label={t('friends.fieldAvatar')}
-								value={row.avatar ?? ''}
-								disabled={!editable}
-								onChange={(e) => updateRow(group, index, { avatar: e.target.value })}
-							/>
-							{editable ? (
-								<Space size={0}>
-									<Button
-										size="small"
-										type="text"
-										aria-label={t('common.moveUp')}
-										onClick={() => moveRow(group, index, -1)}
-									>
-										<ArrowUp size={14} aria-hidden="true" />
-									</Button>
-									<Button
-										size="small"
-										type="text"
-										aria-label={t('common.moveDown')}
-										onClick={() => moveRow(group, index, 1)}
-									>
-										<ArrowDown size={14} aria-hidden="true" />
-									</Button>
-									<Popconfirm
-										title={t('friends.removeConfirm')}
-										onConfirm={() => removeRow(group, index)}
-									>
-										<Button size="small" type="text" danger aria-label={t('common.remove')}>
-											<X size={14} aria-hidden="true" />
-										</Button>
-									</Popconfirm>
-								</Space>
-							) : null}
-						</div>
-					))
+					<FriendsList
+						key={`${scope.key}:${group}`}
+						rows={groupRows}
+						editable={editable}
+						label={label}
+						rowKeys={rowKeys}
+						onUpdate={(index, patch) => updateRow(group, index, patch)}
+						onRemove={(index) => removeRow(group, index)}
+						onMove={(from, to) => moveRow(group, from, to)}
+					/>
 				)}
 			</Panel>
 		);

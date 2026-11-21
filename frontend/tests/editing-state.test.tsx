@@ -9,7 +9,7 @@
 import React from 'react';
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import FriendsPage from '../src/pages/content/FriendsPage';
 import PostsPage from '../src/pages/content/posts/PostsPage';
 import PostEditorPage from '../src/pages/content/posts/PostEditorPage';
@@ -65,10 +65,11 @@ function button(text: string): HTMLButtonElement {
 	return b as HTMLButtonElement;
 }
 
+let reduceMotion = false;
 beforeAll(() =>
 	Object.defineProperty(window, 'matchMedia', {
 		value: (query: string) => ({
-			matches: false,
+			matches: reduceMotion && query === '(prefers-reduced-motion: reduce)',
 			media: query,
 			onchange: null,
 			addListener() {},
@@ -82,6 +83,7 @@ beforeAll(() =>
 	})
 );
 beforeEach(() => {
+	reduceMotion = false;
 	vi.clearAllMocks();
 	const NativeRequest = globalThis.Request;
 	vi.stubGlobal(
@@ -124,7 +126,122 @@ function mount(element: React.ReactElement, section: string, siteId = site.siteI
 	render(<RouterProvider router={router} />);
 }
 
+async function mountReorderableFriends() {
+	const friends = {
+		online: ['Alpha', 'Bravo', 'Charlie'].map((name) => ({
+			name,
+			url: `https://${name.toLowerCase()}.test`
+		})),
+		offline: [{ name: 'Delta', url: 'https://delta.test' }]
+	};
+	vi.mocked(api.getFriends).mockResolvedValue({ friends, digest: 'friends-v1' });
+	mount(<FriendsPage />, 'friends');
+	const handle = await screen.findByRole('button', {
+		name: t('friends.reorderHandle', { name: 'Alpha' })
+	});
+	const online = within(screen.getByRole('list', { name: t('friends.online') }));
+	const items = online.getAllByRole('listitem');
+	items.forEach((item, index) => {
+		item.getBoundingClientRect = () => new DOMRect(0, index * 48, 500, 40);
+	});
+	return { friends, handle, online, items };
+}
+
 describe('editing state (R5)', () => {
+	it('previews keyboard sorting, cancels with Escape, and saves the final group order once', async () => {
+		reduceMotion = true;
+		const { friends, handle, online, items } = await mountReorderableFriends();
+		const [alpha, bravo, charlie] = items;
+		const animate = vi.fn();
+		alpha.animate = animate;
+		handle.focus();
+		fireEvent.keyDown(handle, { key: ' ' });
+		expect(handle.getAttribute('aria-pressed')).toBe('true');
+		expect(
+			screen.getByText(t('friends.reorderPicked', { name: 'Alpha', position: 1, total: 3 }))
+		).toBeTruthy();
+		fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		expect(bravo.style.translate).toBe('0px -48px');
+		expect(online.getAllByRole('listitem')).toEqual(items);
+		expect(button(t('common.save')).disabled).toBe(true);
+		fireEvent.keyDown(handle, { key: 'Escape' });
+		expect(bravo.style.translate).toBe('');
+		expect(handle.getAttribute('aria-pressed')).toBe('false');
+		expect(screen.getByText(t('friends.reorderCancelled', { name: 'Alpha' }))).toBeTruthy();
+
+		fireEvent.keyDown(handle, { key: 'Enter' });
+		fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		expect(
+			screen.getByText(t('friends.reorderMoved', { name: 'Alpha', position: 3, total: 3 }))
+		).toBeTruthy();
+		fireEvent.keyDown(handle, { key: 'Enter' });
+		expect(online.getAllByRole('listitem')).toEqual([bravo, charlie, alpha]);
+		expect(document.activeElement).toBe(handle);
+		expect(items.every((item) => item.style.translate === '')).toBe(true);
+		expect(animate).not.toHaveBeenCalled();
+		expect(vi.mocked(api.putFriends)).not.toHaveBeenCalled();
+
+		const reordered = {
+			...friends,
+			online: [friends.online[1], friends.online[2], friends.online[0]]
+		};
+		vi.mocked(api.putFriends).mockResolvedValue({ friends: reordered, digest: 'friends-v2' });
+		fireEvent.click(button(t('common.save')));
+		await waitFor(() => expect(button(t('common.save')).disabled).toBe(true));
+		expect(api.putFriends).toHaveBeenCalledExactlyOnceWith(site.siteId, reordered, 'friends-v1');
+		expect(online.getAllByRole('listitem')).toEqual([bravo, charlie, alpha]);
+	});
+
+	it('moves only transforms during pointer drag and commits when landing finishes', async () => {
+		const { handle, online, items } = await mountReorderableFriends();
+		const [alpha, bravo, charlie] = items;
+		let finishLanding = () => {};
+		const finished = new Promise<void>((resolve) => {
+			finishLanding = resolve;
+		});
+		const animate = vi.fn(() => ({ finished, cancel: vi.fn() }));
+		Object.assign(alpha, { animate });
+		const capture = new Set<number>();
+		Object.assign(handle, {
+			setPointerCapture: (id: number) => capture.add(id),
+			hasPointerCapture: (id: number) => capture.has(id),
+			releasePointerCapture: (id: number) => capture.delete(id)
+		});
+		const pointer = { pointerId: 7, isPrimary: true, button: 0, pointerType: 'touch' };
+		fireEvent.pointerDown(handle, { ...pointer, clientY: 20 });
+		expect(capture.has(7)).toBe(true);
+		fireEvent.pointerMove(handle, { ...pointer, clientY: 100 });
+		expect(alpha.style.translate).toBe('0px 80px');
+		expect(bravo.style.translate).toBe('0px -48px');
+		expect(charlie.style.translate).toBe('0px -48px');
+		fireEvent.pointerUp(handle, { ...pointer, pointerId: 8, clientY: 100 });
+		expect(animate).not.toHaveBeenCalled();
+		fireEvent.pointerCancel(handle, pointer);
+		expect(capture.has(7)).toBe(false);
+		expect(online.getAllByRole('listitem')).toEqual(items);
+
+		fireEvent.pointerDown(handle, { ...pointer, clientY: 20 });
+		fireEvent.pointerUp(handle, { ...pointer, clientY: 100 });
+		expect(animate).toHaveBeenCalledExactlyOnceWith(
+			[
+				{ translate: '0px 80px', scale: 1.04 },
+				{ translate: '0px 96px', scale: 1 }
+			],
+			{ duration: 200, easing: 'cubic-bezier(0.2, 0, 0, 1)', fill: 'forwards' }
+		);
+		fireEvent.lostPointerCapture(handle, pointer);
+		expect(online.getAllByRole('listitem')).toEqual(items);
+		expect(button(t('common.save')).disabled).toBe(true);
+		await act(async () => finishLanding());
+		expect(online.getAllByRole('listitem')).toEqual([bravo, charlie, alpha]);
+		expect(items.every((item) => item.style.translate === '')).toBe(true);
+		expect(button(t('common.save')).disabled).toBe(false);
+		expect(
+			screen.getByText(t('friends.reorderDropped', { name: 'Alpha', position: 3, total: 3 }))
+		).toBeTruthy();
+	});
+
 	it('retains unsaved state for edits made while a friends save is pending', async () => {
 		let resolveSave: (x: unknown) => void = () => {};
 		const original = { name: 'Original friend', url: 'https://friend.test' };
