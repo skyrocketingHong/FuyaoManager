@@ -561,23 +561,32 @@ export async function putSiteConfig(
 
 // --- albums ---
 
+// ASVS 1.2.2: use a scoped same-origin endpoint and encode only the variant path.
+export function getAlbumThumbnailUrl(target: ContentTarget, path: string): string {
+	return `${contentResourcePath(target, 'albums')}/thumbnail?${new URLSearchParams({ path })}`;
+}
+
 export async function getAlbums(
-	siteId: ContentTarget
+	siteId: ContentTarget,
+	signal?: AbortSignal
 ): Promise<{ index: AlbumIndex; digest: string }> {
 	const { data } = await api<{ index: AlbumIndex; digest: string }>(
 		'GET',
-		contentResourcePath(siteId, 'albums')
+		contentResourcePath(siteId, 'albums'),
+		{ signal }
 	);
 	return data;
 }
 
 export async function getAlbumYear(
 	siteId: ContentTarget,
-	year: string
+	year: string,
+	signal?: AbortSignal
 ): Promise<{ year: AlbumYear; digest: string }> {
 	const { data } = await api<{ year: AlbumYear; digest: string }>(
 		'GET',
-		`${contentResourcePath(siteId, 'albums')}/${encodeURIComponent(year)}`
+		`${contentResourcePath(siteId, 'albums')}/${encodeURIComponent(year)}`,
+		{ signal }
 	);
 	return data;
 }
@@ -624,10 +633,11 @@ export async function processAlbums(siteId: ContentTarget): Promise<{ taskId: st
 	return data;
 }
 
-export async function listMediaTasks(siteId: ContentTarget): Promise<MediaTask[]> {
+export async function listMediaTasks(siteId: ContentTarget, signal?: AbortSignal): Promise<MediaTask[]> {
 	const { data } = await api<{ tasks: MediaTask[] }>(
 		'GET',
-		`${contentResourcePath(siteId, 'albums')}/tasks`
+		`${contentResourcePath(siteId, 'albums')}/tasks`,
+		{ signal }
 	);
 	return data.tasks;
 }

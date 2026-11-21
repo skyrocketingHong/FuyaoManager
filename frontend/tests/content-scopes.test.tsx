@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useState } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { App as AntApp, ConfigProvider } from 'antd';
 import { ContentScopeProvider } from '../src/components/ContentScopeProvider';
@@ -18,6 +18,8 @@ import * as service from '../src/lib/api/content';
 import * as content from '../src/lib/api/management';
 import { setLocale } from '../src/lib/i18n';
 import { getVisibleButton } from './visible-button';
+
+const NativeRequest = globalThis.Request;
 
 const runtime = vi.hoisted(() => ({
 	state: { status: 'authenticated', user: { id: 'admin', platformRole: 'admin' } },
@@ -60,6 +62,7 @@ vi.mock('../src/lib/api/management', async (original) => ({
 	getAlbums: vi.fn(),
 	getAlbumYear: vi.fn(),
 	putAlbumYear: vi.fn(),
+	uploadAlbumPhoto: vi.fn(),
 	listMediaTasks: vi.fn(),
 	getFootprints: vi.fn(),
 	getSiteConfig: vi.fn()
@@ -148,6 +151,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.unstubAllEnvs();
+	vi.unstubAllGlobals();
 });
 
 it.each([
@@ -203,7 +207,7 @@ it('moves the selected photo in the underlying album after sorting its table', a
 	] };
 	vi.mocked(content.getAlbumYear).mockResolvedValue({ year, digest: '"year"' });
 	vi.mocked(content.putAlbumYear).mockResolvedValue({ year, digest: '"saved"' });
-	mount(<ContentScopeProvider resource="albums"><AlbumsPage /></ContentScopeProvider>, '/content/albums');
+	mount(<ContentScopeProvider resource="albums"><AlbumsPage /></ContentScopeProvider>, '/content/albums?view=list');
 	await screen.findByText('Charlie');
 	fireEvent.click(screen.getByRole('columnheader', { name: /Photo/ }));
 	const row = screen.getByText('Bravo').closest('tr')!;
@@ -212,6 +216,54 @@ it('moves the selected photo in the underlying album after sorting its table', a
 	await waitFor(() => expect(content.putAlbumYear).toHaveBeenCalled());
 	const saved = vi.mocked(content.putAlbumYear).mock.calls[0][2];
 	expect(saved.map((photo) => photo.filename)).toEqual(['c.jpg', 'b.jpg', 'a.jpg']);
+});
+
+it('uses a year deep link, shows real thumbnails and keeps photo edits when changing the view', async () => {
+	vi.stubGlobal('Request', class extends NativeRequest {
+		constructor(input: RequestInfo | URL, init?: RequestInit) {
+			super(input, { ...init, signal: undefined });
+		}
+	});
+	const photo = { filename: 'morning.jpg', path: '2025/01/morning.jpg', title: 'Morning',
+		variants: [{ path: '2025/01/morning 480.webp', width: 480, height: 360 }] };
+	vi.mocked(content.getAlbums).mockResolvedValue({
+		index: { schemaVersion: 1, years: [2025, 2026], totalPhotos: 1, devices: [] }, digest: '"index"'
+	});
+	vi.mocked(content.getAlbumYear).mockResolvedValue({ year: { year: 2025, photos: [photo] }, digest: '"year"' });
+	vi.mocked(content.putAlbumYear).mockResolvedValue({ year: { year: 2025, photos: [{ ...photo, title: 'Sunrise' }] }, digest: '"saved"' });
+	mount(<ContentScopeProvider resource="albums"><AlbumsPage /></ContentScopeProvider>, '/content/albums?year=2025');
+	const open = await screen.findByRole('button', { name: 'Open photo Morning' });
+	expect(content.getAlbumYear).toHaveBeenCalledWith({ type: 'platform' }, '2025', expect.any(AbortSignal));
+	expect(open.querySelector('img')?.getAttribute('src')).toBe(
+		'/api/v1/content/albums/thumbnail?path=2025%2F01%2Fmorning+480.webp'
+	);
+	fireEvent.click(open);
+	const editor = await screen.findByRole('dialog', { name: 'Edit photo' });
+	fireEvent.change(within(editor).getByRole('textbox', { name: 'Title' }), { target: { value: 'Sunrise' } });
+	fireEvent.click(within(editor).getByRole('button', { name: 'Apply changes' }));
+	await screen.findByRole('button', { name: 'Open photo Sunrise' });
+	fireEvent.click(screen.getByRole('radio', { name: 'Horizontal gallery' }));
+	await screen.findByRole('region', { name: 'Photo gallery, use arrow keys to browse' });
+	expect(screen.getByText('Unsaved')).toBeTruthy();
+	fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+	await waitFor(() => expect(content.putAlbumYear).toHaveBeenCalledWith(
+		{ type: 'platform' }, '2025', [{ filename: 'morning.jpg', title: 'Sunrise', description: '', alt: '' }], '"year"', '', ''
+	));
+});
+
+it('shows a first-use empty state and submits multiple selected originals in order', async () => {
+	vi.mocked(content.uploadAlbumPhoto)
+		.mockResolvedValueOnce({ path: '2026/first.jpg', taskId: 'first' })
+		.mockResolvedValueOnce({ path: '2026/second.jpg', taskId: 'second' });
+	mount(<ContentScopeProvider resource="albums"><AlbumsPage /></ContentScopeProvider>, '/content/albums');
+	expect(await screen.findByText('No albums yet. Upload photos to create a year album.')).toBeTruthy();
+	const input = screen.getByLabelText('Upload photos', { selector: 'input' });
+	const first = new File(['first'], 'first.jpg', { type: 'image/jpeg' });
+	const second = new File(['second'], 'second.jpg', { type: 'image/jpeg' });
+	fireEvent.change(input, { target: { files: [first, second] } });
+	await waitFor(() => expect(content.uploadAlbumPhoto).toHaveBeenCalledTimes(2));
+	expect(content.uploadAlbumPhoto).toHaveBeenNthCalledWith(1, { type: 'platform' }, first);
+	expect(content.uploadAlbumPhoto).toHaveBeenNthCalledWith(2, { type: 'platform' }, second);
 });
 
 it('uses the platform permission rather than a site role for platform writes', async () => {

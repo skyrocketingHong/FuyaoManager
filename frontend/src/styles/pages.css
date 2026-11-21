@@ -115,9 +115,6 @@
 .sites-table .ant-table-content > table {
 	min-width: 760px;
 }
-.albums-table .ant-table-content > table {
-	min-width: 760px;
-}
 .taxonomy-table .ant-table-content > table {
 	min-width: 560px;
 }

@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -113,6 +115,71 @@ func (s *Store) GetAlbumYear(siteID uuid.UUID, year string) (AlbumYear, string, 
 	}
 	doc.raw = data
 	return doc, digest, nil
+}
+
+// ReadAlbumThumbnail serves generated derivatives from the album's own tree.
+func (s *Store) ReadAlbumThumbnail(siteID uuid.UUID, name string) ([]byte, string, error) {
+	// ASVS 5.3.2: confine the requested name to the thumbnails tree.
+	if !fs.ValidPath(name) || strings.ContainsAny(name, "\\\x00") || !allowedImageExt[strings.ToLower(path.Ext(name))] {
+		return nil, "", ErrInvalidPath
+	}
+	const thumbnails = "albums/thumbnails"
+	root, err := os.OpenRoot(s.ContentRoot(siteID))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "", ErrNotFound
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	defer root.Close()
+	for _, folder := range []string{"albums", thumbnails} {
+		info, err := root.Lstat(folder)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, "", ErrNotFound
+		}
+		if err != nil {
+			return nil, "", err
+		}
+		if !info.IsDir() {
+			return nil, "", ErrInvalidPath
+		}
+	}
+	media, err := root.OpenRoot(thumbnails)
+	if err != nil {
+		return nil, "", err
+	}
+	defer media.Close()
+
+	// A thumbnail is normally well below this limit. Bound both its stat
+	// size and the read in case the indexer replaces it concurrently.
+	const maxThumbnailBytes = 12 << 20
+	info, err := media.Stat(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "", ErrNotFound
+	}
+	if err != nil || !info.Mode().IsRegular() || info.Size() > maxThumbnailBytes {
+		return nil, "", ErrNotFound
+	}
+	file, err := media.Open(name)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, "", ErrNotFound
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxThumbnailBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	kind := http.DetectContentType(data)
+	switch kind {
+	case "image/jpeg", "image/png", "image/webp":
+		if len(data) <= maxThumbnailBytes {
+			return data, kind, nil
+		}
+	}
+	return nil, "", ErrNotFound
 }
 
 // SaveAlbumYear applies an edit to one year document under If-Match

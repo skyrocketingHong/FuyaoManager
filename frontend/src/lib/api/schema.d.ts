@@ -1327,6 +1327,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/albums/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a private album thumbnail
+         * @description Reads a generated image from the selected album content source.
+         */
+        get: operations["getAlbumThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/albums/{year}": {
         parameters: {
             query?: never;
@@ -1992,6 +2012,26 @@ export interface paths {
          * @description A full session may read the independent platform content library. No site ID is required.
          */
         get: operations["platformListMediaTasks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/content/albums/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a private album thumbnail
+         * @description Reads a generated image from the selected album content source.
+         */
+        get: operations["platformGetAlbumThumbnail"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6246,6 +6286,45 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    getAlbumThumbnail: {
+        parameters: {
+            query: {
+                /** @description Variant path relative to the thumbnail directory. */
+                path: string;
+            };
+            header?: never;
+            path: {
+                /** @description Site UUID. */
+                siteId: components["parameters"]["SiteId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Generated image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Invalid thumbnail path. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
     getAlbumYear: {
         parameters: {
             query?: never;
@@ -8105,6 +8184,42 @@ export interface operations {
             };
             400: components["responses"]["InvalidSiteId"];
             401: components["responses"]["Unauthenticated"];
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Problem"];
+        };
+    };
+    platformGetAlbumThumbnail: {
+        parameters: {
+            query: {
+                /** @description Variant path relative to the thumbnail directory. */
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Generated image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Invalid thumbnail path. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             default: components["responses"]["Problem"];
         };

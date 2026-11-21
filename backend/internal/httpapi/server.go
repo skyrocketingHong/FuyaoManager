@@ -119,6 +119,7 @@ type ContentStore interface {
 	SaveSiteConfig(siteID uuid.UUID, doc content.SiteConfigDoc, securityCode *string, expectedDigest string) (content.SiteConfigDoc, string, error)
 	UpdateSiteBaseURL(siteID uuid.UUID, url string) error
 	GetAlbumIndex(siteID uuid.UUID) (content.AlbumIndex, string, error)
+	ReadAlbumThumbnail(siteID uuid.UUID, name string) ([]byte, string, error)
 	GetAlbumYear(siteID uuid.UUID, year string) (content.AlbumYear, string, error)
 	SaveAlbumYear(siteID uuid.UUID, year string, expectedDigest string, edit func(*content.AlbumYear) error) (content.AlbumYear, string, error)
 	StoreUpload(siteID uuid.UUID, reader io.Reader, sizeHint int64) (string, error)
@@ -277,6 +278,7 @@ func (a *API) routes() []routeSpec {
 		{http.MethodPost, "/api/v1/sites/{siteId}/albums/photos", "uploadAlbumPhoto", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleUploadAlbumPhoto)))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/albums/process", "processAlbums", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleEnqueueAlbumTask)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/albums/tasks", "listMediaTasks", a.requireFullScope(a.contentRoute(a.handleListMediaTasks))},
+		{http.MethodGet, "/api/v1/sites/{siteId}/albums/thumbnail", "getAlbumThumbnail", a.requireFullScope(a.contentRoute(a.handleGetAlbumThumbnail))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/albums/{year}", "getAlbumYear", a.requireFullScope(a.contentRoute(a.handleGetAlbumYear))},
 		{http.MethodPut, "/api/v1/sites/{siteId}/albums/{year}", "putAlbumYear", a.requireFullScope(a.withCSRF(a.contentRoute(a.handlePutAlbumYear)))},
 		{http.MethodDelete, "/api/v1/sites/{siteId}/albums/{year}/{filename}", "deleteAlbumPhoto", a.requireFullScope(a.withCSRF(a.contentRoute(a.handleDeleteAlbumPhoto)))},

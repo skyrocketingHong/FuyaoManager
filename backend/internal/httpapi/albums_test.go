@@ -332,3 +332,67 @@ func TestAlbumUploadProcessEditDelete(t *testing.T) {
 		t.Fatalf("photo still listed after delete: %+v", yearEnv.Year.Photos)
 	}
 }
+
+func TestAlbumThumbnailRequiresScopeAndServesOnlyDerivatives(t *testing.T) {
+	env, owner, siteID := contentWorld(t)
+	ctx := t.Context()
+	member, memberToken, memberCSRF := env.createUserSession("album-thumbnail-viewer")
+	if _, err := env.pool.Exec(ctx,
+		"INSERT INTO site_memberships (site_id, user_id, role) VALUES ($1, $2, 'viewer')",
+		mustUUID(siteID), member.ID,
+	); err != nil {
+		t.Fatal(err)
+	}
+	viewer := env.clientFor(memberToken, memberCSRF)
+	_, outsiderToken, outsiderCSRF := env.createUserSession("album-thumbnail-outsider")
+	outsider := env.clientFor(outsiderToken, outsiderCSRF)
+
+	albumStore, err := content.New(env.provisionRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := albumStore.ContentRoot(mustUUID(siteID))
+	const image = "2026/hero-480.jpeg"
+	write := func(name string, data []byte) {
+		t.Helper()
+		if _, err := albumStore.WriteFile(mustUUID(siteID), content.RootContent, name, data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("albums/thumbnails/"+image, tinyJPEG)
+	write("albums/photos/original.jpeg", tinyJPEG)
+	write("albums/thumbnails/not-image.jpeg", []byte("<svg/>"))
+	if err := os.Symlink("../photos/original.jpeg", filepath.Join(root, "albums/thumbnails/escaped.jpeg")); err != nil {
+		t.Fatal(err)
+	}
+
+	endpoint := "/api/v1/sites/" + siteID + "/albums/thumbnail"
+	request := func(c *tclient, path string, expected int) (http.Header, []byte) {
+		t.Helper()
+		return adminRequest(t, c, http.MethodGet, endpoint+"?path="+path, nil, expected)
+	}
+	h, body := request(viewer, "2026%2Fhero-480.jpeg", http.StatusOK)
+	if !bytes.Equal(body, tinyJPEG) || h.Get("Content-Type") != "image/jpeg" ||
+		h.Get("Cache-Control") != "private, no-store" || h.Get("Cross-Origin-Resource-Policy") != "same-origin" {
+		t.Fatal("thumbnail did not preserve the image and private delivery headers")
+	}
+	request(outsider, "2026%2Fhero-480.jpeg", http.StatusNotFound)
+	request(env.newClient(), "2026%2Fhero-480.jpeg", http.StatusUnauthorized)
+	request(owner, "..%2Fphotos%2Foriginal.jpeg", http.StatusBadRequest)
+	request(owner, "2026%2Fhero-480.jpeg&path=not-image.jpeg", http.StatusBadRequest)
+	request(owner, "escaped.jpeg", http.StatusNotFound)
+	request(owner, "not-image.jpeg", http.StatusNotFound)
+}
+
+func TestPlatformAlbumThumbnailUsesLibraryScope(t *testing.T) {
+	env, library, _ := platformContentWorld(t)
+	_, token, csrf := env.createUserSession("library-thumbnail-viewer")
+	if _, err := library.WriteFile(content.PlatformScopeID, content.RootContent, "albums/thumbnails/library.jpeg", tinyJPEG); err != nil {
+		t.Fatal(err)
+	}
+	h, body := adminRequest(t, env.clientFor(token, csrf), http.MethodGet,
+		"/api/v1/content/albums/thumbnail?path=library.jpeg", nil, http.StatusOK)
+	if h.Get("Content-Type") != "image/jpeg" || !bytes.Equal(body, tinyJPEG) {
+		t.Fatal("listed platform thumbnail was not read from the library")
+	}
+}

@@ -1,562 +1,614 @@
-import { queryValue, usePageQuery } from '../../lib/navigation/query';
-/**
- * AlbumsPage: year albums under the platform content authority. Uploads
- * queue the theme's own EXIF/thumbnail indexer (task status banner), the
- * photo grid edits titles/descriptions/alt and ordering with digest saves,
- * and deletion respects frozen-release references.
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, Button, Empty, Input, Modal, Popconfirm, Select, Space, Upload, message } from 'antd';
-import type { UploadFile } from 'antd';
-import { ArrowDown, ArrowUp } from 'lucide-react';
-import Trans from '../../components/i18n/Trans';
-import { usePageHeader, PageTabs } from '../../components/PageHeader';
-import DataTable, { compareTableValues } from '../../components/DataTable';
-import StatusTag from '../../components/StatusTag';
-import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
-import PageLoading from '../../components/PageLoading';
-import { TablePanel } from '../../components/Panel';
+import { Alert, App, Button, Empty, Input, Select, Space } from 'antd';
+import { LayoutGrid, List, PanelsTopLeft, Search, Upload as UploadIcon } from 'lucide-react';
+import { RetryButton } from '../../components/ActionButton';
 import { useContentScope } from '../../components/ContentScopeProvider';
+import PageLoading from '../../components/PageLoading';
+import { PageTabs, usePageHeader } from '../../components/PageHeader';
+import StatusTag from '../../components/StatusTag';
+import AlbumDialogs, { type AlbumDialog } from '../../features/albums/AlbumDialogs';
+import AlbumPhotos, { type PhotoRemoval } from '../../features/albums/AlbumPhotos';
+import { mergeAlbumDraft, validAlbumCover } from '../../features/albums/mergeAlbumDraft';
+import { useAdminQuery } from '../../lib/admin/requests';
+import { currentAuthGeneration } from '../../lib/api/client';
+import type { ContentTarget } from '../../lib/api/content';
 import {
 	deleteAlbumPhoto,
 	getAlbums,
 	getAlbumYear,
 	getSite,
 	listMediaTasks,
+	processAlbums,
 	putAlbumYear,
 	uploadAlbumPhoto,
-	type AlbumIndex,
 	type AlbumPhotoEntry,
-	type AlbumYear,
-	type MediaTask,
-	type Site
+	type AlbumYear
 } from '../../lib/api/management';
-import { apiErrorKey } from '../../lib/i18n/errors';
+import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { t, type MessageKey } from '../../lib/i18n';
+import { apiErrorKey } from '../../lib/i18n/errors';
+import { queryChoice, queryValue, usePageQuery } from '../../lib/navigation/query';
+import '../../styles/albums.css';
 
-const terminalTask = new Set(['succeeded', 'failed']);
+type AlbumSnapshot = Awaited<ReturnType<typeof getAlbumYear>>;
+type AlbumWrite = 'upload' | 'retry' | 'save' | 'remove' | 'merge';
+
+function selectedYear(years: string[], params: URLSearchParams) {
+	const requested = queryValue(params, 'year');
+	return requested && years.includes(requested) ? requested : (years[0] ?? '');
+}
 
 export default function AlbumsPage() {
-	const { siteId } = useParams<{ siteId: string }>();
 	const scope = useContentScope();
-	const target = scope.target;
-	const navigate = useNavigate();
-	const [site, setSite] = useState<Site | null>(null);
-	const [index, setIndex] = useState<AlbumIndex | null>(null);
-	const [params, setParams] = usePageQuery();
-	const requestedYear = queryValue(params, 'year');
-	const years = index?.years ?? [];
-	const year = years.some((value) => String(value) === requestedYear)
-		? requestedYear ?? ''
-		: String(years.at(-1) ?? '');
-	const [doc, setDoc] = useState<AlbumYear | null>(null);
-	const [digest, setDigest] = useState('');
-	const [dirty, setDirty] = useState(false);
-	const [tasks, setTasks] = useState<MediaTask[]>([]);
-	const [uploading, setUploading] = useState(false);
-	const [saving, setSaving] = useState(false);
-	const [editing, setEditing] = useState<AlbumPhotoEntry | null>(null);
-	const [editValues, setEditValues] = useState({ title: '', description: '', alt: '' });
-	const [conflict, setConflict] = useState(false);
-	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
-	const [messageApi, contextHolder] = message.useMessage();
-	const epoch = useRef(0);
+	return (
+		<AlbumWorkspace
+			key={`${scope.key}:${currentAuthGeneration()}`}
+			target={scope.target}
+			canEdit={scope.canEdit}
+		/>
+	);
+}
 
+function AlbumWorkspace({ target, canEdit }: { target?: ContentTarget; canEdit?: boolean }) {
+	const { modal, message } = App.useApp();
+	const [params, setParams] = usePageQuery();
+	const view = queryChoice(params, 'view', ['grid', 'gallery', 'list'], 'grid');
+	const search = (queryValue(params, 'q') ?? '').slice(0, 150);
+	const index = useAdminQuery(
+		useCallback((signal) => (target ? getAlbums(target, signal) : Promise.resolve(null)), [target])
+	);
+	const tasks = useAdminQuery(
+		useCallback(
+			(signal) => (target ? listMediaTasks(target, signal) : Promise.resolve([])),
+			[target]
+		)
+	);
+	const permissions = useAdminQuery(
+		useCallback(
+			() =>
+				typeof target === 'string' && canEdit === undefined
+					? getSite(target)
+					: Promise.resolve(null),
+			[target, canEdit]
+		)
+	);
+	const editable =
+		canEdit ?? (permissions.data?.role === 'owner' || permissions.data?.role === 'editor');
+	const years = [...new Set(index.data?.index.years ?? [])].sort((a, b) => b - a).map(String);
+	const year = selectedYear(years, params);
+
+	const [snapshot, setSnapshot] = useState<{ key: string; data: AlbumSnapshot }>();
+	const [draft, setDraft] = useState<{ key: string; album: AlbumYear }>();
+	const [yearError, setYearError] = useState<{ key: string; message: MessageKey }>();
+	const [reading, setReading] = useState('');
+	const [write, setWrite] = useState<AlbumWrite | null>(null);
+	const [writeError, setWriteError] = useState('');
+	const [conflict, setConflict] = useState(false);
+	const [confirming, setConfirming] = useState(false);
+	const [dialog, setDialog] = useState<AlbumDialog | null>(null);
+	const [progress, setProgress] = useState({ done: 0, total: 0 });
+	const fileInput = useRef<HTMLInputElement>(null);
+	const activeRead = useRef<AbortController>();
+	const writing = useRef(false);
+	const mounted = useRef(true);
+	const needsRefresh = useRef(false);
+	const currentYear = useRef(year);
+	currentYear.current = year;
+
+	const saved = snapshot?.key === year ? snapshot.data : undefined;
+	const local = draft?.key === year ? draft.album : undefined;
+	const album = local ?? saved?.year;
+	const dirty = !!local;
+	const busy = !!write || (reading === year && !!year);
 	const loadYear = useCallback(
-		async (yearArg: string) => {
-			if (!target || !yearArg) return;
-			const my = ++epoch.current;
+		async (key: string) => {
+			if (!target || !key) return;
+			activeRead.current?.abort();
+			const read = new AbortController();
+			activeRead.current = read;
+			setYearError(undefined);
+			setReading(key);
 			try {
-				const env = await getAlbumYear(target, yearArg);
-				if (my !== epoch.current) return;
-				setDoc(env.year);
-				setDigest(env.digest);
-				setDirty(false);
-				setConflict(false);
-				setErrorKey(null);
-			} catch (err) {
-				if (my !== epoch.current) return;
-				const key = apiErrorKey(err);
-				if (key === 'error.unauthenticated') {
-					navigate('/login');
-					return;
+				const data = await getAlbumYear(target, key, read.signal);
+				if (!read.signal.aborted) setSnapshot({ key, data });
+			} catch (error) {
+				if (!read.signal.aborted)
+					setYearError({ key, message: apiErrorKey(error) ?? 'error.generic' });
+			} finally {
+				if (activeRead.current === read) {
+					activeRead.current = undefined;
+					setReading('');
 				}
-				setErrorKey(key);
 			}
 		},
-		[target, navigate]
+		[target]
 	);
 
-	const loadIndex = useCallback(async () => {
-		if (!target) return;
-		const my = ++epoch.current;
-		try {
-			const env = await getAlbums(target);
-			if (my !== epoch.current) return;
-			setIndex(env.index);
-		} catch (err) {
-			if (my !== epoch.current) return;
-			const key = apiErrorKey(err);
-			if (key === 'error.unauthenticated') {
-				navigate('/login');
-				return;
-			}
-			setErrorKey(key);
-		}
-	}, [target, navigate]);
-
 	useEffect(() => {
-		if (!target) return;
-		epoch.current++;
-		setSite(null);
-		setIndex(null);
-		setDoc(null);
-		let cancelled = false;
-		if (siteId && scope.canEdit === undefined)
-			getSite(siteId)
-				.then((s) => {
-					if (!cancelled) setSite(s);
-				})
-				.catch(() => {});
-		void loadIndex();
+		mounted.current = true;
 		return () => {
-			epoch.current++;
-			cancelled = true;
+			mounted.current = false;
 		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [scope.key]);
-
+	}, []);
 	useEffect(() => {
-		if (!index || !year) return;
-		setDoc(null);
-		setEditing(null);
+		setDraft(undefined);
+		setDialog(null);
+		setConflict(false);
+		setWriteError('');
 		void loadYear(year);
-		return () => { epoch.current++; };
-	}, [index, year, loadYear]);
+		return () => {
+			activeRead.current?.abort();
+			activeRead.current = undefined;
+		};
+	}, [year, loadYear]);
 
-	// Poll task status while anything is queued or running. When processing
-	// finishes, the index reload is skipped while the user has unsaved
-	// metadata edits — a completed background task must never clobber the
-	// editor. The stale index stays visible until the user saves or reloads.
+	const task = tasks.data?.[0];
+	const processing = !!tasks.data?.some(
+		({ status }) => status === 'queued' || status === 'running'
+	);
 	useEffect(() => {
-		if (!target) return;
-		if (!tasks.some((task) => !terminalTask.has(task.status))) return;
-		const timer = window.setInterval(async () => {
-			try {
-				const list = await listMediaTasks(target);
-				setTasks((prev) => (prev.length === 0 && list.length === 0 ? prev : list));
-				if (!list.some((task) => !terminalTask.has(task.status))) {
-					if (!dirty) {
-						void loadIndex();
-					}
-				}
-			} catch {
-				// polling continues silently
+		if (processing) needsRefresh.current = true;
+		if (processing && !tasks.loading) {
+			const timer = window.setTimeout(tasks.reload, 3000);
+			return () => window.clearTimeout(timer);
+		}
+		if (
+			!processing &&
+			!tasks.loading &&
+			tasks.data &&
+			!dirty &&
+			!busy &&
+			!dialog &&
+			!confirming &&
+			needsRefresh.current
+		) {
+			needsRefresh.current = false;
+			index.reload();
+			void loadYear(year);
+		}
+	}, [
+		processing,
+		tasks.loading,
+		tasks.data,
+		tasks.reload,
+		dirty,
+		busy,
+		dialog,
+		confirming,
+		index.reload,
+		loadYear,
+		year
+	]);
+
+	const dialogChanged =
+		dialog?.kind === 'photo'
+			? (['title', 'description', 'alt'] as const).some(
+					(field) => (dialog.values[field] ?? '') !== (dialog.photo[field] ?? '')
+				)
+			: dialog?.kind === 'settings' &&
+				((dialog.values.title ?? '') !== (album?.title ?? '') ||
+					(dialog.values.cover ?? '') !== (album ? validAlbumCover(album) : ''));
+	useUnsavedGuard(
+		dirty || !!dialogChanged,
+		(from, to) =>
+			from.pathname === to.pathname && selectedYear(years, new URLSearchParams(to.search)) === year
+	);
+
+	async function runWrite(kind: AlbumWrite, act: () => Promise<void>) {
+		if (!editable || writing.current || activeRead.current) return;
+		writing.current = true;
+		setWrite(kind);
+		setWriteError('');
+		try {
+			await act();
+		} catch (error) {
+			if (mounted.current) {
+				const key = apiErrorKey(error) ?? 'error.generic';
+				if (key === 'error.conflict' && currentYear.current === year) setConflict(true);
+				else setWriteError(t(key));
 			}
-		}, 3000);
-		return () => window.clearInterval(timer);
-	}, [tasks, target, loadIndex, dirty]);
-
-	async function refreshTasks() {
-		if (!target) return;
-		try {
-			setTasks(await listMediaTasks(target));
-		} catch {
-			// surfaced on the next poll
-		}
-	}
-
-	// Upload beforeUpload: store through the typed API, never auto-upload.
-	async function handleUpload(file: File) {
-		if (!target) return false;
-		setUploading(true);
-		try {
-			await uploadAlbumPhoto(target, file);
-			void messageApi.success(t('albums.uploadQueued'));
-			await refreshTasks();
-		} catch (err) {
-			const key = apiErrorKey(err);
-			if (key !== null) void messageApi.warning(t(key));
 		} finally {
-			setUploading(false);
-		}
-		return false; // prevent antd's own upload
-	}
-
-	function mutateDoc(updater: (photos: AlbumPhotoEntry[]) => AlbumPhotoEntry[]) {
-		if (!doc) return;
-		setDirty(true);
-		setDoc({ ...doc, photos: updater(doc.photos) });
-	}
-
-	function patchYear(patch: Partial<Pick<AlbumYear, 'title' | 'cover'>>) {
-		if (!doc) return;
-		setDirty(true);
-		setDoc({ ...doc, ...patch });
-	}
-
-	function openEditor(photo: AlbumPhotoEntry) {
-		setEditing(photo);
-		setEditValues({
-			title: photo.title ?? '',
-			description: photo.description ?? '',
-			alt: photo.alt ?? ''
-		});
-	}
-
-	async function applyEditor() {
-		if (!editing) return;
-		mutateDoc((photos) =>
-			photos.map((p) => (p.filename === editing.filename ? { ...p, ...editValues } : p))
-		);
-		setEditing(null);
-	}
-
-	function move(filename: string, delta: -1 | 1) {
-		mutateDoc((photos) => {
-			const next = [...photos];
-			const indexOf = next.findIndex((photo) => photo.filename === filename);
-			if (indexOf < 0) return next;
-			const target = indexOf + delta;
-			if (target < 0 || target >= next.length) return next;
-			[next[indexOf], next[target]] = [next[target], next[indexOf]];
-			return next;
-		});
-	}
-
-	// Conflict sync: adopt the server digest (baseline marker) while keeping
-	// the local photo edits; discarding them is the separate explicit action.
-	async function syncAfterConflict() {
-		if (!target || !year) return;
-		const my = ++epoch.current;
-		try {
-			const env = await getAlbumYear(target, year);
-			if (my !== epoch.current) return;
-			setDigest(env.digest);
-			if (!dirty) setDoc(env.year);
-			setConflict(false);
-			void messageApi.info(t('posts.conflictSynced'));
-		} catch {
-			// keep the banner
+			writing.current = false;
+			if (mounted.current) setWrite(null);
 		}
 	}
 
-	async function handleSave() {
-		if (!target || !doc || !year) return;
-		setSaving(true);
-		try {
-			const photos = doc.photos.map((p) => ({
-				filename: p.filename,
-				title: p.title ?? '',
-				description: p.description ?? '',
-				alt: p.alt ?? ''
-			}));
-			const saved = await putAlbumYear(
+	function upload(files: File[]) {
+		if (!target || files.length === 0) return;
+		void runWrite('upload', async () => {
+			let accepted = 0;
+			const rejected: string[] = [];
+			setProgress({ done: 0, total: files.length });
+			for (const file of files) {
+				try {
+					await uploadAlbumPhoto(target, file);
+					accepted++;
+				} catch (error) {
+					rejected.push(`${file.name}（${t(apiErrorKey(error) ?? 'error.generic')}）`);
+				}
+				if (!mounted.current) return;
+				setProgress({ done: accepted + rejected.length, total: files.length });
+			}
+			if (accepted > 0) {
+				needsRefresh.current = true;
+				tasks.reload();
+			}
+			if (rejected.length > 0)
+				setWriteError(t('albums.uploadFailed', { files: rejected.join(', ') }));
+			else void message.success(t('albums.queuedCount', { count: accepted }));
+		});
+	}
+
+	function updateAlbum(next: AlbumYear) {
+		if (editable && !busy) setDraft({ key: year, album: next });
+	}
+
+	function applyDialog() {
+		if (!dialog || !album || busy || !editable) return;
+		if (dialogChanged)
+			updateAlbum(
+				dialog.kind === 'settings'
+					? { ...album, ...dialog.values }
+					: {
+							...album,
+							photos: album.photos.map((photo) =>
+								photo.filename === dialog.photo.filename ? { ...photo, ...dialog.values } : photo
+							)
+						}
+			);
+		setDialog(null);
+	}
+
+	function move(filename: string, direction: -1 | 1) {
+		if (!album) return;
+		const photos = [...album.photos];
+		const from = photos.findIndex((photo) => photo.filename === filename);
+		const to = from + direction;
+		if (from < 0 || to < 0 || to >= photos.length) return;
+		[photos[from], photos[to]] = [photos[to], photos[from]];
+		updateAlbum({ ...album, photos });
+	}
+
+	function save() {
+		if (!target || !saved || !local || conflict) return;
+		void runWrite('save', async () => {
+			const data = await putAlbumYear(
 				target,
 				year,
-				photos,
-				digest,
-				doc.title ?? '',
-				doc.cover ?? ''
+				local.photos.map(({ filename, title, description, alt }) => ({
+					filename,
+					title: title ?? '',
+					description: description ?? '',
+					alt: alt ?? ''
+				})),
+				saved.digest,
+				local.title ?? '',
+				validAlbumCover(local)
 			);
-			setDoc(saved.year);
-			setDigest(saved.digest);
-			setDirty(false);
-			setConflict(false);
-			void messageApi.success(t('albums.saved'));
-		} catch (err) {
-			if (apiErrorKey(err) === 'error.conflict') {
-				setConflict(true);
-			} else {
-				const key = apiErrorKey(err);
-				if (key !== null) void messageApi.warning(t(key));
+			if (mounted.current && currentYear.current === year) {
+				setSnapshot({ key: year, data });
+				setDraft(undefined);
+				setConflict(false);
+				void message.success(t('albums.saved'));
 			}
-		} finally {
-			setSaving(false);
-		}
+		});
 	}
 
-	// Detach removes the photo from the next build only; the files stay for
-	// releases that still reference them. Hard delete additionally removes
-	// files and is refused while referenced.
-	async function handleDelete(photo: AlbumPhotoEntry, mode: 'delete' | 'detach') {
-		if (!target || !year) return;
-		try {
-			await deleteAlbumPhoto(target, year, photo.filename, digest, mode);
-			await loadYear(year);
-			void messageApi.success(mode === 'detach' ? t('albums.detached') : t('albums.deleted'));
-		} catch (err) {
-			const key = apiErrorKey(err);
-			if (key !== null) void messageApi.warning(t(key));
-		}
+	function resolveConflict(keepDraft: boolean) {
+		if (!target) return;
+		void runWrite('merge', async () => {
+			const data = await getAlbumYear(target, year);
+			if (!mounted.current || currentYear.current !== year) return;
+			if (keepDraft && local && saved)
+				setDraft({ key: year, album: mergeAlbumDraft(saved.year, local, data.year) });
+			else setDraft(undefined);
+			setSnapshot({ key: year, data });
+			setConflict(false);
+		});
 	}
 
-	const editable =
-		scope.canEdit ?? (site !== null && (site.role === 'owner' || site.role === 'editor'));
-	useUnsavedGuard(dirty);
-	const activeTask = tasks.find((task) => !terminalTask.has(task.status));
-	const lastFailure = tasks.find((task) => task.status === 'failed');
+	function confirmRemoval(photo: AlbumPhotoEntry, mode: PhotoRemoval) {
+		if (!saved || !target || dirty || !editable || busy || conflict || confirming) return;
+		setConfirming(true);
+		modal.confirm({
+			afterClose: () => setConfirming(false),
+			title: t(mode === 'detach' ? 'albums.detach' : 'albums.deletePhoto'),
+			content: (
+				<>
+					<p className="version-text">{photo.title || photo.filename}</p>
+					<p>{t(mode === 'detach' ? 'albums.detachConfirm' : 'albums.deleteConfirm')}</p>
+				</>
+			),
+			okText: t(mode === 'detach' ? 'albums.detach' : 'albums.deletePhoto'),
+			okButtonProps: { danger: mode === 'delete' },
+			cancelText: t('common.cancel'),
+			focusable: { autoFocusButton: 'cancel' },
+			onOk: () =>
+				runWrite('remove', async () => {
+					if (!mounted.current || currentYear.current !== year) return;
+					await deleteAlbumPhoto(target, year, photo.filename, saved.digest, mode);
+					if (!mounted.current || currentYear.current !== year) return;
+					index.reload();
+					await loadYear(year);
+					void message.success(t(mode === 'detach' ? 'albums.detached' : 'albums.deleted'));
+				})
+		});
+	}
 
-	const headerActions = (
-		<Space size={8}>
-			<Upload
-				beforeUpload={(file) => {
-					void handleUpload(file);
-					return false;
-				}}
-				showUploadList={false}
-				accept="image/jpeg,image/png,image/webp"
-				disabled={!editable}
-				fileList={[] as UploadFile[]}
-			>
-				<Button loading={uploading} disabled={!editable}>
-					<Trans text={t('albums.upload')} />
-				</Button>
-			</Upload>
-			<Button
-				type="primary"
-				loading={saving}
-				disabled={!editable || !dirty}
-				onClick={() => void handleSave()}
-			>
-				<Trans text={t('common.save')} />
-			</Button>
-		</Space>
+	const query = search.trim().toLocaleLowerCase();
+	const photos =
+		album?.photos.filter(
+			(photo) =>
+				!query ||
+				[photo.filename, photo.title, photo.description].some((field) =>
+					field?.toLocaleLowerCase().includes(query)
+				)
+		) ?? [];
+	const cover = album ? validAlbumCover(album) || album.photos[0]?.filename : undefined;
+	const controls = (
+		<div className="album-toolbar">
+			{years.length > 0 && (
+				<Select<string>
+					className="album-year-picker"
+					aria-label={t('albums.year')}
+					value={year}
+					options={years.map((item) => ({ label: item, value: item }))}
+					disabled={!!write}
+					showSearch={{ optionFilterProp: 'label' }}
+					onChange={(value) => setParams({ year: value })}
+				/>
+			)}
+			{album && album.photos.length > 0 && (
+				<>
+					<Input
+						className="album-search"
+						prefix={<Search size={15} aria-hidden="true" />}
+						aria-label={t('albums.search')}
+						placeholder={t('albums.search')}
+						allowClear
+						value={search}
+						maxLength={150}
+						onChange={(event) => setParams({ q: event.target.value }, true)}
+					/>
+					<PageTabs
+						value={view}
+						ariaLabel={t('albums.view')}
+						options={[
+							{
+								value: 'grid',
+								label: (
+									<span className="album-view-label">
+										<LayoutGrid size={14} />
+										{t('albums.grid')}
+									</span>
+								)
+							},
+							{
+								value: 'gallery',
+								label: (
+									<span className="album-view-label">
+										<PanelsTopLeft size={14} />
+										{t('albums.gallery')}
+									</span>
+								)
+							},
+							{
+								value: 'list',
+								label: (
+									<span className="album-view-label">
+										<List size={15} />
+										{t('albums.list')}
+									</span>
+								)
+							}
+						]}
+						onChange={(value) => setParams({ view: value === 'grid' ? null : value })}
+					/>
+				</>
+			)}
+		</div>
 	);
-	const yearTabs =
-		index !== null && (index.years ?? []).length > 0 ? (
-			<PageTabs
-				value={year}
-				options={(index.years ?? []).map((y) => ({
-					key: String(y),
-					label: String(y),
-					value: String(y)
-				}))}
-				onChange={(key) => setParams({ year: key })}
-				ariaLabel={t('nav.albums')}
-			/>
+	const actions =
+		editable && target ? (
+			<Space wrap size={8}>
+				<input
+					ref={fileInput}
+					type="file"
+					aria-label={t('albums.upload')}
+					accept="image/jpeg,image/png,image/webp"
+					multiple
+					hidden
+					onChange={(event) => {
+						const files = Array.from(event.currentTarget.files ?? []);
+						event.currentTarget.value = '';
+						upload(files);
+					}}
+				/>
+				<Button
+					type={dirty ? 'default' : 'primary'}
+					icon={<UploadIcon size={15} />}
+					loading={write === 'upload'}
+					disabled={busy}
+					onClick={() => fileInput.current?.click()}
+				>
+					{write === 'upload' ? t('albums.uploadProgress', progress) : t('albums.upload')}
+				</Button>
+				{dirty && (
+					<Button
+						type="primary"
+						loading={write === 'save'}
+						disabled={busy || conflict}
+						onClick={save}
+					>
+						{t('common.save')}
+					</Button>
+				)}
+			</Space>
 		) : undefined;
-	const headerActive = usePageHeader({ content: yearTabs, actions: headerActions });
+	const header = usePageHeader({ content: controls, actions });
+	const error = index.error ?? (yearError?.key === year ? yearError.message : null);
 
 	return (
-		<div className="page-stack page-stack--fill">
-			{contextHolder}
-			{!headerActive ? (
-				<div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-					{yearTabs}
-					{headerActions}
+		<div className="page-stack album-workspace">
+			{!header && (
+				<div className="album-toolbar album-toolbar--local">
+					{controls}
+					{actions}
 				</div>
-			) : null}
-			{activeTask ? (
-				<Alert type="info" showIcon title={t('albums.processing')} style={{ marginBottom: 12 }} />
-			) : null}
-			{lastFailure ? (
+			)}
+			{writeError && (
+				<Alert
+					type="error"
+					showIcon
+					title={writeError}
+					closable={{ onClose: () => setWriteError('') }}
+				/>
+			)}
+			{tasks.error && (
+				<Alert
+					type="warning"
+					showIcon
+					title={t('albums.taskReadFailed')}
+					action={<RetryButton onClick={tasks.reload} />}
+				/>
+			)}
+			{processing && <Alert type="info" showIcon title={t('albums.processing')} />}
+			{!processing && task?.status === 'failed' && (
 				<Alert
 					type="error"
 					showIcon
 					title={t('albums.taskFailed')}
-					description={lastFailure.failure?.message ?? ''}
-					style={{ marginBottom: 12 }}
+					description={task.failure?.message}
 					action={
-						<Button
-							size="small"
-							disabled={!editable}
-							onClick={async () => {
-								if (!target) return;
-								const { processAlbums } = await import('../../lib/api/management');
-								try {
-									await processAlbums(target);
-									await refreshTasks();
-								} catch (err) {
-									const key = apiErrorKey(err);
-									if (key !== null) void messageApi.warning(t(key));
-								}
-							}}
-						>
-							{t('albums.retry')}
-						</Button>
+						editable && (
+							<RetryButton
+								loading={write === 'retry'}
+								disabled={busy}
+								onClick={() => {
+									if (target)
+										void runWrite('retry', async () => {
+											await processAlbums(target);
+											if (mounted.current) {
+												needsRefresh.current = true;
+												tasks.reload();
+											}
+										});
+								}}
+							/>
+						)
 					}
 				/>
-			) : null}
-			{conflict ? (
+			)}
+			{conflict && (
 				<Alert
 					type="warning"
 					showIcon
 					title={t('posts.conflictTitle')}
-					description={t('posts.conflictBody')}
-					style={{ marginBottom: 12 }}
+					description={t('albums.conflictBody')}
 					action={
-						<Space>
-							<Button size="small" onClick={() => void syncAfterConflict()}>
-								{t('posts.conflictAction')}
-							</Button>
-							<Button
-								size="small"
-								danger
-								onClick={() => {
-									setDirty(false);
-									void loadYear(year);
-								}}
-							>
-								{t('posts.discardLocal')}
+						<Space wrap>
+							{dirty && (
+								<Button size="small" disabled={busy} onClick={() => resolveConflict(true)}>
+									{t('albums.keepDraft')}
+								</Button>
+							)}
+							<Button size="small" disabled={busy} onClick={() => resolveConflict(false)}>
+								{t(dirty ? 'posts.discardLocal' : 'common.refresh')}
 							</Button>
 						</Space>
 					}
 				/>
-			) : null}
-			{errorKey !== null ? (
-				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
-			) : null}
-			{index === null ? (
+			)}
+			{error && (
+				<Alert
+					type="error"
+					showIcon
+					title={t(error)}
+					action={
+						<RetryButton onClick={() => (index.error ? index.reload() : void loadYear(year))} />
+					}
+				/>
+			)}
+			{(!index.data || (year && !album)) && !error && (
 				<PageLoading spec="page" label={t('common.loading')} />
-			) : (
-				<TablePanel className="fill-height">
-					{doc ? (
-						<Space wrap style={{ marginBottom: 8 }}>
-							<Input
-								size="small"
-								style={{ width: 220, maxWidth: '100%' }}
-								placeholder={t('albums.yearTitlePlaceholder')}
-								value={doc.title ?? ''}
-								disabled={!editable}
-								onChange={(e) => patchYear({ title: e.target.value })}
-							/>
-							<Select
-								size="small"
-								style={{ width: 200, maxWidth: '100%' }}
-								placeholder={t('albums.coverPlaceholder')}
-								value={doc.cover || undefined}
-								disabled={!editable}
-								allowClear
-								options={doc.photos.map((p) => ({
-									value: p.filename,
-									label: p.title || p.filename
-								}))}
-								onChange={(value: string | undefined) => patchYear({ cover: value ?? '' })}
-							/>
-						</Space>
-					) : null}
-					{doc === null ? (
-						<PageLoading spec="section" />
-					) : doc.photos.length === 0 ? (
-						<Empty description={t('albums.empty')} />
-					) : (
-						<DataTable<AlbumPhotoEntry>
-							scrollLabel={t('nav.albums')}
-							className="albums-table"
-							rowKey="filename"
-							size="small"
-							dataSource={doc.photos}
-							pagination={false}
-							columns={[
-								{
-									title: t('albums.photoColumn'),
-									sorter: (a, b) => compareTableValues(a.title || a.filename, b.title || b.filename),
-									render: (_, photo) => (
-										<>
-											<div>{photo.title || photo.filename}</div>
-											<span className="subtle">{photo.path}</span>
-										</>
-									)
-								},
-								{
-									title: t('albums.dateColumn'),
-									dataIndex: 'date',
-									width: 180,
-									render: (date: string) => (date ?? '').slice(0, 10)
-								},
-								{
-									title: t('albums.altColumn'),
-									dataIndex: 'alt',
-									width: 90,
-									render: (_, photo) =>
-										photo.alt ? (
-											<StatusTag kind="success">{t('albums.hasAlt')}</StatusTag>
-										) : (
-											<StatusTag kind="neutral">{t('albums.noAlt')}</StatusTag>
-										)
-								},
-								{
-									title: t('admin.actions'),
-									width: 220,
-									render: (_, photo) => (
-										<Space>
-											<Button size="small" onClick={() => openEditor(photo)}>
-												{t('posts.edit')}
-											</Button>
-											{editable ? (
-												<>
-													<Button
-														size="small"
-														type="text"
-														aria-label={t('common.moveUp')}
-														onClick={() => move(photo.filename, -1)}
-													>
-														<ArrowUp size={14} aria-hidden="true" />
-													</Button>
-													<Button
-														size="small"
-														type="text"
-														aria-label={t('common.moveDown')}
-														onClick={() => move(photo.filename, 1)}
-													>
-														<ArrowDown size={14} aria-hidden="true" />
-													</Button>
-													<Popconfirm
-														title={t('albums.detachConfirm')}
-														onConfirm={() => void handleDelete(photo, 'detach')}
-													>
-														<Button size="small">{t('albums.detach')}</Button>
-													</Popconfirm>
-													<Popconfirm
-														title={t('albums.deleteConfirm')}
-														onConfirm={() => void handleDelete(photo, 'delete')}
-													>
-														<Button size="small" danger>
-															{t('posts.delete')}
-														</Button>
-													</Popconfirm>
-												</>
-											) : null}
-										</Space>
-									)
+			)}
+			{index.data && !year && (
+				<Empty
+					image={Empty.PRESENTED_IMAGE_SIMPLE}
+					description={t(editable ? 'albums.noAlbumsEditable' : 'albums.noAlbums')}
+				/>
+			)}
+			{album && target && (
+				<>
+					<header className="album-heading">
+						<div className="album-heading-identity">
+							<h1>{album.title?.trim() || t('albums.yearHeading', { year })}</h1>
+							<div className="album-heading-meta">
+								{album.title?.trim() && <span>{year}</span>}
+								<span>{t('albums.photoCount', { count: album.photos.length })}</span>
+								{dirty && <StatusTag kind="warning">{t('albums.unsaved')}</StatusTag>}
+							</div>
+						</div>
+						{editable && (
+							<Button
+								disabled={busy}
+								onClick={() =>
+									setDialog({
+										kind: 'settings',
+										values: { title: album.title ?? '', cover: validAlbumCover(album) }
+									})
 								}
-							]}
+							>
+								{t('albums.settings')}
+							</Button>
+						)}
+					</header>
+					{album.photos.length === 0 ? (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description={t(editable ? 'albums.empty' : 'albums.noPhotos')}
+						/>
+					) : photos.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('albums.noResults')}>
+							<Button onClick={() => setParams({ q: null })}>{t('albums.clearSearch')}</Button>
+						</Empty>
+					) : (
+						<AlbumPhotos
+							target={target}
+							photos={photos}
+							order={album.photos}
+							view={view}
+							cover={cover}
+							savedCover={album.cover}
+							editable={editable}
+							busy={busy}
+							dirty={dirty || conflict}
+							onOpen={(photo) =>
+								setDialog({
+									kind: 'photo',
+									photo,
+									values: { title: photo.title, description: photo.description, alt: photo.alt }
+								})
+							}
+							onCover={(filename) => updateAlbum({ ...album, cover: filename })}
+							onMove={move}
+							onRemove={confirmRemoval}
 						/>
 					)}
-				</TablePanel>
+					{dialog && (
+						<AlbumDialogs
+							dialog={dialog}
+							target={target}
+							album={album}
+							editable={editable}
+							busy={busy}
+							onChange={setDialog}
+							onApply={applyDialog}
+							onClose={() => setDialog(null)}
+						/>
+					)}
+				</>
 			)}
-			<Modal
-				title={t('albums.editTitle')}
-				open={editing !== null}
-				onCancel={() => setEditing(null)}
-				onOk={() => void applyEditor()}
-				okText={t('common.save')}
-				destroyOnClose
-			>
-				<label className="field">
-					<span className="field-label">{t('albums.fieldTitle')}</span>
-					<Input
-						value={editValues.title}
-						onChange={(e) => setEditValues((v) => ({ ...v, title: e.target.value }))}
-					/>
-				</label>
-				<label className="field">
-					<span className="field-label">{t('albums.fieldDescription')}</span>
-					<Input
-						value={editValues.description}
-						onChange={(e) => setEditValues((v) => ({ ...v, description: e.target.value }))}
-					/>
-				</label>
-				<label className="field">
-					<span className="field-label">{t('albums.fieldAlt')}</span>
-					<Input
-						value={editValues.alt}
-						onChange={(e) => setEditValues((v) => ({ ...v, alt: e.target.value }))}
-					/>
-				</label>
-			</Modal>
 		</div>
 	);
 }

@@ -2879,6 +2879,42 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/albums/thumbnail:
+    get:
+      operationId: getAlbumThumbnail
+      tags: [Content]
+      summary: Read a private album thumbnail
+      description: Reads a generated image from the selected album content source.
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/SiteId'
+        - name: path
+          in: query
+          required: true
+          description: Variant path relative to the thumbnail directory.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Generated image.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '400':
+          description: Invalid thumbnail path.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/sites/{siteId}/albums/{year}:
     get:
       operationId: getAlbumYear
@@ -4729,6 +4765,41 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
       description: A full session may read the independent platform content library. No site ID is required.
+  /api/v1/content/albums/thumbnail:
+    get:
+      operationId: platformGetAlbumThumbnail
+      tags: [Platform content]
+      summary: Read a private album thumbnail
+      description: Reads a generated image from the selected album content source.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: Variant path relative to the thumbnail directory.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Generated image.
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        '400':
+          description: Invalid thumbnail path.
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+
   /api/v1/content/albums/{year}:
     get:
       operationId: platformGetAlbumYear

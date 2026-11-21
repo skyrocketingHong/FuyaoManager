@@ -214,6 +214,13 @@ func (s *Store) GetAlbumYear(id uuid.UUID, y string) (content.AlbumYear, string,
 	}
 	return t.GetAlbumYear(k, y)
 }
+func (s *Store) ReadAlbumThumbnail(id uuid.UUID, name string) ([]byte, string, error) {
+	t, k, e := s.target(id, "albums", false)
+	if e != nil {
+		return nil, "", e
+	}
+	return t.ReadAlbumThumbnail(k, name)
+}
 func (s *Store) SaveAlbumYear(id uuid.UUID, y, d string, edit func(*content.AlbumYear) error) (content.AlbumYear, string, error) {
 	t, k, e := s.target(id, "albums", true)
 	if e != nil {

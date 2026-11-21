@@ -106,6 +106,7 @@ func (a *API) platformContentRoutes() []routeSpec {
 		{"POST", "/api/v1/content/albums/photos", "platformUploadAlbumPhoto", write((*API).handleUploadAlbumPhoto)},
 		{"POST", "/api/v1/content/albums/process", "platformProcessAlbums", write((*API).handleEnqueueAlbumTask)},
 		{"GET", "/api/v1/content/albums/tasks", "platformListMediaTasks", read((*API).handleListMediaTasks)},
+		{"GET", "/api/v1/content/albums/thumbnail", "platformGetAlbumThumbnail", read((*API).handleGetAlbumThumbnail)},
 		{"GET", "/api/v1/content/albums/{year}", "platformGetAlbumYear", read((*API).handleGetAlbumYear)},
 		{"PUT", "/api/v1/content/albums/{year}", "platformPutAlbumYear", write((*API).handlePutAlbumYear)},
 		{"DELETE", "/api/v1/content/albums/{year}/{filename}", "platformDeleteAlbumPhoto", write((*API).handleDeleteAlbumPhoto)},

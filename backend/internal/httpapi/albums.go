@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"errors"
 	"net/http"
 	"time"
@@ -40,6 +41,32 @@ func (a *API) handleGetAlbumYear(w http.ResponseWriter, r *http.Request, auth st
 	}
 	w.Header().Set("ETag", `"`+digest+`"`)
 	writeJSON(w, http.StatusOK, map[string]any{"year": doc, "digest": digest, "canEdit": target.CanEdit})
+}
+
+func (a *API) handleGetAlbumThumbnail(w http.ResponseWriter, r *http.Request, auth store.AuthSession) {
+	// ASVS 8.2.2: thumbnails inherit album scope and membership permissions.
+	target, ok := a.contentTarget(w, r, auth, false)
+	if !ok {
+		return
+	}
+	paths := r.URL.Query()["path"]
+	if len(paths) != 1 {
+		writeContentError(w, content.ErrInvalidPath, "")
+		return
+	}
+	data, kind, err := a.content.ReadAlbumThumbnail(target.ID, paths[0])
+	if err != nil {
+		writeContentError(w, err, "Failed to read the album thumbnail.")
+		return
+	}
+	// ASVS 3.2.1: serve only sniffed image types with a fixed safe policy.
+	w.Header().Set("Content-Type", kind)
+	w.Header().Set("Content-Disposition", "inline")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("Cache-Control", "private, no-store")
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
 }
 
 // yearEditBody is the editable projection of one year document: the
