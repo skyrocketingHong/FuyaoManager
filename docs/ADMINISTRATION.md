@@ -52,4 +52,6 @@ FUYAO_ADMIN_THEME_SOURCES='[{"id":"fuyao-homepage","url":"https://github.com/sky
 
 After restarting the service, a platform administrator can check and install updates under Themes → GitHub sources. The platform validates the theme manifest, configuration contract and npm lockfile, downloads the checked commit, installs dependencies in a private directory and registers the version. Select the version in a site's theme settings, then use the existing build, preview and publish workflow. A version already in the catalog keeps its original source. Installation progress is held by the running service. After a restart, check the catalog and retry the installation if needed.
 
+Installed packages live in `themes/github` beside the configured site data directory. They remain accessible when a new application release is activated.
+
 The service needs Git, Node.js 22 or later, npm, and access to GitHub and the public npm registry. Theme build scripts run with the service account's privileges. Configure repositories whose release process you trust.

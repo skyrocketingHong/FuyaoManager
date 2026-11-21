@@ -243,9 +243,10 @@ func runServe(ctx context.Context) error {
 	if releasesRoot == "" {
 		releasesRoot = filepath.Join(dataRoot, "releases")
 	}
+	siteDataRoot := filepath.Dir(sitesRoot)
 	platformRoot := os.Getenv("FUYAO_ADMIN_PLATFORM_CONTENT_ROOT")
 	if platformRoot == "" {
-		platformRoot = filepath.Join(filepath.Dir(sitesRoot), "platform-content")
+		platformRoot = filepath.Join(siteDataRoot, "platform-content")
 	}
 	// The three runtime roots default to three independent directories under
 	// <repo>/data. The real-path overlap check runs BEFORE any directory is
@@ -488,7 +489,7 @@ func runServe(ctx context.Context) error {
 	}
 	var themeImporter *themeimport.Manager
 	if sources := os.Getenv("FUYAO_ADMIN_THEME_SOURCES"); sources != "" {
-		imports := filepath.Join(dataRoot, "themes", "github")
+		imports := filepath.Join(siteDataRoot, "themes", "github")
 		if err := ensureDistinctRoots(
 			[]string{"sites", "builds", "releases", "platform-content", "github-themes"},
 			[]string{sitesRoot, buildsRoot, releasesRoot, platformRoot, imports},
