@@ -7,6 +7,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.9.4 - 2026-11-22
+
+- Browse albums in a photo grid, sortable list, or horizontal gallery. Switch years, search photos, preview thumbnails and upload several originals at once.
+- Set covers and edit photo details from the gallery. Keep local edits when switching views or merging concurrent changes. Album thumbnails follow the existing content permissions. Photo cards add a staggered entrance and CSS book turn. The horizontal gallery supports keyboard navigation and a static grid for reduced motion.
+
 ## 0.9.2 - 2026-11-21
 
 - Share batch loading across posts, user management, and operation logs. Scope automatic loading to each table, ignore expired observer callbacks, and make table scrolling keyboard-accessible.
