@@ -57,7 +57,7 @@ function pending<T>() {
 
 function HeaderSlot() {
 	const header = usePageHeaderContent();
-	return <div data-testid="topbar">{header?.actions}</div>;
+	return <div data-testid="topbar">{header?.content}{header?.actions}</div>;
 }
 
 function Shell() {
@@ -236,11 +236,13 @@ it('edits the canonical site URL and coding language service without losing othe
 		digest: 'sha256:saved',
 		amapSecurityCodeSet: false
 	});
-	mount();
+	const router = mount();
 	fireEvent.change(await screen.findByRole('textbox', { name: 'Site URL' }), {
 		target: { value: 'https://new.example/blog' }
 	});
-	fireEvent.change(screen.getByRole('textbox', { name: 'Coding languages proxy URL' }), {
+	fireEvent.click(screen.getByRole('radio', { name: 'Services' }));
+	await waitFor(() => expect(router.state.location.search).toBe('?tab=services'));
+	fireEvent.change(await screen.findByRole('textbox', { name: 'Coding languages proxy URL' }), {
 		target: { value: '/services/languages' }
 	});
 	fireEvent.click(within(screen.getByTestId('topbar')).getByRole('button', { name: 'Save' }));
@@ -253,7 +255,8 @@ it('edits the canonical site URL and coding language service without losing othe
 		)
 	);
 	expect(screen.queryByRole('textbox', { name: 'Site name' })).toBeNull();
-	expect((screen.getByRole('textbox', { name: 'Site URL' }) as HTMLInputElement).value).toBe(
+	fireEvent.click(screen.getByRole('radio', { name: 'General' }));
+	expect(((await screen.findByRole('textbox', { name: 'Site URL' })) as HTMLInputElement).value).toBe(
 		'https://new.example/blog'
 	);
 	expect(screen.queryByTestId('route-crash')).toBeNull();
@@ -281,10 +284,14 @@ it('clears optional date, year and service values while preserving required sett
 		digest: 'sha256:cleared'
 	}));
 	mount();
-	for (const label of ['Site start date', 'Site start year', 'Wallpaper API URL', 'Twitter ID'])
+	for (const label of ['Site start date', 'Site start year', 'Twitter ID'])
 		fireEvent.change(await screen.findByRole('textbox', { name: label }), {
 			target: { value: '' }
 		});
+	fireEvent.click(screen.getByRole('radio', { name: 'Services' }));
+	fireEvent.change(await screen.findByRole('textbox', { name: 'Wallpaper API URL' }), {
+		target: { value: '' }
+	});
 	fireEvent.click(within(screen.getByTestId('topbar')).getByRole('button', { name: 'Save' }));
 	await waitFor(() => expect(management.putSiteConfig).toHaveBeenCalledTimes(1));
 	const submitted = vi.mocked(management.putSiteConfig).mock.calls[0][1];

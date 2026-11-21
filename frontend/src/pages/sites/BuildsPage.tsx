@@ -1,3 +1,5 @@
+import { useArtifactFilter } from '../../features/delivery/useArtifactFilter';
+import { ArtifactStatus, useArtifactDeletion } from '../../features/delivery/useArtifactDeletion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Popconfirm, Space, Typography, message } from 'antd';
@@ -253,6 +255,8 @@ export default function BuildsPage() {
 		}
 	}
 
+	const { visible, tabs } = useArtifactFilter(builds ?? [], 'nav.builds', (row) => row.status === 'succeeded');
+	const deletion = useArtifactDeletion(siteId, site?.role === 'owner', 'builds', visible, refresh);
 	const editable = site !== null && canEditSite(site) && siteWorkspace(site).buildable;
 
 	// No confirmation gate: a build is non-destructive and cheap to run.
@@ -261,13 +265,14 @@ export default function BuildsPage() {
 			<Trans text={t('builds.create')} />
 		</Button>
 	);
-	const headerActive = usePageHeader({ actions: createButton });
+	const headerActive = usePageHeader({ content: tabs, actions: <Space wrap>{deletion.actions}{createButton}</Space> });
 
 	return (
 		<div className="page-stack page-stack--fill">
 			{contextHolder}
+			{deletion.error}
 			{!headerActive ? (
-				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{createButton}</div>
+				<div className="table-panel-header">{tabs}{deletion.actions}{createButton}</div>
 			) : null}
 			{errorKey !== null ? (
 				<Alert
@@ -286,16 +291,18 @@ export default function BuildsPage() {
 			) : (
 				<TablePanel className="fill-height">
 					<DataTable<BuildTask>
+						scrollLabel={t('nav.builds')}
 						className="builds-table"
 						rowKey="id"
-						dataSource={builds}
+						dataSource={visible}
+						rowSelection={deletion.rowSelection}
 						pagination={false}
 							columns={[
 								{
 									title: t('builds.idColumn'),
 									dataIndex: 'id',
 									render: (id: string) => (
-										<Typography.Text copyable code>
+										<Typography.Text copyable={{ text: id }} code title={id}>
 											{id.slice(0, 8)}
 										</Typography.Text>
 									)
@@ -303,7 +310,9 @@ export default function BuildsPage() {
 							{
 								title: t('builds.status'),
 								dataIndex: 'status',
-								render: (status: string) => (
+								render: (status: string, record) => record.artifactState && record.artifactState !== 'available' ? (
+									<ArtifactStatus state={record.artifactState} />
+								) : (
 									<StatusTag
 										kind={
 											status === 'succeeded'
@@ -348,12 +357,13 @@ export default function BuildsPage() {
 								title: t('admin.actions'),
 								render: (_, record) => (
 									<Space>
+										{deletion.rowAction(record)}
 										{record.failure ? (
 											<Typography.Text type="danger">
 												{t('builds.failureStage')}: {buildStageLabel(record.failure.stage)}
 											</Typography.Text>
 										) : null}
-										{record.status === 'succeeded' ? (
+										{record.status === 'succeeded' && (record.artifactState ?? 'available') === 'available' ? (
 											<Button
 												size="small"
 												loading={opening === record.id}

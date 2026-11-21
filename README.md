@@ -60,9 +60,9 @@ platform development history preserved; see
   selected theme's own Node indexer executed read-only against the site's
   album directories, year metadata edited per filename, deletes guarded by
   release references.
-- **Theme registry**: operator-driven registration
-  (`fuyao-admin register-theme`) validating theme.json and its config schema
-  against the authoritative contracts; per-site selection with If-Match.
+- **Theme registry**: operator registration of local themes and administrator
+  installation from trusted GitHub sources. Per-site selection uses If-Match.
+  See [administration](./docs/ADMINISTRATION.md#install-themes-from-github).
 - **Builds**: frozen input snapshots prepared by the theme itself, builds in
   task-private source copies (never writing the registered theme), full
   per-file source manifests, capability and URL-convention checks.
@@ -70,7 +70,7 @@ platform development history preserved; see
   tokens; close revokes tokens, stops the listener, and frees the port.
 - **Publish and rollback**: contract-validated release metadata, immutable
   sealed artifacts, atomic live-pointer switching under the per-site publish
-  lock, retry-safe failures, rollback without rebuilding.
+  lock, retry-safe failures, rollback and bulk cleanup of static outputs.
 - **Managed edge**: rendered Caddy snippet from database state, per-site
   public/private visibility with explicit interface binding, apply through a
   fixed operator command with last-good restore. Run-isolated by default:

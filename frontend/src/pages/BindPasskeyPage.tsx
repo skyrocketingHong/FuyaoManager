@@ -1,3 +1,5 @@
+import AuthLayout from '../components/layout/AuthLayout';
+import { authDestination, requestedWorkspace } from '../lib/navigation/query';
 /**
  * BindPasskeyPage: the only page a restricted registration session can use.
  * The account identity came from a CLI one-time code; until a passkey is
@@ -6,7 +8,7 @@
  * here without redeeming another code.
  */
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Typography } from 'antd';
 import { apiErrorKey } from '../lib/i18n/errors';
@@ -36,12 +38,13 @@ function ceremonyErrorKey(err: unknown): MessageKey {
 
 export default function BindPasskeyPage() {
 	const navigate = useNavigate();
+	const next = requestedWorkspace(useLocation().search);
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const [busy, setBusy] = useState(false);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 
-	if (session.status === 'authenticated') return <Navigate to="/sites" replace />;
-	if (session.status === 'anonymous') return <Navigate to="/login" replace />;
+	if (session.status === 'authenticated') return <Navigate to={next ?? '/sites'} replace />;
+	if (session.status === 'anonymous') return <Navigate to={authDestination('/login', next)} replace />;
 
 	const capability = detectCapability();
 	const usable = capability === 'available' && session.passkeyAvailable;
@@ -51,7 +54,7 @@ export default function BindPasskeyPage() {
 		setErrorKey(null);
 		try {
 			await bindPasskey();
-			navigate('/sites', { replace: true });
+			navigate(next ?? '/sites', { replace: true });
 		} catch (err) {
 			// Stay on the page with a retry entry; never loop the authenticator
 			// prompt automatically.
@@ -62,7 +65,7 @@ export default function BindPasskeyPage() {
 	}
 
 	return (
-		<div className="auth-screen">
+		<AuthLayout>
 			<Card title={t('bind.title')} className="auth-card">
 				<Typography.Paragraph>
 					{t('bind.description', { username: session.user?.username ?? '' })}
@@ -92,12 +95,12 @@ export default function BindPasskeyPage() {
 					block
 					style={{ marginTop: 8 }}
 					onClick={() => {
-						void signOut().then(() => navigate('/login', { replace: true }));
+						void signOut().then(() => navigate(authDestination('/login', next), { replace: true }));
 					}}
 				>
 					{t('bind.signOut')}
 				</Button>
 			</Card>
-		</div>
+		</AuthLayout>
 	);
 }

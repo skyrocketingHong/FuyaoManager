@@ -1,18 +1,13 @@
-/**
- * ThemesCatalogPage: the platform-scope registered-theme catalog — versions,
- * adapters, capabilities, URL conventions, required artifacts, and whether a
- * config schema is declared. Registration itself stays operator-driven
- * (`fuyao-admin register-theme`), so this page is read-only by design. An
- * empty catalog is a real state with the registration hint; a load failure
- * is never disguised as an empty catalog.
- */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback } from 'react';
+import ThemeSourcesTable from '../features/themes/ThemeSourcesTable';
+import { PageTabs, usePageHeader } from '../components/PageHeader';
+import { queryChoice, usePageQuery } from '../lib/navigation/query';
+import { useAdminQuery } from '../lib/admin/requests';
 import { Alert, Empty, Tooltip, Typography } from 'antd';
 import DataTable from '../components/DataTable';
 import type { ColumnsType } from 'antd/es/table';
 import { listThemes, type Theme } from '../lib/api/management';
-import { apiErrorKey } from '../lib/i18n/errors';
-import { t, type MessageKey } from '../lib/i18n';
+import { t } from '../lib/i18n';
 import { sessionSnapshot, subscribeSession } from '../lib/session';
 import { useSyncExternalStore } from 'react';
 import StatusTag from '../components/StatusTag';
@@ -21,39 +16,40 @@ import { RetryButton } from '../components/ActionButton';
 
 export default function ThemesCatalogPage() {
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
-	const [themes, setThemes] = useState<Theme[] | null>(null);
-	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
-
-	const load = useCallback(() => {
-		if (session.status !== 'authenticated') return;
-		let cancelled = false;
-		setErrorKey(null);
-		listThemes()
-			.then((list) => {
-				if (!cancelled) setThemes(list);
-			})
-			.catch((err) => {
-				if (cancelled) return;
-				setErrorKey(apiErrorKey(err) ?? 'error.generic');
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [session.status]);
-
-	useEffect(() => load(), [load]);
-
+	const [params, setParams] = usePageQuery();
+	const authorized = session.user?.platformRole === 'admin';
+	const tab = authorized ? queryChoice(params, 'tab', ['catalog', 'github'], 'catalog') : 'catalog';
+	const catalog = useAdminQuery(useCallback(() => listThemes(), []));
+	const tabs = authorized && (
+		<PageTabs
+			value={tab}
+			ariaLabel={t('nav.themesCatalog')}
+			options={[
+				{ value: 'catalog', label: t('themeSources.catalog') },
+				{ value: 'github', label: t('themeSources.tab') }
+			]}
+			onChange={(value) => setParams({ tab: value === 'catalog' ? null : value })}
+		/>
+	);
+	const inHeader = usePageHeader({ content: tabs });
+	if (tab === 'github')
+		return (
+			<div className="page-stack page-stack--fill">
+				{!inHeader && tabs}
+				<ThemeSourcesTable onInstalled={catalog.reload} />
+			</div>
+		);
 	const columns: ColumnsType<Theme> = [
 		{
 			title: t('themes.themeColumn'),
 			sorter: (a, b) => (a.name ?? a.themeId).localeCompare(b.name ?? b.themeId),
 			render: (_, theme) => (
-					<>
-						<div>{theme.name ?? theme.themeId}</div>
-						<Typography.Text className="version-text text-caption" type="secondary">
-							{theme.themeId} @ {theme.version}
-						</Typography.Text>
-					</>
+				<>
+					<div>{theme.name ?? theme.themeId}</div>
+					<Typography.Text className="version-text text-caption" type="secondary">
+						{theme.themeId} @ {theme.version}
+					</Typography.Text>
+				</>
 			)
 		},
 		{
@@ -75,17 +71,17 @@ export default function ThemesCatalogPage() {
 				</span>
 			)
 		},
-			{
-				title: t('themes.requirementsColumn'),
-				render: (_, theme) => (
-					<Typography.Text type="secondary" className="text-caption">
-						{(theme.outputs?.urlConventions ?? []).join(', ') || '—'}
-						{(theme.outputs?.requiredArtifacts ?? []).length > 0
-							? ` · ${t('themes.artifacts')}: ${(theme.outputs?.requiredArtifacts ?? []).join(', ')}`
-							: ''}
-					</Typography.Text>
-				)
-			},
+		{
+			title: t('themes.requirementsColumn'),
+			render: (_, theme) => (
+				<Typography.Text type="secondary" className="text-caption">
+					{(theme.outputs?.urlConventions ?? []).join(', ') || '—'}
+					{(theme.outputs?.requiredArtifacts ?? []).length > 0
+						? ` · ${t('themes.artifacts')}: ${(theme.outputs?.requiredArtifacts ?? []).join(', ')}`
+						: ''}
+				</Typography.Text>
+			)
+		},
 		{
 			title: t('themes.configColumn'),
 			sorter: (a, b) => Number(Boolean(a.configSchema)) - Number(Boolean(b.configSchema)),
@@ -101,23 +97,16 @@ export default function ThemesCatalogPage() {
 
 	return (
 		<div className="page-stack page-stack--fill">
-			{errorKey !== null ? (
+			{!inHeader && tabs}
+			{catalog.error !== null ? (
 				<Alert
 					type="error"
 					showIcon
-					title={t(errorKey)}
-					action={
-						<RetryButton
-							size="small"
-							onClick={() => {
-								setThemes(null);
-								load();
-							}}
-						 />
-					}
+					title={t(catalog.error)}
+					action={<RetryButton size="small" onClick={catalog.reload} />}
 				/>
 			) : null}
-			{errorKey === null ? (
+			{catalog.error === null ? (
 				<TablePanel
 					className="fill-height"
 					tools={
@@ -129,11 +118,12 @@ export default function ThemesCatalogPage() {
 					}
 				>
 					<DataTable<Theme>
-						className="themes-table"
+						className="themes-table repository-table"
+						scrollLabel={t('nav.themesCatalog')}
 						rowKey="id"
 						columns={columns}
-						dataSource={themes ?? []}
-						loading={themes === null}
+						dataSource={catalog.data ?? []}
+						loading={catalog.loading}
 						pagination={false}
 						locale={{ emptyText: <Empty description={t('themes.emptyCatalog')} /> }}
 					/>

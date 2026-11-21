@@ -11,6 +11,8 @@ import { setLocale } from '../src/lib/i18n';
 import * as service from '../src/lib/api/admin';
 import { getVisibleButton } from './visible-button';
 
+const NativeRequest = globalThis.Request;
+
 const runtime = vi.hoisted(() => ({
 	generation: 0,
 	state: {
@@ -119,7 +121,7 @@ function Header() {
 		</div>
 	);
 }
-function mount(Page = UsersPage) {
+function mount(Page = UsersPage, search = '') {
 	const router = createMemoryRouter([
 		{
 			path: '*',
@@ -135,8 +137,9 @@ function mount(Page = UsersPage) {
 			),
 			errorElement: <div>route-crash</div>
 		}
-	]);
+	], { initialEntries: [`/users${search}`] });
 	render(<RouterProvider router={router} />);
+	return router;
 }
 async function openCreate() {
 	fireEvent.click(await screen.findByRole('button', { name: 'Create user' }));
@@ -156,6 +159,11 @@ beforeEach(() => {
 	// rc-util returns the same "test-id" for every control in test mode,
 	// breaking dialog aria-labelledby when selects share the document.
 	vi.stubEnv('NODE_ENV', 'development');
+	vi.stubGlobal('Request', class extends NativeRequest {
+		constructor(input: RequestInfo | URL, init?: RequestInit) {
+			super(input, { ...init, signal: undefined });
+		}
+	});
 	vi.clearAllMocks();
 	localStorage.clear();
 	setLocale('en-US');
@@ -499,4 +507,13 @@ it('renders UsersPage filters and actions once in the real top bar and keeps the
 	expect(navigationButton).toBeDefined();
 	fireEvent.click(navigationButton);
 	expect(navigationActivations).toBe(1);
+});
+
+it('opens a user detail from the URL and clears the query when it closes', async () => {
+	const router = mount(UsersPage, `?user=${member.id}`);
+	const drawer = await screen.findByRole('dialog', { name: 'member' });
+	await within(drawer).findByRole('textbox', { name: 'Display name' });
+	fireEvent.click(within(drawer).getByRole('button', { name: 'Close' }));
+	await waitFor(() => expect(router.state.location.search).toBe(''));
+	expect(screen.queryByRole('dialog', { name: 'member' })).toBeNull();
 });

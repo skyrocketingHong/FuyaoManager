@@ -4,6 +4,7 @@
  * bound to the typed API, the draft gate is visible, and viewers get no
  * create action.
  */
+import PostWorkspace from '../src/features/posts/PostWorkspace';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	MemoryRouter,
@@ -138,7 +139,7 @@ function mountPosts() {
 				),
 				errorElement: <div>route-crash</div>,
 				children: [
-					{ index: true, element: <PostsPage /> },
+					{ index: true, element: <PostWorkspace /> },
 					{ path: 'new', element: <PostEditorPage mode="new" /> },
 					{ path: 'categories', element: <PostVocabularyPage kind="categories" /> },
 					{ path: 'tags', element: <PostVocabularyPage kind="tags" /> },
@@ -600,12 +601,12 @@ describe('PostsPage', () => {
 		const { router } = mountPosts();
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
-		await waitFor(() => expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/categories`));
+		await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(`/sites/${ownerSite.siteId}/posts?tab=categories`));
 		expect(await screen.findByText('技术')).toBeDefined();
 		expect(screen.queryByRole('button', { name: 'Import existing terms' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add to vocabulary' })).toBeNull();
 		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
-		await waitFor(() => expect(router.state.location.pathname).toBe(`/sites/${ownerSite.siteId}/posts/tags`));
+		await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(`/sites/${ownerSite.siteId}/posts?tab=tags`));
 		expect(await screen.findByText('Go')).toBeDefined();
 		fireEvent.change(screen.getByLabelText('Enter a tag'), { target: { value: 'Go' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Add' }));

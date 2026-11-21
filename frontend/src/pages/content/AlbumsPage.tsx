@@ -1,3 +1,4 @@
+import { queryValue, usePageQuery } from '../../lib/navigation/query';
 /**
  * AlbumsPage: year albums under the platform content authority. Uploads
  * queue the theme's own EXIF/thumbnail indexer (task status banner), the
@@ -43,7 +44,12 @@ export default function AlbumsPage() {
 	const navigate = useNavigate();
 	const [site, setSite] = useState<Site | null>(null);
 	const [index, setIndex] = useState<AlbumIndex | null>(null);
-	const [year, setYear] = useState<string>('');
+	const [params, setParams] = usePageQuery();
+	const requestedYear = queryValue(params, 'year');
+	const years = index?.years ?? [];
+	const year = years.some((value) => String(value) === requestedYear)
+		? requestedYear ?? ''
+		: String(years.at(-1) ?? '');
 	const [doc, setDoc] = useState<AlbumYear | null>(null);
 	const [digest, setDigest] = useState('');
 	const [dirty, setDirty] = useState(false);
@@ -89,10 +95,6 @@ export default function AlbumsPage() {
 			const env = await getAlbums(target);
 			if (my !== epoch.current) return;
 			setIndex(env.index);
-			const years = env.index.years ?? [];
-			const latest = years.length > 0 ? String(years[years.length - 1]) : '';
-			setYear(latest);
-			if (latest) void loadYear(latest);
 		} catch (err) {
 			if (my !== epoch.current) return;
 			const key = apiErrorKey(err);
@@ -102,7 +104,7 @@ export default function AlbumsPage() {
 			}
 			setErrorKey(key);
 		}
-	}, [target, navigate, loadYear]);
+	}, [target, navigate]);
 
 	useEffect(() => {
 		if (!target) return;
@@ -124,6 +126,14 @@ export default function AlbumsPage() {
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [scope.key]);
+
+	useEffect(() => {
+		if (!index || !year) return;
+		setDoc(null);
+		setEditing(null);
+		void loadYear(year);
+		return () => { epoch.current++; };
+	}, [index, year, loadYear]);
 
 	// Poll task status while anything is queued or running. When processing
 	// finishes, the index reload is skipped while the user has unsaved
@@ -323,10 +333,7 @@ export default function AlbumsPage() {
 					label: String(y),
 					value: String(y)
 				}))}
-				onChange={(key) => {
-					setYear(key);
-					void loadYear(key);
-				}}
+				onChange={(key) => setParams({ year: key })}
 				ariaLabel={t('nav.albums')}
 			/>
 		) : undefined;
@@ -436,6 +443,7 @@ export default function AlbumsPage() {
 						<Empty description={t('albums.empty')} />
 					) : (
 						<DataTable<AlbumPhotoEntry>
+							scrollLabel={t('nav.albums')}
 							className="albums-table"
 							rowKey="filename"
 							size="small"

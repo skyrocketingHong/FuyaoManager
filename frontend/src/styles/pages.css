@@ -136,15 +136,6 @@
 .releases-table .ant-table-content > table {
 	min-width: 720px;
 }
-.releases-panel > .ant-card-body > .panel-body {
-	display: flex;
-	flex-direction: column;
-	overflow-y: auto;
-}
-.release-history {
-	flex: 1 1 auto;
-	min-height: 12rem;
-}
 .friends-groups {
 	display: flex;
 	flex-direction: column;
@@ -551,4 +542,59 @@
 	font-size: var(--text-secondary);
 	font-weight: 600;
 	overflow-wrap: anywhere;
+}
+
+.repository-table:not(.themes-table) .ant-table-content > table {
+	min-inline-size: 540px;
+}
+
+.maintenance-identity,
+.version-facts {
+	display: grid;
+	gap: var(--space-1);
+	min-inline-size: 0;
+	overflow-wrap: anywhere;
+}
+
+.version-badge.ant-btn {
+	max-inline-size: 100%;
+	padding-inline: var(--space-2);
+}
+
+.version-badge-label {
+	color: var(--muted-foreground);
+	font-size: var(--text-caption);
+}
+
+.maintenance-receipt,
+.maintenance-controls {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--space-4);
+}
+
+.maintenance-receipt > .ant-btn {
+	padding-inline: 0;
+}
+
+.maintenance-controls > label {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+}
+
+.workspace-grid {
+	display: grid;
+	grid-template-columns: repeat(12, minmax(0, 1fr));
+	gap: var(--space-4);
+	align-items: start;
+}
+
+.workspace-grid > * { grid-column: 1 / -1; }
+
+@container (inline-size >= 880px) {
+	.workspace-grid > .workspace-main { grid-column: span 8; }
+	.workspace-grid > .workspace-side { grid-column: span 4; }
+	.workspace-grid > .workspace-half { grid-column: span 6; }
 }

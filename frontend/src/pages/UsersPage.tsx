@@ -1,3 +1,4 @@
+import { queryChoice, queryValue, usePageQuery } from '../lib/navigation/query';
 // Table, editor lifecycle and request guards adapted from the reference UsersPage.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, App, Button, Empty, Input, Modal, Select, Space, Typography } from 'antd';
@@ -26,12 +27,17 @@ export default function UsersPage() {
 	const { modal } = App.useApp();
 	useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const generation = currentAuthGeneration();
-	const [search, setSearch] = useState('');
-	const [q, setQuery] = useState('');
-	const [role, setRole] = useState('');
-	const [status, setStatus] = useState('');
-	const [pageSize, setPageSize] = useState(50);
-	const [ordering, setOrdering] = useState<TableSort>();
+	const [params, setParams] = usePageQuery();
+	const q = (queryValue(params, 'q') ?? '').slice(0, 128);
+	const [search, setSearch] = useState(q);
+	useEffect(() => setSearch(q), [q]);
+	const role = queryChoice(params, 'role', ['admin', 'member', ''], '');
+	const status = queryChoice(params, 'status', ['active', 'disabled', 'pending', 'deleted', ''], '');
+	const pageSize = Number(queryChoice(params, 'size', ['25', '50', '100', '200'], '50'));
+	const field = queryValue(params, 'sort');
+	const direction = queryValue(params, 'order');
+	const ordering: TableSort | undefined = field && ['username', 'displayName', 'platformRole', 'status', 'createdAt', 'lastLoginAt'].includes(field) &&
+		(direction === 'asc' || direction === 'desc') ? { field, direction } : undefined;
 	const queryString = service.queryString({ q, role, status, pageSize, sort: ordering?.field, order: ordering?.direction });
 	const load = useCallback(
 		(page: number, signal: AbortSignal) => service.listUsers(`${queryString}&page=${page}`, signal),
@@ -39,7 +45,10 @@ export default function UsersPage() {
 	);
 	const query = useAdminBatches(queryString, load, usersOf, userKey);
 	const mutation = useAdminMutation();
-	const [selected, setSelected] = useState<string | null>(null);
+	const userParam = queryValue(params, 'user');
+	const selected = userParam && /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(userParam) ? userParam : null;
+	const approvedClose = useRef<string | null>(null);
+	const account = useRef(generation);
 	const [drawerDirty, setDrawerDirty] = useState(false);
 	const [createOpen, setCreateOpen] = useState(false);
 	const [profile, setProfile] = useState<service.AdminProfile>({ username: '', displayName: '' });
@@ -48,14 +57,27 @@ export default function UsersPage() {
 	const createDirty = createOpen && (profile.username !== '' || profile.displayName !== '');
 	const validProfile =
 		/^[a-z0-9][a-z0-9._-]{2,63}$/.test(profile.username) && profile.displayName.length <= 200;
-	useUnsavedGuard(createDirty || drawerDirty || mutation.busy);
+	useUnsavedGuard(createDirty || drawerDirty || mutation.busy, (current, next) =>
+		!!approvedClose.current && current.pathname === next.pathname &&
+		queryValue(new URLSearchParams(current.search), 'user') === approvedClose.current &&
+		!new URLSearchParams(next.search).has('user')
+	);
 	useEffect(() => {
-		setSelected(null);
+		approvedClose.current = null;
+		setDrawerDirty(false);
+	}, [selected]);
+	useEffect(() => {
+		if (account.current === generation) return;
+		account.current = generation;
+		if (selected) {
+			approvedClose.current = selected;
+			setParams({ user: null }, true);
+		}
 		setDrawerDirty(false);
 		setCreateOpen(false);
 		setCode(null);
 		setProfile({ username: '', displayName: '' });
-	}, [generation]);
+	}, [generation, selected, setParams]);
 	const changed = useCallback(() => {
 		query.reload();
 		void loadSiteList(true);
@@ -64,20 +86,8 @@ export default function UsersPage() {
 		setCode({ generation: currentAuthGeneration(), value });
 	const closeDrawer = (discard = false) => {
 		if (mutation.busy && !discard) return;
-		const close = () => {
-			setSelected(null);
-			setDrawerDirty(false);
-			mutation.clearError();
-		};
-		if (drawerDirty && !discard)
-			modal.confirm({
-				title: t('draft.leaveTitle'),
-				content: t('draft.leaveBody'),
-				okText: t('draft.leaveConfirm'),
-				cancelText: t('draft.leaveCancel'),
-				onOk: close
-			});
-		else close();
+		if (discard) approvedClose.current = selected;
+		setParams({ user: null }, true);
 	};
 	const closeCreate = () => {
 		if (mutation.busy) return;
@@ -106,7 +116,7 @@ export default function UsersPage() {
 				value={search}
 				onChange={(event) => setSearch(event.target.value)}
 				onSearch={(value) => {
-					setQuery(value);
+					setParams({ q: value });
 				}}
 				className="admin-search"
 			/>
@@ -117,7 +127,7 @@ export default function UsersPage() {
 				allowClear
 				value={role || undefined}
 				onChange={(value) => {
-					setRole(value ?? '');
+					setParams({ role: value });
 				}}
 				options={[
 					{ value: 'admin', label: t('admin.role.admin') },
@@ -131,7 +141,7 @@ export default function UsersPage() {
 				allowClear
 				value={status || undefined}
 				onChange={(value) => {
-					setStatus(value ?? '');
+					setParams({ status: value });
 				}}
 				options={(['active', 'disabled', 'pending', 'deleted'] as const).map((value) => ({
 					value,
@@ -141,7 +151,7 @@ export default function UsersPage() {
 			<Select
 				aria-label={t('audit.pageSize')}
 				value={pageSize}
-				onChange={setPageSize}
+				onChange={(value) => setParams({ size: value === 50 ? null : String(value) })}
 				options={[25, 50, 100, 200].map((value) => ({ value, label: t('audit.pageRows', { count: value }) }))}
 			/>
 		</Space>
@@ -190,6 +200,7 @@ export default function UsersPage() {
 					<TablePanel className="fill-height">
 						<DataTable<service.AdminUser>
 							className="users-table"
+							scrollLabel={t('nav.users')}
 							manualSorting
 							scroll={{ x: 'max-content' }}
 							styles={{ content: { overflowY: 'auto' } }}
@@ -198,7 +209,8 @@ export default function UsersPage() {
 							loading={query.loading}
 							onChange={(_, __, sorter, extra) => {
 								if (extra.action === 'sort') {
-									setOrdering(selectedTableSort(sorter));
+									const next = selectedTableSort(sorter);
+									setParams({ sort: next?.field, order: next?.direction });
 								}
 							}}
 							locale={{
@@ -244,8 +256,7 @@ export default function UsersPage() {
 											disabled={mutation.busy || query.loading}
 											onClick={() => {
 												mutation.clearError();
-												setSelected(user.id);
-												setDrawerDirty(false);
+												setParams({ user: user.id });
 											}}
 										>
 											{t('admin.manage')}

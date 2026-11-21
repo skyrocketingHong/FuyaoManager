@@ -1,22 +1,20 @@
-English | [简体中文](./UI_REFERENCE_ZH.md)
+**English** | [简体中文](./UI_REFERENCE_ZH.md)
 
-# Console UI reuse
+# Console design and implementation references
 
-User management and audit views also adapt `components/platform/features/settings/UsersPage.tsx` and `LogsPage.tsx`: header filters, TablePanel/DataTable composition, profile editing, confirmation flows, session controls, request-generation guards and operation-label lookup. Manager-specific API clients and passkey enrollment replace the reference controller/password flow. Platform roles and site memberships follow the manager's own backend contract.
+FuyaoManager uses the robot platform's 208px sidebar, operation bar and independently scrolling workspace. The sidebar presents the brand, current scope, fixed entry points, grouped navigation and footer. Filters, tabs and primary actions sit in the operation bar. The version control on the right identifies the component and opens the running service version and commit. Narrow screens use a navigation drawer and a wrapping operation bar.
 
-Console appearance settings additionally reuse `components/platform/features/settings/AppearancePage.tsx`, `styles/features/settings/appearance.css` and `lib/appearance.ts`: light/dark/system modes, twelve accent presets, a custom color picker and reset. Preferences remain browser-local, retain legacy mode choices and track system changes. The console default is system mode; status colors remain independent of the selected accent. Sidebar actions and menus share an 8px inner inset and 16px icon column to align their text.
+Ant Design tokens and CSS variables share the console's theme. Panel borders and surface colors set the hierarchy. Forms and records can use 8:4 or 6:6 columns in wide containers and follow natural document flow on narrow ones. Standalone lists use `TablePanel` and `DataTable`, with sticky headers and room for long values. Tables that scroll horizontally expose a named, keyboard-focusable region. Overflow fades indicate hidden content at each vertical edge. Status colors are independent of the accent. Versions and identifiers use monospace text. Field labels and the consequences of destructive actions stay visible.
 
-The console reuses generic interface code from the user-selected `robot-platform/frontend`. The read-only reference revision for this iteration is `8644ba55c7c1963892518ee77cc6bd18146144e9`. The reference repository was not modified.
+Paths identify primary pages and site scopes. Query parameters identify tabs and shareable filters. New subviews update the address through `PageTabs` and `usePageQuery`. Back, forward, reload and login restore the selected view. The UI keeps draft confirmations, one-time actions and bulk selections in local state. Article editing and tables retain their existing components and styles. Categories, tags and media use `?tab=`, with redirects for previous links.
 
-| Reference module (relative to its frontend)                                          | Manager implementation                                     | Reused behavior                                                                                              |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `components/platform/sidebar/SideMenu.tsx`, `SidebarActions.tsx`                     | `src/components/layout/AppShell.tsx`, `SidebarActions.tsx` | 208px sidebar, brand → information → fixed actions → scrolling menu → footer, separate return action         |
-| `components/platform/sidebar/InfoCard.tsx`, `SidebarFoot.tsx`                        | `SidebarInfo.tsx`, `SidebarFoot.tsx`                       | Title and two-column facts, version region and fading separators                                             |
-| `components/platform/statusbar/TopBar.tsx`, `styles/statusbar/statusbar.css`         | `TopBar.tsx`, `src/styles/statusbar/statusbar.css`         | Responsive bar, page controls, layered background and account button                                        |
-| `components/platform/shared/Widgets.tsx`                                             | `src/components/DataTable.tsx`                             | Small table density and shared surface; typed rows, stable keys and sorting                                 |
-| `styles/shared/panel.css`, `forms.css`, `controls.css`, `styles/sidebar/sidebar.css` | `src/styles/pages.css`, `src/styles/sidebar/sidebar.css`   | Panel anatomy, table density, form grids, controls and sidebar regions                                       |
-| Application entry's `StyleProvider layer`                                            | `src/main.tsx`                                             | Layered antd CSS gives the shared rules their intended precedence                                            |
+| robot-platform implementation | FuyaoManager implementation |
+| --- | --- |
+| `docs/架构规范/前端页面布局规范.md` (`b1db1edd`) and `libraries/ui/styles/panel.css` | Responsive 12-column grid, ordinary panels and standalone lists in `styles/pages.css` |
+| `frontend/lib/workspaceNavigation.ts`, commit `4d5a679e` | Page-owned and validated query parameters in `lib/navigation/query.ts` |
+| `modules/frontend-updates/ui/src/PlatformComponentsPage.tsx`, commit `c838b03f` | Shared maintenance tables for application and GitHub theme updates, organized by product version |
+| `frontend/components/platform/operationbar/TopBar.tsx`, commit `1e79d584` | `TopBar`, `PlatformVersion` and `VersionBadge` with expandable build details |
+| `libraries/ui-sdk/src/scrollFade.ts` | Scroll edge calculations for the console workspace and shared tables in `lib/ui/scrollFade.ts` |
+| `libraries/platform-ui/components/AppearanceProvider.tsx` | Browser-local light and dark modes, twelve accent presets and a custom color |
 
-Functional icons use the reference's Lucide 1.31.0; brand icons use Simple Icons. React 18, manager routing, authentication and locale state remain in use. Device controllers, telemetry, company branding and the fixed 16:9 stage are outside the copied modules; the workspace remains responsive.
-
-Sidebar facts come from the caller's actual accessible sites and membership roles. Loading and failure states do not invent counts. The cache is scoped by authentication generation and rejects previous-account responses. Locale changes rerender page components without discarding drafts. Site-configuration saves lock editing and install canonical server values after success.
+`App.tsx` and `lib/navigation` own page entry points. Feature code lives in `pages/` and the corresponding `features/`. Tables, panels, version controls and operation-bar slots belong in `components/`. The entry point uses `StyleProvider layer` to give shared styles and component tokens explicit cascade precedence. Site permissions, sessions, date preferences and static publishing follow FuyaoManager's own contracts.

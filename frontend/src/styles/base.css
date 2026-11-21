@@ -221,3 +221,45 @@ code,
 		scroll-behavior: auto !important;
 	}
 }
+
+.auth-layout-inner {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
+	align-items: center;
+	gap: clamp(24px, 6vw, 88px);
+	inline-size: min(100%, 1060px);
+}
+
+.auth-identity {
+	min-inline-size: 0;
+	padding-inline-end: var(--space-5);
+}
+
+.auth-identity h1 {
+	margin: 0;
+	font-size: clamp(32px, 5vw, 56px);
+	font-weight: 600;
+	line-height: 1.14;
+	overflow-wrap: anywhere;
+}
+
+.auth-identity p {
+	margin: var(--space-4) 0 0;
+	font-size: var(--text-title);
+	color: var(--muted-foreground);
+}
+
+.auth-layout .auth-card > .ant-card-body {
+	padding: var(--space-5);
+}
+
+.auth-layout .auth-card .ant-btn-block {
+	min-block-size: 44px;
+}
+
+@media (max-width: 767px) {
+	.auth-layout-inner {
+		grid-template-columns: minmax(0, 480px);
+		justify-content: center;
+	}
+}

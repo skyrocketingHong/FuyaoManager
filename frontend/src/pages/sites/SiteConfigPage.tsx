@@ -1,3 +1,4 @@
+import { queryChoice, usePageQuery } from '../../lib/navigation/query';
 /**
  * SiteConfigPage: the visual site configuration the theme consumes —
  * profile, repository, SEO, services (with the write-only AMap security
@@ -9,7 +10,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Empty, Input, Space, Tooltip, Typography, message } from 'antd';
 import { Info, Plus, X } from 'lucide-react';
 import Trans from '../../components/i18n/Trans';
-import { usePageHeader } from '../../components/PageHeader';
+import { PageTabs, usePageHeader } from '../../components/PageHeader';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import PageLoading from '../../components/PageLoading';
 import { Panel } from '../../components/Panel';
@@ -320,8 +321,26 @@ export default function SiteConfigPage() {
 		}
 	}
 
+	const [params, setParams] = usePageQuery();
+	const tab = queryChoice(params, 'tab', ['general', 'services', 'links'], 'general');
+	const tabs = (
+		<PageTabs
+			value={tab}
+			ariaLabel={t('nav.config')}
+			disabled={saving}
+			options={[
+				{ value: 'general', label: t('config.generalTab') },
+				{ value: 'services', label: t('config.servicesTab') },
+				{ value: 'links', label: t('config.linksTab') }
+			]}
+			onChange={(value) => setParams({ tab: value === 'general' ? null : value })}
+		/>
+	);
 	const editable = site !== null && (site.role === 'owner' || site.role === 'editor');
-	useUnsavedGuard(editable && (dirty || linksDirty || securityInput !== '' || saving));
+	useUnsavedGuard(
+		editable && (dirty || linksDirty || securityInput !== '' || saving),
+		(current, next) => !saving && current.pathname === next.pathname
+	);
 
 	const headerActions = (
 		<Space size={8}>
@@ -333,14 +352,14 @@ export default function SiteConfigPage() {
 			<Button
 				type="primary"
 				loading={saving}
-				disabled={!editable || (!dirty && securityInput === '')}
-				onClick={() => void handleSave()}
+				disabled={!editable || (tab === 'links' ? !linksDirty : !dirty && securityInput === '')}
+				onClick={() => void (tab === 'links' ? handleSaveLinks() : handleSave())}
 			>
 				<Trans text={t('common.save')} />
 			</Button>
 		</Space>
 	);
-	const headerActive = usePageHeader({ actions: headerActions }, form !== null);
+	const headerActive = usePageHeader({ content: tabs, actions: headerActions }, form !== null);
 
 	if (form === null) {
 		return (
@@ -364,7 +383,10 @@ export default function SiteConfigPage() {
 		<div className="page-stack">
 			{contextHolder}
 			{!headerActive ? (
-				<div style={{ display: 'flex', justifyContent: 'flex-end' }}>{headerActions}</div>
+				<div className="table-panel-header">
+					{tabs}
+					{headerActions}
+				</div>
 			) : null}
 			{conflict ? (
 				<Alert
@@ -379,178 +401,177 @@ export default function SiteConfigPage() {
 				<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 12 }} />
 			) : null}
 			{validationError && <Alert type="error" showIcon title={t(validationError)} />}
-			<Panel title={t('config.originSection')}>
-				<div className="form-grid">
-					{field(t('config.siteUrl'), 'siteUrl', 'https://…')}
-					{field(t('config.startDate'), 'startDate', 'YYYY-MM-DD')}
-					{field(t('config.startYear'), 'startYear', '2026')}
+			{tab === 'general' && (
+				<div className="workspace-grid">
+					<Panel title={t('config.originSection')}>
+						<div className="form-grid">
+							{field(t('config.siteUrl'), 'siteUrl', 'https://…')}
+							{field(t('config.startDate'), 'startDate', 'YYYY-MM-DD')}
+							{field(t('config.startYear'), 'startYear', '2026')}
+						</div>
+						{effectiveOrigin ? (
+							<>
+								<Space>
+									<span className="version-text">{effectiveOrigin}</span>
+									<Tooltip title={t('config.originHint')}>
+										<Button
+											type="text"
+											size="small"
+											icon={<Info size={14} />}
+											aria-label={t('config.originSection')}
+										/>
+									</Tooltip>
+								</Space>
+							</>
+						) : (
+							<Typography.Text type="secondary">{t('config.originPending')}</Typography.Text>
+						)}
+					</Panel>
+					<Panel className="workspace-half" title={t('config.profileSection')}>
+						<div className="form-grid">
+							{field(t('config.profileName'), 'profileName')}
+							{field(t('config.avatar'), 'avatarUrl', 'https://…')}
+							{field(t('config.birthDate'), 'birthDate', '2000-01-01')}
+						</div>
+						<div className="form-grid">
+							{field(`${t('config.role')} (zh)`, 'roleZh')}
+							{field(`${t('config.role')} (en)`, 'roleEn')}
+						</div>
+						<div className="form-grid">
+							{field(`${t('config.quote')} (zh)`, 'quoteZh')}
+							{field(`${t('config.quote')} (en)`, 'quoteEn')}
+						</div>
+					</Panel>
+					<Panel className="workspace-half" title={t('config.seoSection')}>
+						<div className="form-grid">
+							{field(t('config.seoAuthor'), 'seoAuthor')}
+							{field(t('config.repoName'), 'repoName')}
+							{field(t('config.repoOwner'), 'repoOwner')}
+						</div>
+						{field(t('config.repoUrl'), 'repoUrl', 'https://github.com/…')}
+						{field(t('config.seoDescription'), 'seoDescription')}
+						{field(t('config.seoKeywords'), 'seoKeywords', 'Svelte, Go')}
+						{field(t('config.twitterId'), 'seoTwitterId')}
+					</Panel>
 				</div>
-				{effectiveOrigin ? (
-					<>
-						<Space>
-							<span className="version-text">{effectiveOrigin}</span>
-							<Tooltip title={t('config.originHint')}>
+			)}
+			{tab === 'services' && (
+				<Panel title={t('config.servicesSection')}>
+					{field(t('config.wallpaper'), 'wallpaperUrl', 'https://…')}
+					<div className="form-grid">
+						{field(t('config.wallpaperApiUrl'), 'wallpaperApiUrl')}
+						{field(t('config.wallpaperMetadataApiUrl'), 'wallpaperMetadataApiUrl')}
+					</div>
+					<div className="form-grid">
+						{field(t('config.githubProxyUrl'), 'githubProxyUrl')}
+						{field(t('config.analyticsProxyUrl'), 'analyticsProxyUrl')}
+						{field(t('config.codingActivityProxyUrl'), 'codingActivityProxyUrl')}
+						{field(t('config.codingLanguagesProxyUrl'), 'codingLanguagesProxyUrl')}
+					</div>
+					<div className="form-grid">
+						{field(t('config.amapKey'), 'amapBrowserKey')}
+						{field(t('config.amapServiceHost'), 'amapServiceHost', 'https://…/_AMapService')}
+						<label className="field">
+							<span className="field-label">
+								AMap {t('config.securityCode')} {securitySet ? `(${t('config.securitySet')})` : ''}
+							</span>
+							<Input.Password
+								size="small"
+								value={securityInput}
+								disabled={!editable || saving}
+								placeholder={t('config.securityPlaceholder')}
+								onChange={(e) => setSecurityInput(e.target.value)}
+							/>
+						</label>
+					</div>
+				</Panel>
+			)}
+			{tab === 'links' && (
+				<Panel
+					title={t('config.socialSection')}
+					tags={
+						editable ? (
+							<Space>
 								<Button
-									type="text"
 									size="small"
-									icon={<Info size={14} />}
-									aria-label={t('config.originSection')}
-								/>
-							</Tooltip>
-						</Space>
-					</>
-				) : (
-					<Typography.Text type="secondary">{t('config.originPending')}</Typography.Text>
-				)}
-			</Panel>
-			<Panel title={t('config.profileSection')}>
-				<div className="form-grid">
-					{field(t('config.profileName'), 'profileName')}
-					{field(t('config.avatar'), 'avatarUrl', 'https://…')}
-					{field(t('config.birthDate'), 'birthDate', '2000-01-01')}
-				</div>
-				<div className="form-grid">
-					{field(`${t('config.role')} (zh)`, 'roleZh')}
-					{field(`${t('config.role')} (en)`, 'roleEn')}
-				</div>
-				<div className="form-grid">
-					{field(`${t('config.quote')} (zh)`, 'quoteZh')}
-					{field(`${t('config.quote')} (en)`, 'quoteEn')}
-				</div>
-			</Panel>
-			<Panel title={t('config.seoSection')}>
-				<div className="form-grid">
-					{field(t('config.seoAuthor'), 'seoAuthor')}
-					{field(t('config.repoName'), 'repoName')}
-					{field(t('config.repoOwner'), 'repoOwner')}
-				</div>
-				{field(t('config.repoUrl'), 'repoUrl', 'https://github.com/…')}
-				{field(t('config.seoDescription'), 'seoDescription')}
-				{field(t('config.seoKeywords'), 'seoKeywords', 'Svelte, Go')}
-				{field(t('config.twitterId'), 'seoTwitterId')}
-			</Panel>
-			<Panel title={t('config.servicesSection')}>
-				{field(t('config.wallpaper'), 'wallpaperUrl', 'https://…')}
-				<div className="form-grid">
-					{field(t('config.wallpaperApiUrl'), 'wallpaperApiUrl')}
-					{field(t('config.wallpaperMetadataApiUrl'), 'wallpaperMetadataApiUrl')}
-				</div>
-				<div className="form-grid">
-					{field(t('config.githubProxyUrl'), 'githubProxyUrl')}
-					{field(t('config.analyticsProxyUrl'), 'analyticsProxyUrl')}
-					{field(t('config.codingActivityProxyUrl'), 'codingActivityProxyUrl')}
-					{field(t('config.codingLanguagesProxyUrl'), 'codingLanguagesProxyUrl')}
-				</div>
-				<div className="form-grid">
-					{field(t('config.amapKey'), 'amapBrowserKey')}
-					{field(t('config.amapServiceHost'), 'amapServiceHost', 'https://…/_AMapService')}
-					<label className="field">
-						<span className="field-label">
-							AMap {t('config.securityCode')} {securitySet ? `(${t('config.securitySet')})` : ''}
-						</span>
-						<Input.Password
-							size="small"
-							value={securityInput}
-							disabled={!editable || saving}
-							placeholder={t('config.securityPlaceholder')}
-							onChange={(e) => setSecurityInput(e.target.value)}
-						/>
-					</label>
-				</div>
-			</Panel>
-			<Panel
-				title={t('config.socialSection')}
-				tags={
-					editable ? (
-						<Space>
-							<Button
+									icon={<Plus size={15} />}
+									disabled={saving}
+									onClick={() => {
+										setLinks([...links, { name: '', href: '' }]);
+										setLinksDirty(true);
+									}}
+								>
+									{t('config.addLink')}
+								</Button>
+							</Space>
+						) : null
+					}
+				>
+					{links.length === 0 ? (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('config.noLinks')} />
+					) : null}
+					{links.map((link, index) => (
+						<div key={index} className="social-link-row">
+							<Input
 								size="small"
-								icon={<Plus size={15} />}
-								disabled={saving}
-								onClick={() => {
-									setLinks([...links, { name: '', href: '' }]);
-									setLinksDirty(true);
-								}}
-							>
-								{t('config.addLink')}
-							</Button>
-							<Button
-								size="small"
-								type="primary"
-								loading={saving}
-								disabled={!linksDirty || saving}
-								onClick={() => void handleSaveLinks()}
-							>
-								{t('common.save')}
-							</Button>
-						</Space>
-					) : null
-				}
-			>
-				{links.length === 0 ? (
-					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('config.noLinks')} />
-				) : null}
-				{links.map((link, index) => (
-					<div key={index} className="social-link-row">
-						<Input
-							size="small"
-							aria-label={`${t('friends.fieldName')} ${index + 1}`}
-							placeholder={t('friends.fieldName')}
-							value={link.name}
-							disabled={!editable || saving}
-							onChange={(e) => {
-								const next = links.map((l, i) =>
-									i === index ? { ...l, name: e.target.value } : l
-								);
-								setLinks(next);
-								setLinksDirty(true);
-							}}
-						/>
-						<Input
-							size="small"
-							aria-label={`${t('config.linkUrl')} ${index + 1}`}
-							placeholder="https://… / mailto:…"
-							value={link.href}
-							disabled={!editable || saving}
-							onChange={(e) => {
-								const next = links.map((l, i) =>
-									i === index ? { ...l, href: e.target.value } : l
-								);
-								setLinks(next);
-								setLinksDirty(true);
-							}}
-						/>
-						<Input
-							size="small"
-							aria-label={`${t('config.linkIcon')} ${index + 1}`}
-							placeholder="icon"
-							value={link.icon ?? ''}
-							disabled={!editable || saving}
-							onChange={(e) => {
-								const next = links.map((l, i) =>
-									i === index ? { ...l, icon: e.target.value } : l
-								);
-								setLinks(next);
-								setLinksDirty(true);
-							}}
-						/>
-						{editable ? (
-							<Button
-								size="small"
-								type="text"
-								danger
-								disabled={saving}
-								aria-label={`${t('common.delete')} ${link.name || index + 1}`}
-								icon={<X size={15} />}
-								onClick={() => {
-									setLinks(links.filter((_, i) => i !== index));
+								aria-label={`${t('friends.fieldName')} ${index + 1}`}
+								placeholder={t('friends.fieldName')}
+								value={link.name}
+								disabled={!editable || saving}
+								onChange={(e) => {
+									const next = links.map((l, i) =>
+										i === index ? { ...l, name: e.target.value } : l
+									);
+									setLinks(next);
 									setLinksDirty(true);
 								}}
 							/>
-						) : null}
-					</div>
-				))}
-			</Panel>
+							<Input
+								size="small"
+								aria-label={`${t('config.linkUrl')} ${index + 1}`}
+								placeholder="https://… / mailto:…"
+								value={link.href}
+								disabled={!editable || saving}
+								onChange={(e) => {
+									const next = links.map((l, i) =>
+										i === index ? { ...l, href: e.target.value } : l
+									);
+									setLinks(next);
+									setLinksDirty(true);
+								}}
+							/>
+							<Input
+								size="small"
+								aria-label={`${t('config.linkIcon')} ${index + 1}`}
+								placeholder="icon"
+								value={link.icon ?? ''}
+								disabled={!editable || saving}
+								onChange={(e) => {
+									const next = links.map((l, i) =>
+										i === index ? { ...l, icon: e.target.value } : l
+									);
+									setLinks(next);
+									setLinksDirty(true);
+								}}
+							/>
+							{editable ? (
+								<Button
+									size="small"
+									type="text"
+									danger
+									disabled={saving}
+									aria-label={`${t('common.delete')} ${link.name || index + 1}`}
+									icon={<X size={15} />}
+									onClick={() => {
+										setLinks(links.filter((_, i) => i !== index));
+										setLinksDirty(true);
+									}}
+								/>
+							) : null}
+						</div>
+					))}
+				</Panel>
+			)}
 		</div>
 	);
 }

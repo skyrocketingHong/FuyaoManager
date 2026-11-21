@@ -251,7 +251,9 @@ export const navItems: readonly NavItem[] = [
 		path: '/sites/:siteId/theme-config',
 		scope: 'site',
 		group: 'settings',
-		titleKey: 'nav.themeConfiguration'
+		titleKey: 'nav.themeConfiguration',
+		menu: false,
+		parentId: 'site.theme'
 	},
 	{
 		id: 'site.sources',

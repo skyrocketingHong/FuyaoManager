@@ -1,3 +1,4 @@
+import { authDestination, queryChoice, requestedWorkspace } from '../src/lib/navigation/query';
 /**
  * Navigation metadata tests: every business route resolves to exactly one
  * item with the right scope, group, and site context; the menu selection is
@@ -141,4 +142,15 @@ describe('navigation metadata', () => {
 		expect(matchRoute('/sites/abc/extra/segments')).toBeNull();
 		expect(matchRoute('/sites/abc/albums/edit')).toBeNull();
 	});
+});
+
+it('restores a query deep link after login and rejects ambiguous or external return targets', () => {
+	const workspace = '/sites/abc/theme?tab=configuration#workspace';
+	const auth = authDestination('/login', workspace);
+	expect(requestedWorkspace(auth.slice(auth.indexOf('?')))).toBe(workspace);
+	for (const target of ['https://outside.example/site', '//outside.example/theme', '/login', '/register-passkey']) {
+		expect(requestedWorkspace(new URLSearchParams({ next: target }).toString())).toBeNull();
+	}
+	expect(queryChoice(new URLSearchParams('tab=selection&tab=configuration'), 'tab', ['selection', 'configuration'], 'selection'))
+		.toBe('selection');
 });

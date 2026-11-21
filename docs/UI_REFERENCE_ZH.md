@@ -1,22 +1,20 @@
 [English](./UI_REFERENCE.md) | **简体中文**
 
-# 管理台界面复用记录
+# 管理台界面规范与复用来源
 
-用户管理及日志页面继续适配 `components/platform/features/settings/UsersPage.tsx` 和 `LogsPage.tsx`：顶部筛选、TablePanel/DataTable、资料编辑、操作确认、会话管理、请求代数守卫及操作文案查找。数据改接本仓类型化接口，认证沿用通行密钥和登记码；平台角色、逐站授权遵循本仓后端契约。
+FuyaoManager 采用机器人平台的 208px 侧栏、顶部操作栏和独立滚动工作区。侧栏依次呈现品牌、当前作用域、固定入口、分组菜单与页脚。顶部承载筛选、页签和主要操作，右侧显示带来源标签的应用版本，点击可查看运行服务版本和提交。窄屏使用导航抽屉和可换行的操作栏。
 
-管理台自身的外观设置继续复用 `components/platform/features/settings/AppearancePage.tsx`、`styles/features/settings/appearance.css` 和 `lib/appearance.ts`：日间、夜间、跟随系统、12 种预设强调色、自定义取色及恢复默认。偏好按浏览器保存，兼容旧日夜设置并响应系统模式变化；管理台默认跟随系统，状态颜色独立于强调色。侧栏固定操作和菜单使用相同的 8px 内缩进与 16px 图标列，统一文字对齐。
+设计令牌由现有 Ant Design 主题和 CSS 变量共同驱动。常规卡片用描边与底色分层，表单和档案可在宽容器内按 8:4 或 6:6 分列，窄屏回到自然文档流。独立列表使用 `TablePanel` 与 `DataTable`，长值保留完整内容，表头在内容滚动时保持可见。需要横向滚动的表格提供有名称的键盘可聚焦区域。工作区仅在边缘还有隐藏内容时渐隐。状态色独立于强调色，编号和版本使用等宽文本，字段名和危险后果保持可见。
 
-管理台按用户指定的 `robot-platform/frontend` 复用通用界面代码。本轮只读参考版本为 `8644ba55c7c1963892518ee77cc6bd18146144e9`；参考仓库未修改。
+页面路径标识主页面及站点，页签和可分享的筛选用查询参数。新增子页应经 `PageTabs` 和 `usePageQuery` 更新地址。浏览器前进、后退、刷新及登录跳转均可恢复子页。草稿确认、一次性操作和选中待删除的行保存在页面状态中。文章编辑及正文表格沿用原有组件和样式，分类、标签和媒体切换改用 `?tab=`，原地址会重定向。
 
-| 参考模块（相对参考项目的 frontend）                                                  | 本仓实现                                                   | 复用内容                                                                   |
-| ------------------------------------------------------------------------------------ | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `components/platform/sidebar/SideMenu.tsx`、`SidebarActions.tsx`                     | `src/components/layout/AppShell.tsx`、`SidebarActions.tsx` | 208px 侧栏，品牌、信息、固定操作、滚动菜单、页脚的顺序；返回入口与菜单分离 |
-| `components/platform/sidebar/InfoCard.tsx`、`SidebarFoot.tsx`                        | `SidebarInfo.tsx`、`SidebarFoot.tsx`                       | 信息标题与双列统计、版本区、渐隐分隔线                                     |
-| `components/platform/statusbar/TopBar.tsx`、`styles/statusbar/statusbar.css`         | `TopBar.tsx`、`src/styles/statusbar/statusbar.css`         | 响应式顶栏、页面控件、分层背景和账号按钮                                   |
-| `components/platform/shared/Widgets.tsx`                                             | `src/components/DataTable.tsx`                             | `size="small"` 与 `data-table` 表面，使用类型化行、稳定键及排序             |
-| `styles/shared/panel.css`、`forms.css`、`controls.css`、`styles/sidebar/sidebar.css` | `src/styles/pages.css`、`src/styles/sidebar/sidebar.css`   | 面板结构、表格密度、表单网格、输入与按钮样式、侧栏分区                     |
-| 应用入口的 `StyleProvider layer`                                                     | `src/main.tsx`                                             | 将 antd CSS 放入样式层，使上述共享 CSS 获得预期优先级                      |
+| 来自 robot-platform 的实现 | FuyaoManager 中的落点 |
+| --- | --- |
+| `docs/架构规范/前端页面布局规范.md`（`b1db1edd`）与 `libraries/ui/styles/panel.css` | `styles/pages.css` 的响应式 12 列网格、常规面板与独立列表 |
+| `frontend/lib/workspaceNavigation.ts`，提交 `4d5a679e` | `lib/navigation/query.ts`，由页面校验并更新查询参数 |
+| `modules/frontend-updates/ui/src/PlatformComponentsPage.tsx`，提交 `c838b03f` | 平台更新和 GitHub 主题来源复用维护表格，用应用版本作为主显示 |
+| `frontend/components/platform/operationbar/TopBar.tsx`，提交 `1e79d584` | `TopBar`、`PlatformVersion` 和 `VersionBadge`，展开查看组件及构建来源 |
+| `libraries/ui-sdk/src/scrollFade.ts` | `lib/ui/scrollFade.ts` 的滚动边缘计算，用于工作区及共享表格 |
+| `libraries/platform-ui/components/AppearanceProvider.tsx` | 管理台浏览器级明暗模式、12 个强调色预设和自定义颜色 |
 
-功能图标使用与参考项目相同的 Lucide 1.31.0，品牌图标仍使用 Simple Icons。管理台保留 React 18 和既有路由、认证及语言状态；未复制设备控制器、遥测、公司品牌或固定 16:9 舞台。窄屏继续采用响应式工作区。
-
-信息区读取调用者可访问的真实站点列表和站点角色；加载及失败状态不显示虚构数字。列表缓存按会话代数隔离，旧账号响应不能带入新账号。页面构造函数随语言变化重新渲染，草稿不因语言切换卸载。站点资料保存时锁定编辑，成功后采用服务器返回的规范值。
+页面入口集中在 `App.tsx` 和 `lib/navigation`，页面业务放在 `pages/` 及对应的 `features/`，表格、面板、版本入口和顶栏插槽留在 `components/`。应用入口通过 `StyleProvider layer` 让共享样式与组件令牌参与明确的级联。站点权限、会话、日期偏好与静态发布沿用 FuyaoManager 的业务边界。

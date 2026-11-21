@@ -293,15 +293,14 @@ describe('deep links and menu selection', () => {
 	beforeEach(() => authenticated());
 
 	it.each([
-		['/content/posts/vocabulary?view=categories', '/content/posts/categories'],
-		['/content/posts/vocabulary?view=tags', '/content/posts/tags'],
-		['/sites/abc/posts/vocabulary?view=categories', '/sites/abc/posts/categories'],
-		['/sites/abc/posts/vocabulary?view=tags', '/sites/abc/posts/tags']
+		['/content/posts/vocabulary?view=categories', '/content/posts?tab=categories'],
+		['/content/posts/vocabulary?view=tags', '/content/posts?tab=tags'],
+		['/sites/abc/posts/vocabulary?view=categories', '/sites/abc/posts?tab=categories'],
+		['/sites/abc/posts/vocabulary?view=tags', '/sites/abc/posts?tab=tags']
 	])('redirects the legacy taxonomy URL to its route', async (legacy, expected) => {
 		const { router } = renderAt(legacy);
-		await waitFor(() => expect(router.state.location.pathname).toBe(expected));
+		await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(expected));
 		await waitFor(() => expect(getPostVocabulary).toHaveBeenCalled());
-		expect(router.state.location.search).toBe('');
 	});
 
 	it('renders the real post editor inside the site shell and retries a failed read', async () => {
@@ -579,7 +578,8 @@ describe('site kind workspaces', () => {
 		renderAt('/sites/abc/builds');
 		expect(await screen.findByText('page-builds')).toBeDefined();
 		const menu = document.querySelector('.app-sider nav')!;
-		expect(menu.textContent).toContain(zh['nav.themeConfiguration']);
+		expect(menu.textContent).toContain(zh['nav.themeSelection']);
+		expect(menu.textContent).not.toContain(zh['nav.themeConfiguration']);
 		expect(menu.textContent).toContain(zh['nav.builds']);
 		expect(menu.textContent).toContain(zh['nav.releases']);
 		expect(menu.textContent).toContain(zh['nav.caddy']);

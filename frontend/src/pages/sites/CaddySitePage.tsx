@@ -1,3 +1,4 @@
+import { queryChoice, usePageQuery } from '../../lib/navigation/query';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, App, Button, Descriptions, Select, Space, Typography } from 'antd';
 import { useParams } from 'react-router-dom';
@@ -6,7 +7,7 @@ import DataTable from '../../components/DataTable';
 import StatusTag from '../../components/StatusTag';
 import CaddyIcon from '../../components/CaddyIcon';
 import { useCurrentSite } from '../../components/layout/SiteBoundary';
-import { usePageHeader } from '../../components/PageHeader';
+import { PageTabs, usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
 import { RefreshButton, RetryButton } from '../../components/ActionButton';
 import { useAdminMutation, useAdminQuery } from '../../lib/admin/requests';
@@ -197,8 +198,23 @@ function CaddySiteEditor({ siteId }: { siteId: string }) {
 			)}
 		</Space>
 	);
+	const [params, setParams] = usePageQuery();
+	const tab = managed
+		? queryChoice(params, 'tab', ['configuration', 'history'], 'configuration')
+		: 'configuration';
 	const content = (
-		<Space size={8}>
+		<Space size={8} wrap>
+			{managed && (
+				<PageTabs
+					value={tab}
+					ariaLabel={t('nav.caddy')}
+					options={[
+						{ value: 'configuration', label: t('caddy.configTab') },
+						{ value: 'history', label: t('caddy.history') }
+					]}
+					onChange={(value) => setParams({ tab: value === 'configuration' ? null : value })}
+				/>
+			)}
 			<CaddyIcon />
 			<span>
 				{t(
@@ -274,112 +290,125 @@ function CaddySiteEditor({ siteId }: { siteId: string }) {
 					{dirty && managed && draft?.etag !== etag && (
 						<Alert type="warning" showIcon title={t('caddy.draftConflict')} />
 					)}
-					<Panel title={site?.name}>
-						<Descriptions
-							column={1}
-							items={[
-								{
-									key: 'kind',
-									label: t('caddy.kind'),
-									children: t(
-										config.kind === 'redirect'
-											? 'caddy.redirect'
-											: config.kind === 'static'
-												? 'caddy.static'
-												: config.kind === 'reverse_proxy'
-													? 'caddy.proxy'
-													: 'caddy.complex'
-									)
-								},
-								{
-									key: 'hosts',
-									label: t('caddy.hosts'),
-									children: (
-										<Space orientation="vertical">
-											{definition?.hosts?.map((host) => (
-												<Typography.Text key={host} copyable>
-													{host}
-												</Typography.Text>
-											))}
-										</Space>
-									)
-								},
-								{
-									key: 'listen',
-									label: t('caddy.listen'),
-									children: <code>{definition?.listen?.join(', ')}</code>
-								},
-								...(definition?.root
-									? [
-											{
-												key: 'root',
-												label: t('caddy.root'),
-												children: <Typography.Text copyable>{definition.root}</Typography.Text>
-											}
-										]
-									: []),
-								...(target
-									? [
-											{
-												key: 'redirect',
-												label: t('caddy.target'),
-												children: (
-													<Space orientation="vertical">
-														<code>{target}</code>
-														{targetBase && /^https?:\/\//.test(targetBase) && (
-															<a href={targetBase} target="_blank" rel="noreferrer">
-																{t('caddy.openTarget')}
-															</a>
-														)}
-													</Space>
-												)
-											},
-											{ key: 'status', label: 'HTTP', children: definition?.redirect?.statusCode }
-										]
-									: []),
-								{ key: 'sync', label: t('caddy.synced'), children: timeText(config.syncedAt) }
-							]}
-						/>
-					</Panel>
-					{managed && draft && (
-						<Panel title={t('caddy.safeSettings')} tags={<code>#{managed.revision}</code>}>
-							<div className="form-grid">
-								{options.map((option) => (
-									<label className="field" key={option.field}>
-										<span className="field-label">{t(option.label)}</span>
-										<Select
-											aria-label={t(option.label)}
-											value={draft.settings[option.field]}
-											disabled={
-												blocked ||
-												!owner ||
-												!capabilities?.edit ||
-												!config.settingsCapabilities?.[option.field]
-											}
-											options={option.values}
-											onChange={(value) =>
-												setEditor((previous) =>
-													previous?.scope === scope
-														? {
-																...previous,
-																settings: { ...previous.settings, [option.field]: value }
-															}
-														: previous
-												)
-											}
-										/>
-									</label>
-								))}
-							</div>
-							<details className="log-record-detail">
-								<summary>{t('caddy.sourceDigest')}</summary>
-								<code>{managed.sourceDigest}</code>
-							</details>
-						</Panel>
+					{tab === 'configuration' && (
+						<div className="workspace-grid">
+							<Panel title={site?.name} className={managed && draft ? 'workspace-main' : undefined}>
+								<Descriptions
+									column={1}
+									items={[
+										{
+											key: 'kind',
+											label: t('caddy.kind'),
+											children: t(
+												config.kind === 'redirect'
+													? 'caddy.redirect'
+													: config.kind === 'static'
+														? 'caddy.static'
+														: config.kind === 'reverse_proxy'
+															? 'caddy.proxy'
+															: 'caddy.complex'
+											)
+										},
+										{
+											key: 'hosts',
+											label: t('caddy.hosts'),
+											children: (
+												<Space orientation="vertical">
+													{definition?.hosts?.map((host) => (
+														<Typography.Text key={host} copyable>
+															{host}
+														</Typography.Text>
+													))}
+												</Space>
+											)
+										},
+										{
+											key: 'listen',
+											label: t('caddy.listen'),
+											children: <code>{definition?.listen?.join(', ')}</code>
+										},
+										...(definition?.root
+											? [
+													{
+														key: 'root',
+														label: t('caddy.root'),
+														children: <Typography.Text copyable>{definition.root}</Typography.Text>
+													}
+												]
+											: []),
+										...(target
+											? [
+													{
+														key: 'redirect',
+														label: t('caddy.target'),
+														children: (
+															<Space orientation="vertical">
+																<code>{target}</code>
+																{targetBase && /^https?:\/\//.test(targetBase) && (
+																	<a href={targetBase} target="_blank" rel="noreferrer">
+																		{t('caddy.openTarget')}
+																	</a>
+																)}
+															</Space>
+														)
+													},
+													{
+														key: 'status',
+														label: 'HTTP',
+														children: definition?.redirect?.statusCode
+													}
+												]
+											: []),
+										{ key: 'sync', label: t('caddy.synced'), children: timeText(config.syncedAt) }
+									]}
+								/>
+							</Panel>
+							{managed && draft && (
+								<Panel
+									className="workspace-side"
+									title={t('caddy.safeSettings')}
+									tags={<code>#{managed.revision}</code>}
+								>
+									<div className="form-grid">
+										{options.map((option) => (
+											<label className="field" key={option.field}>
+												<span className="field-label">{t(option.label)}</span>
+												<Select
+													aria-label={t(option.label)}
+													value={draft.settings[option.field]}
+													disabled={
+														blocked ||
+														!owner ||
+														!capabilities?.edit ||
+														!config.settingsCapabilities?.[option.field]
+													}
+													options={option.values}
+													onChange={(value) =>
+														setEditor((previous) =>
+															previous?.scope === scope
+																? {
+																		...previous,
+																		settings: { ...previous.settings, [option.field]: value }
+																	}
+																: previous
+														)
+													}
+												/>
+											</label>
+										))}
+									</div>
+									<details className="log-record-detail">
+										<summary>{t('caddy.sourceDigest')}</summary>
+										<code>{managed.sourceDigest}</code>
+									</details>
+								</Panel>
+							)}
+						</div>
 					)}
-					{managed && (
+					{managed && tab === 'history' && (
 						<TablePanel title={t('caddy.history')}>
 							<DataTable<CaddyHistory>
+								scrollLabel={t('caddy.history')}
 								rowKey="revision"
 								dataSource={managed.history ?? []}
 								pagination={false}

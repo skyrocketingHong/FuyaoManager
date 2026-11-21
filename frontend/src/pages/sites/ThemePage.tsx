@@ -22,6 +22,7 @@ import { loadSiteList } from '../../lib/sites/site-list';
 import { ThemeSelection } from '../../lib/themes/theme-selection';
 import { useUnsavedGuard } from '../../lib/editing/useUnsavedGuard';
 import { configTextFromFields, fieldsFromSchema } from '../../lib/themes/schemaForm';
+import { usePageQuery } from '../../lib/navigation/query';
 import { t } from '../../lib/i18n';
 
 export default function ThemePage({
@@ -31,6 +32,7 @@ export default function ThemePage({
 }) {
 	const { siteId } = useParams<{ siteId: string }>();
 	const navigate = useNavigate();
+	const [, setQuery] = usePageQuery();
 	const store = useMemo(
 		() =>
 			new ThemeSelection({
@@ -95,9 +97,7 @@ export default function ThemePage({
 						disabled: !state.hasSelection
 					}
 				]}
-				onChange={(value) =>
-					navigate(`/sites/${siteId}/${value === 'selection' ? 'theme' : 'theme-config'}`)
-				}
+				onChange={(value) => setQuery({ tab: value === 'selection' ? null : value })}
 				ariaLabel={t('nav.theme')}
 			/>
 		);

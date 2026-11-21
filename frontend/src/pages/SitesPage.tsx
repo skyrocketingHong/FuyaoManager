@@ -245,6 +245,7 @@ export default function SitesPage() {
 						<Empty description={t('sites.empty')} />
 					) : (
 						<DataTable<Site>
+							scrollLabel={t('nav.sites')}
 							className="sites-table"
 							rowKey="siteId"
 							pagination={false}

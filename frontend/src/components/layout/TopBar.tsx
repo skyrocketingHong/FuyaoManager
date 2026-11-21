@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, ConfigProvider, Dropdown, Tooltip } from 'antd';
 import { ChevronsUpDown, Languages, Moon, Sun } from 'lucide-react';
+import PlatformVersion from './PlatformVersion';
 import { usePageHeaderContent } from '../PageHeader';
 import { i18nSnapshot, setLocale, subscribeI18n, t, type Locale } from '../../lib/i18n';
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
@@ -36,6 +37,7 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 					{header?.content && <div className="topbar-page-content">{header.content}</div>}
 				</div>
 				<div className="topbar-session">
+					<PlatformVersion />
 					<Tooltip title={t('app.localeSwitch')}>
 						<Button
 							className="topbar-icon"

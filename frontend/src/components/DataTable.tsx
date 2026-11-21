@@ -1,9 +1,11 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { Table, type TableProps, type TableRef } from 'antd';
+import { observeScrollEdges } from '../lib/ui/scrollFade';
 import LoadMore, { type LoadMoreControls } from './LoadMore';
 
 type SortableTableProps<Row extends object> = TableProps<Row> & {
 	manualSorting?: boolean;
+	scrollLabel?: string;
 	tableRef?: RefObject<TableRef>;
 	loadMore?: LoadMoreControls & { scrollLabel: string };
 };
@@ -44,10 +46,10 @@ export function tableScrollContent(table: TableRef | null) {
 // robot-platform's Widgets.DataTable uses small tables and a shared surface.
 // Keep the manager's typed rows, stable keys, sorting, and server pagination.
 export default function DataTable<Row extends object>(props: SortableTableProps<Row>) {
-	const { className, manualSorting = false, columns, tableRef, loadMore, ...tableProps } = props;
+	const { className, manualSorting = false, columns, tableRef, loadMore, scrollLabel: label, ...tableProps } = props;
 	const internalRef = useRef<TableRef>(null);
 	const ref = tableRef ?? internalRef;
-	const scrollLabel = loadMore?.scrollLabel;
+	const scrollLabel = label ?? loadMore?.scrollLabel;
 	useEffect(() => {
 		if (!scrollLabel) return;
 		const content = tableScrollContent(ref.current);
@@ -56,17 +58,19 @@ export default function DataTable<Row extends object>(props: SortableTableProps<
 		content.tabIndex = 0;
 		content.setAttribute('role', 'region');
 		content.setAttribute('aria-label', scrollLabel);
+		const stop = label ? observeScrollEdges(content) : undefined;
 		return () => {
+			stop?.();
 			content.removeAttribute('tabindex');
 			content.removeAttribute('role');
 			content.removeAttribute('aria-label');
 		};
-	}, [ref, scrollLabel]);
+	}, [label, ref, scrollLabel]);
 
 	return (
 		<>
 			<Table<Row>
-				ref={loadMore || tableRef ? ref : undefined}
+				ref={scrollLabel || tableRef || loadMore ? ref : undefined}
 				size="small"
 				{...tableProps}
 				sortDirections={['ascend', 'descend']}

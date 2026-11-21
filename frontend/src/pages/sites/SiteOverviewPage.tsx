@@ -62,9 +62,7 @@ function TrafficStatistics({
 					type="info"
 					showIcon
 					title={t('overview.trafficUnavailable')}
-					action={
-						<RetryButton loading={loading} onClick={reload} />
-					}
+					action={<RetryButton loading={loading} onClick={reload} />}
 				/>
 			)}
 		</Panel>
@@ -157,46 +155,48 @@ export default function SiteOverviewPage() {
 					action={<RetryButton onClick={query.reload} />}
 				/>
 			)}
-			<Panel title={t('overview.content')}>
-				{!overview ? (
-					query.loading ? (
-						<PageLoading />
-					) : null
-				) : (
-					<ContentStatistics counts={overview.counts} />
+			<div className="workspace-grid">
+				<Panel title={t('overview.content')} className={overview ? 'workspace-main' : undefined}>
+					{!overview ? (
+						query.loading ? (
+							<PageLoading />
+						) : null
+					) : (
+						<ContentStatistics counts={overview.counts} />
+					)}
+				</Panel>
+				{overview && (
+					<Panel title={t('overview.themePanel')} className="workspace-side">
+						<Space wrap>
+							{overview.theme.selected && overview.theme.theme ? (
+								<code>
+									{overview.theme.theme.themeId} @ {overview.theme.theme.version}
+								</code>
+							) : (
+								t('themes.unselected')
+							)}
+							{allowSitePage(site, 'site.theme') && (
+								<Link to={`/sites/${siteId}/theme`}>{t('nav.themeSelection')}</Link>
+							)}
+							{allowSitePage(site, 'site.sources') && (
+								<Link to={`/sites/${siteId}/content-sources`}>{t('nav.contentSources')}</Link>
+							)}
+							{allowSitePage(site, 'site.builds') && (
+								<Link to={`/sites/${siteId}/builds`}>{t('nav.builds')}</Link>
+							)}
+							{allowSitePage(site, 'site.releases') && (
+								<Link to={`/sites/${siteId}/releases`}>{t('nav.releases')}</Link>
+							)}
+						</Space>
+					</Panel>
 				)}
-			</Panel>
+			</div>
 			{overview && (
 				<TrafficStatistics
 					analytics={overview.analytics}
 					loading={query.loading}
 					reload={query.reload}
 				/>
-			)}
-			{overview && (
-				<Panel title={t('overview.themePanel')}>
-					<Space wrap>
-						{overview.theme.selected && overview.theme.theme ? (
-							<code>
-								{overview.theme.theme.themeId} @ {overview.theme.theme.version}
-							</code>
-						) : (
-							t('themes.unselected')
-						)}
-						{allowSitePage(site, 'site.theme') && (
-							<Link to={`/sites/${siteId}/theme`}>{t('nav.themeSelection')}</Link>
-						)}
-						{allowSitePage(site, 'site.sources') && (
-							<Link to={`/sites/${siteId}/content-sources`}>{t('nav.contentSources')}</Link>
-						)}
-						{allowSitePage(site, 'site.builds') && (
-							<Link to={`/sites/${siteId}/builds`}>{t('nav.builds')}</Link>
-						)}
-						{allowSitePage(site, 'site.releases') && (
-							<Link to={`/sites/${siteId}/releases`}>{t('nav.releases')}</Link>
-						)}
-					</Space>
-				</Panel>
 			)}
 			{hasCaddy ? <CaddyCurrentRelease key={siteId} siteId={siteId} /> : <SiteDetailPage />}
 		</div>

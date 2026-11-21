@@ -1,5 +1,7 @@
+import dayjs from 'dayjs';
+import { queryChoice, queryValue, usePageQuery } from '../lib/navigation/query';
 // Generic table, filters and inline detail anatomy from robot-platform's LogsPage.
-import { useCallback, useEffect, useState, type ComponentProps } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, DatePicker, Input, Select, Space } from 'antd';
 import { RefreshButton, RetryButton } from '../components/ActionButton';
 import PageLoading from '../components/PageLoading';
@@ -71,23 +73,30 @@ function recordDetail(event: AuditEvent) {
 }
 
 export default function LogsPage() {
-	const [search, setSearch] = useState('');
-	const [q, setQuery] = useState('');
-	const [actorInput, setActorInput] = useState('');
-	const [actor, setActor] = useState('');
-	const [operation, setOperation] = useState('');
-	const [outcome, setOutcome] = useState('');
-	const [range, setRange] = useState<ComponentProps<typeof DatePicker.RangePicker>['value']>(null);
-	const [pageSize, setPageSize] = useState(50);
-	const [ordering, setOrdering] = useState<TableSort>();
+	const [url, setURL] = usePageQuery();
+	const q = (queryValue(url, 'q') ?? '').slice(0, 128);
+	const actor = (queryValue(url, 'actor') ?? '').slice(0, 128);
+	const [search, setSearch] = useState(q);
+	const [actorInput, setActorInput] = useState(actor);
+	const operation = (queryValue(url, 'operation') ?? '').slice(0, 128);
+	const outcome = queryChoice(url, 'outcome', ['success', 'failure', ''], '');
+	const from = dayjs(queryValue(url, 'from') ?? '');
+	const until = dayjs(queryValue(url, 'until') ?? '');
+	const range: [typeof from, typeof until] | null = from.isValid() && until.isValid() && until.isAfter(from) ? [from, until] : null;
+	const pageSize = Number(queryChoice(url, 'size', ['25', '50', '100', '200'], '50'));
+	const field = queryValue(url, 'sort');
+	const direction = queryValue(url, 'order');
+	const ordering: TableSort | undefined = field && ['createdAt', 'actorName', 'operation', 'resourceId', 'outcome', 'status', 'peerIp'].includes(field) &&
+		(direction === 'asc' || direction === 'desc') ? { field, direction } : undefined;
+	useEffect(() => setSearch(q), [q]);
+	useEffect(() => setActorInput(actor), [actor]);
 	useEffect(() => {
 		if (search === q && actorInput === actor) return;
 		const timer = setTimeout(() => {
-			setQuery(search);
-			setActor(actorInput);
+			setURL({ q: search, actor: actorInput }, true);
 		}, 250);
 		return () => clearTimeout(timer);
-	}, [search, actorInput, q, actor]);
+	}, [search, actorInput, q, actor, setURL]);
 	const params = queryString({
 		q,
 		actor,
@@ -113,7 +122,7 @@ export default function LogsPage() {
 				value={operation || undefined}
 				options={operations.map((value) => ({ value, label: operationText(value) }))}
 				onChange={(value) => {
-					setOperation(value ?? '');
+					setURL({ operation: value });
 				}}
 			/>
 			<Select
@@ -126,7 +135,7 @@ export default function LogsPage() {
 					{ value: 'failure', label: t('audit.failure') }
 				]}
 				onChange={(value) => {
-					setOutcome(value ?? '');
+					setURL({ outcome: value });
 				}}
 			/>
 			<Input
@@ -137,7 +146,7 @@ export default function LogsPage() {
 				value={actorInput}
 				onChange={(event) => setActorInput(event.target.value)}
 				onPressEnter={() => {
-					setActor(actorInput);
+					setURL({ q: search, actor: actorInput });
 				}}
 			/>
 			<Input
@@ -148,7 +157,7 @@ export default function LogsPage() {
 				value={search}
 				onChange={(event) => setSearch(event.target.value)}
 				onPressEnter={() => {
-					setQuery(search);
+					setURL({ q: search, actor: actorInput });
 				}}
 			/>
 			<DatePicker.RangePicker
@@ -156,14 +165,14 @@ export default function LogsPage() {
 				showTime
 				value={range}
 				onChange={(value) => {
-					setRange(value);
+					setURL({ from: value?.[0]?.toISOString(), until: value?.[1]?.toISOString() });
 				}}
 			/>
 			<Select
 				aria-label={t('audit.pageSize')}
 				value={pageSize}
 				onChange={(value) => {
-					setPageSize(value);
+					setURL({ size: value === 50 ? null : String(value) });
 				}}
 				options={[25, 50, 100, 200].map((value) => ({
 					value,
@@ -199,6 +208,7 @@ export default function LogsPage() {
 			)}
 			<DataTable<AuditEvent>
 				className="operation-logs-table"
+				scrollLabel={t('nav.logs')}
 				manualSorting
 				styles={{ content: { overflowY: 'auto' } }}
 				scroll={{ x: 1540 }}
@@ -207,7 +217,8 @@ export default function LogsPage() {
 				locale={{ emptyText: query.loading ? <PageLoading spec="section" label={t('common.loading')} /> : t('audit.empty') }}
 				onChange={(_, __, sorter, extra) => {
 					if (extra.action === 'sort') {
-						setOrdering(selectedTableSort(sorter));
+						const next = selectedTableSort(sorter);
+						setURL({ sort: next?.field, order: next?.direction });
 					}
 				}}
 				pagination={false}

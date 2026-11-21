@@ -42,7 +42,7 @@ const initial = (): service.UpdateStatus => ({
 	previous: null,
 	versions: [
 		{
-			version: '',
+			version: '0.8.0',
 			commit: 'b'.repeat(40),
 			runId: 2,
 			attempt: 1,

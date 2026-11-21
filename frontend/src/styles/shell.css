@@ -57,3 +57,28 @@
 		overflow: visible;
 	}
 }
+
+/* Scroll edges follow the robot-platform workspace's remaining content. */
+.shell-content[data-workspace='console'][data-scroll-fade-top] {
+	--scroll-top: transparent;
+}
+
+.shell-content[data-workspace='console'][data-scroll-fade-bottom],
+.data-table .ant-table-content[data-scroll-fade-bottom] {
+	--scroll-bottom: transparent;
+}
+
+.data-table .ant-table-content[data-scroll-fade-bottom] {
+	--scroll-top: #000;
+}
+
+.shell-content[data-workspace='console']:is([data-scroll-fade-top], [data-scroll-fade-bottom]),
+.data-table .ant-table-content[data-scroll-fade-bottom] {
+	mask-image: linear-gradient(
+		to bottom,
+		var(--scroll-top, #000),
+		#000 var(--space-2),
+		#000 calc(100% - var(--space-2)),
+		var(--scroll-bottom, #000)
+	);
+}

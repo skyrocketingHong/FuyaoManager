@@ -5,19 +5,27 @@
  */
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent, within } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider } from 'antd';
 import zh from '../src/lib/i18n/locales/zh-CN.json';
 
 const listThemes = vi.fn();
+const readThemeSources = vi.fn();
+const checkThemeSource = vi.fn();
+const installThemeSource = vi.fn();
+vi.mock('../src/lib/api/themeSources', () => ({
+	readThemeSources: (...args: unknown[]) => readThemeSources(...args),
+	checkThemeSource: (...args: unknown[]) => checkThemeSource(...args),
+	installThemeSource: (...args: unknown[]) => installThemeSource(...args)
+}));
 vi.mock('../src/lib/api/management', () => ({
 	listThemes: (...args: unknown[]) => listThemes(...args)
 }));
 
 const mockSession = {
 	status: 'authenticated',
-	user: { id: 'u1', username: 'alice', displayName: 'Alice' },
+	user: { id: 'u1', username: 'alice', displayName: 'Alice', platformRole: 'member' },
 	platformInitialized: true,
 	passkeyBound: true,
 	passkeyAvailable: true
@@ -53,17 +61,18 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	localStorage.clear();
 	setLocale('zh-CN');
+	mockSession.user.platformRole = 'member';
 });
 
 afterEach(cleanup);
 
-function mountPage() {
+function mountPage(search = '') {
 	const router = createMemoryRouter([{ path: '/themes', element: <ThemesCatalogPage /> }], {
-		initialEntries: ['/themes']
+		initialEntries: [`/themes${search}`]
 	});
 	return render(
 		<ConfigProvider>
-			<RouterProvider router={router} />
+			<AntApp><RouterProvider router={router} /></AntApp>
 		</ConfigProvider>
 	);
 }
@@ -138,4 +147,23 @@ describe('ThemesCatalogPage', () => {
 			expect(screen.getByText(zh['themes.emptyCatalog'])).toBeDefined();
 		});
 	});
+});
+
+it('checks and installs the exact GitHub candidate from a direct link', async () => {
+	mockSession.user.platformRole = 'admin';
+	setLocale('en-US');
+	const source = { id: 'fuyao-homepage', url: 'https://github.com/skyrocketingHong/FuyaoHomepage', branch: 'main', path: 'site' };
+	const commit = 'c'.repeat(40);
+	listThemes.mockResolvedValue([]);
+	readThemeSources.mockResolvedValueOnce([source]).mockResolvedValue([{ ...source, task: { commit, version: '27.2.1', state: 'installed' } }]);
+	checkThemeSource.mockResolvedValue({ commit, version: '27.2.1', manifestDigest: 'd'.repeat(64), state: 'available' });
+	installThemeSource.mockResolvedValue({ commit, version: '27.2.1', state: 'installing' });
+	mountPage('?tab=github');
+	fireEvent.click(await screen.findByRole('button', { name: 'Check updates' }));
+	fireEvent.click(await screen.findByRole('button', { name: 'Download and install' }));
+	const dialog = await screen.findByRole('dialog', { name: 'Install theme 27.2.1?' });
+	expect(installThemeSource).not.toHaveBeenCalled();
+	fireEvent.click(within(dialog).getByRole('button', { name: 'Download and install' }));
+	expect(await screen.findByText('Installed')).toBeDefined();
+	expect(installThemeSource).toHaveBeenCalledExactlyOnceWith(source.id, commit);
 });

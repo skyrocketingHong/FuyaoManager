@@ -35,3 +35,21 @@ The management HTTP surface provides audit reads only. PostgreSQL records follow
 Appearance provides light, dark and system modes, twelve accent presets, a custom color picker and reset. Changes immediately update console components and CSS variables and persist in the browser. System mode follows OS changes; other tabs synchronize. The account menu also links to appearance, and the top-bar quick toggle preserves the accent. Error/warning colors remain semantic; custom accent text is adjusted for contrast against its actual surfaces.
 
 See the [management OpenAPI](../contracts/openapi/openapi.yaml) for the contract and [UI_REFERENCE.md](./UI_REFERENCE.md) for reused UI sources. Business publishing stays isolated: account authorization and appearance changes do not apply Caddy or switch running websites.
+
+## Manage static outputs
+
+A platform administrator who owns the site can remove one or more static outputs from Builds and Releases. Removing build output prevents further previews and publishing from that build. Existing published copies continue serving. Removing a historical release makes it unavailable for rollback. Build and release history remains visible and can be filtered by output availability or cleanup status.
+
+The platform checks the whole selection before deletion. The live release, any historical release still referenced by the edge and active previews are protected. After closing the preview or synchronizing the edge, select the outputs again. An interrupted removal is marked Cleanup pending and can be retried from the original record.
+
+## Install themes from GitHub
+
+Set `FUYAO_ADMIN_THEME_SOURCES` in the service environment. Each entry specifies a public GitHub HTTPS repository, theme ID, branch and theme directory. FuyaoHomepage uses the following configuration.
+
+```sh
+FUYAO_ADMIN_THEME_SOURCES='[{"id":"fuyao-homepage","url":"https://github.com/skyrocketingHong/FuyaoHomepage","branch":"main","path":"site"}]'
+```
+
+After restarting the service, a platform administrator can check and install updates under Themes → GitHub sources. The platform validates the theme manifest, configuration contract and npm lockfile, downloads the checked commit, installs dependencies in a private directory and registers the version. Select the version in a site's theme settings, then use the existing build, preview and publish workflow. A version already in the catalog keeps its original source. Installation progress is held by the running service. After a restart, check the catalog and retry the installation if needed.
+
+The service needs Git, Node.js 22 or later, npm, and access to GitHub and the public npm registry. Theme build scripts run with the service account's privileges. Configure repositories whose release process you trust.

@@ -1,6 +1,7 @@
-import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PageTabs } from '../../components/PageHeader';
 import { t } from '../../lib/i18n';
+import { tabDestination } from '../../lib/navigation/query';
 
 export type PostWorkspaceSection = 'posts' | 'categories' | 'tags' | 'media';
 
@@ -8,11 +9,16 @@ export function postWorkspacePath(siteId?: string): string {
 	return siteId ? `/sites/${encodeURIComponent(siteId)}/posts` : '/content/posts';
 }
 
-export function LegacyPostVocabularyRedirect() {
+export function LegacyPostSectionRedirect({ section }: { section: PostWorkspaceSection }) {
 	const { siteId } = useParams<{ siteId: string }>();
+	const { search, hash } = useLocation();
+	return <Navigate to={{ ...tabDestination(postWorkspacePath(siteId), search, section), hash }} replace />;
+}
+
+export function LegacyPostVocabularyRedirect() {
 	const [params] = useSearchParams();
 	const section = params.get('view') === 'tags' ? 'tags' : 'categories';
-	return <Navigate to={`${postWorkspacePath(siteId)}/${section}`} replace />;
+	return <LegacyPostSectionRedirect section={section} />;
 }
 
 export default function PostWorkspaceTabs({ current }: { current: PostWorkspaceSection }) {
@@ -30,9 +36,7 @@ export default function PostWorkspaceTabs({ current }: { current: PostWorkspaceS
 				{ value: 'media', label: t('posts.media') }
 			]}
 			onChange={(value) => {
-				if (value === 'posts') navigate(base);
-				else if (value === 'media') navigate(`${base}/media`);
-				else navigate(`${base}/${value}`);
+				navigate(value === 'posts' ? base : tabDestination(base, '', value));
 			}}
 		/>
 	);

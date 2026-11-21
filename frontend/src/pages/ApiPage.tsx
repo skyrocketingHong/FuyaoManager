@@ -1,3 +1,4 @@
+import { queryValue, usePageQuery } from '../lib/navigation/query';
 // Layout and component calls from robot-platform/features/api/ApiPage.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Input, Select } from 'antd';
@@ -28,9 +29,11 @@ export default function ApiPage() {
 	);
 	const result = useAdminQuery(load);
 	const catalog = result.data;
-	const [query, setQuery] = useState('');
-	const [group, setGroup] = useState('');
-	const [method, setMethod] = useState('');
+	const [url, setURL] = usePageQuery();
+	const query = (queryValue(url, 'q') ?? '').slice(0, 128);
+	const group = queryValue(url, 'group') ?? '';
+	const method = queryValue(url, 'method') ?? '';
+	const expanded = queryValue(url, 'operation');
 	const [copied, setCopied] = useState<Record<string, boolean>>({});
 	const [copyError, setCopyError] = useState('');
 	const [copyStatus, setCopyStatus] = useState('');
@@ -73,9 +76,7 @@ export default function ApiPage() {
 		[catalog]
 	);
 	function resetFilters() {
-		setQuery('');
-		setGroup('');
-		setMethod('');
+		setURL({ q: null, group: null, method: null, operation: null });
 	}
 	function downloadContract() {
 		if (!catalog) return;
@@ -128,7 +129,7 @@ export default function ApiPage() {
 			placeholder={t('api.searchPlaceholder')}
 			value={query}
 			allowClear
-			onChange={(event) => setQuery(event.target.value)}
+			onChange={(event) => setURL({ q: event.target.value }, true)}
 		/>
 	);
 	const filterControls = (
@@ -137,7 +138,7 @@ export default function ApiPage() {
 				aria-label={t('api.group')}
 				value={group}
 				options={[{ value: '', label: t('api.allGroups') }, ...groups]}
-				onChange={setGroup}
+				onChange={(value) => setURL({ group: value })}
 			/>
 			<Select
 				aria-label={t('api.method')}
@@ -146,7 +147,7 @@ export default function ApiPage() {
 					{ value: '', label: t('api.allMethods') },
 					...methods.map((value) => ({ value, label: value }))
 				]}
-				onChange={setMethod}
+				onChange={(value) => setURL({ method: value })}
 			/>
 			<Button onClick={resetFilters} disabled={!hasFilter}>
 				{t('api.clear')}
@@ -214,6 +215,8 @@ export default function ApiPage() {
 								className="api-catalog-list"
 								bordered={false}
 								expandIconPlacement="start"
+								activeKey={expanded ? [expanded] : []}
+								onChange={(keys) => setURL({ operation: Array.isArray(keys) ? keys.at(-1) : keys })}
 								items={operations.map((operation) => ({
 									key: operation.id,
 									label: (

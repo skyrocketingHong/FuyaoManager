@@ -3,6 +3,16 @@ import type { MessageKey } from './index';
 import { ApiError } from '../api/client';
 
 const codeToKey: Record<string, MessageKey> = {
+	artifact_protected: 'artifacts.protected',
+	artifact_not_found: 'artifacts.notFound',
+	artifact_cleanup_incomplete: 'artifacts.incomplete',
+	artifact_cleanup_unavailable: 'artifacts.unavailable',
+	theme_source_incompatible: 'themeSources.incompatible',
+	theme_source_failed: 'themeSources.checkFailed',
+	theme_source_conflict: 'themeSources.conflict',
+	theme_source_not_found: 'themeSources.notFound',
+	theme_install_busy: 'themeSources.busy',
+	theme_install_failed: 'themeSources.installFailed',
 	preview_closed: 'error.previewClosed',
 	content_source_shared: 'content.sourceSharedError',
 	caddy_unavailable: 'error.caddyUnavailable',

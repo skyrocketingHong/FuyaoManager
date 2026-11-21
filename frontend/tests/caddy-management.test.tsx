@@ -80,7 +80,7 @@ function Header() {
 		</div>
 	);
 }
-function mount() {
+function mount(search = '') {
 	const router = createMemoryRouter(
 		[
 			{
@@ -98,7 +98,7 @@ function mount() {
 				errorElement: <div>route-crash</div>
 			}
 		],
-		{ initialEntries: ['/sites/site/caddy'] }
+		{ initialEntries: [`/sites/site/caddy${search}`] }
 	);
 	render(<RouterProvider router={router} />);
 	return router;
@@ -293,7 +293,7 @@ it('confirms a historical applied revision before rolling back with the latest E
 	current.data.management!.history = [record(1), record(2, 'draft'), record(3)];
 	vi.mocked(service.getCaddyConfig).mockResolvedValue(current);
 	vi.mocked(service.changeCaddyConfig).mockResolvedValue(config(4));
-	mount();
+	mount('?tab=history');
 	fireEvent.click(await screen.findByRole('button', { name: 'Roll back and deploy' }));
 	expect(service.changeCaddyConfig).not.toHaveBeenCalled();
 	await confirm('Restore applied configuration');

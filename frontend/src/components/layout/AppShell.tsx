@@ -1,8 +1,10 @@
+import { observeScrollEdges } from '../../lib/ui/scrollFade';
 // SideMenu's brand → information → actions → scrolling menu → footer skeleton
 // from robot-platform; modules here consume the manager's own site metadata.
 import {
 	useCallback,
 	useEffect,
+	useRef,
 	useState,
 	useSyncExternalStore,
 	type MouseEvent,
@@ -102,6 +104,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	useSyncExternalStore(subscribeI18n, i18nSnapshot);
 	const navigate = useNavigate();
 	const { pathname } = useLocation();
+	const workspaceRef = useRef<HTMLElement>(null);
+	const article = /^\/(?:sites\/[^/]+|content)\/posts(?:\/|$)/.test(pathname);
+	useEffect(() => {
+		const node = workspaceRef.current;
+		if (node && !article) return observeScrollEdges(node);
+	}, [article, pathname]);
 	const authGeneration = currentAuthGeneration();
 	useEffect(() => {
 		if (session.status === 'authenticated') void loadSiteList();
@@ -262,7 +270,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 				)}
 				<Layout className="shell-main">
 					<TopBar navigationSlot={narrow ? menuButton : undefined} />
-					<Layout.Content id="workspace" tabIndex={-1} className="shell-content">
+					<Layout.Content id="workspace" ref={workspaceRef} tabIndex={-1} className="shell-content" data-workspace={article ? 'article' : 'console'}>
 						{children}
 					</Layout.Content>
 				</Layout>

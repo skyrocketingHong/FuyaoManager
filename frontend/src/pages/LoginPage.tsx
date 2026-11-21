@@ -1,3 +1,5 @@
+import AuthLayout from '../components/layout/AuthLayout';
+import { authDestination, requestedWorkspace } from '../lib/navigation/query';
 /**
  * LoginPage: passkey sign-in is the routine entry; the CLI one-time code is
  * the identity-proofing and recovery entry. Before platform initialization
@@ -6,7 +8,7 @@
  * credential lands on the binding page instead of the console.
  */
 import { useId, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useSyncExternalStore } from 'react';
 import { Alert, Button, Card, Divider, Form, Input, Typography } from 'antd';
 import { apiErrorKey } from '../lib/i18n/errors';
@@ -109,6 +111,7 @@ function CodeRedeemForm({ onDone }: { onDone: (status: string) => void }) {
 
 export default function LoginPage() {
 	const navigate = useNavigate();
+	const next = requestedWorkspace(useLocation().search);
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const [busy, setBusy] = useState(false);
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
@@ -116,7 +119,7 @@ export default function LoginPage() {
 	const recoveryId = useId();
 
 	function handleDone(status: string) {
-		navigate(status === 'restricted' ? '/register-passkey' : '/sites', { replace: true });
+		navigate(status === 'restricted' ? authDestination('/register-passkey', next) : next ?? '/sites', { replace: true });
 	}
 
 	async function handlePasskey() {
@@ -124,7 +127,7 @@ export default function LoginPage() {
 		setErrorKey(null);
 		try {
 			await signInWithPasskey();
-			navigate('/sites', { replace: true });
+			navigate(next ?? '/sites', { replace: true });
 		} catch (err) {
 			setErrorKey(webauthnErrorKey(err));
 		} finally {
@@ -134,19 +137,17 @@ export default function LoginPage() {
 
 	if (!session.platformInitialized) {
 		return (
-			<div className="auth-screen">
-				<div className="auth-stack">
+			<AuthLayout>
 					<InitGuide />
 					<Card title={t('login.title')} className="auth-card">
 						<CodeRedeemForm onDone={handleDone} />
 					</Card>
-				</div>
-			</div>
+			</AuthLayout>
 		);
 	}
 
 	return (
-		<div className="auth-screen">
+		<AuthLayout>
 			<Card title={t('login.title')} className="auth-card">
 				{errorKey ? (
 					<Alert type="error" showIcon title={t(errorKey)} style={{ marginBottom: 16 }} />
@@ -177,6 +178,6 @@ export default function LoginPage() {
 					<CodeRedeemForm onDone={handleDone} />
 				</div>
 			</Card>
-		</div>
+		</AuthLayout>
 	);
 }

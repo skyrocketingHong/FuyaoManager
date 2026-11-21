@@ -1,3 +1,6 @@
+import { useArtifactFilter } from '../../features/delivery/useArtifactFilter';
+import { ArtifactStatus, useArtifactDeletion } from '../../features/delivery/useArtifactDeletion';
+import { queryValue, usePageQuery } from '../../lib/navigation/query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Alert, Button, Modal, Select, Space, Typography, message } from 'antd';
@@ -7,7 +10,7 @@ import Trans from '../../components/i18n/Trans';
 import { usePageHeader } from '../../components/PageHeader';
 import PageLoading from '../../components/PageLoading';
 import StatusTag from '../../components/StatusTag';
-import { Panel, TablePanel } from '../../components/Panel';
+import { TablePanel } from '../../components/Panel';
 import {
 	canEditSite,
 	createRelease,
@@ -82,7 +85,8 @@ export default function ReleasesPage() {
 	const [current, setCurrent] = useState<CurrentView | null>(null);
 	const [releases, setReleases] = useState<Release[] | null>(null);
 	const [succeeded, setSucceeded] = useState<BuildTask[]>([]);
-	const [candidate, setCandidate] = useState<string | null>(null);
+	const [params, setParams] = usePageQuery();
+	const candidate = queryValue(params, 'build');
 	const [errorKey, setErrorKey] = useState<MessageKey | null>(null);
 	const [publishing, setPublishing] = useState(false);
 	const [rollbackTarget, setRollbackTarget] = useState<Release | null>(null);
@@ -126,7 +130,11 @@ export default function ReleasesPage() {
 			]);
 			if (my !== epoch.current || myGen !== generation.current) return;
 			setReleases(releaseList);
-			setSucceeded(buildList.filter((b) => b.status === 'succeeded'));
+			setSucceeded(
+				buildList.filter(
+					(b) => b.status === 'succeeded' && (b.artifactState ?? 'available') === 'available'
+				)
+			);
 			try {
 				const view = await getCurrentRelease(siteId);
 				if (my !== epoch.current || myGen !== generation.current) return;
@@ -161,7 +169,6 @@ export default function ReleasesPage() {
 		setCurrent(null);
 		setReleases(null);
 		setSucceeded([]);
-		setCandidate(null);
 		setErrorKey(null);
 		setRollbackTarget(null);
 		setEdge({ kind: 'loading' });
@@ -261,7 +268,9 @@ export default function ReleasesPage() {
 	// Only releases that actually back content block a build from being
 	// published again; failed attempts do not.
 	const releasedBuildIds = new Set(
-		(releases ?? []).filter((r) => r.status !== 'failed').map((r) => r.buildId)
+		(releases ?? [])
+			.filter((r) => r.status !== 'failed' && r.artifactState !== 'deleted')
+			.map((r) => r.buildId)
 	);
 	const candidateOptions = succeeded.map((build) => ({
 		value: build.id,
@@ -271,10 +280,9 @@ export default function ReleasesPage() {
 	}));
 	// Default the candidate to the newest succeeded build that has not been
 	// released yet, without silently publishing anything.
-	let effectiveCandidate: string | null =
-		candidate !== null && succeeded.some((b) => b.id === candidate)
-			? candidate
-			: (succeeded.find((b) => !releasedBuildIds.has(b.id))?.id ?? null);
+	const effectiveCandidate = params.has('build')
+		? (succeeded.find((b) => b.id === candidate)?.id ?? null)
+		: (succeeded.find((b) => !releasedBuildIds.has(b.id))?.id ?? null);
 	// Why the publish button is off: one reason at a time, surfaced on the
 	// button itself so viewers and empty-catalog states are explained without
 	// a permanent alert wall above the table. Isolation stays alert-only: the
@@ -295,13 +303,27 @@ export default function ReleasesPage() {
 			id="release-candidate"
 			style={{ minWidth: 220, maxWidth: '100%' }}
 			value={effectiveCandidate}
-			onChange={setCandidate}
+			placeholder={t('releases.candidate')}
+			onChange={(build) => setParams({ build })}
 			options={candidateOptions}
 			aria-label={t('releases.candidate')}
 		/>
 	);
+	const { visible, tabs } = useArtifactFilter(
+		releases ?? [],
+		'nav.releases',
+		(row) => row.status === 'live' || row.status === 'superseded'
+	);
+	const deletion = useArtifactDeletion(
+		siteId,
+		site?.role === 'owner',
+		'releases',
+		visible,
+		refresh
+	);
 	const headerActions = (
-		<Space size={8}>
+		<Space wrap size={8}>
+			{deletion.actions}
 			{!isolated && current && current.originUrl ? (
 				<Button href={current.originUrl} target="_blank">
 					<Trans text={t('releases.open')} />
@@ -318,99 +340,95 @@ export default function ReleasesPage() {
 			</ActionButton>
 		</Space>
 	);
-	const headerActive = usePageHeader({ content: headerContent, actions: headerActions });
+	const headerActive = usePageHeader({
+		content: (
+			<Space wrap>
+				{tabs}
+				{headerContent}
+			</Space>
+		),
+		actions: headerActions
+	});
 
 	return (
 		<div className="page-stack page-stack--fill">
 			{contextHolder}
+			{deletion.error}
 			{!headerActive ? (
 				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>{headerActions}</div>
 			) : null}
-			<Panel className="fill-height releases-panel" title={<Trans text={t('releases.title')} />}>
-				{errorKey !== null ? (
-					<Alert
-						type="error"
-						showIcon
-						title={t(errorKey ?? 'error.generic')}
-						style={{ marginBottom: 16 }}
-					/>
-				) : null}
-				{releases === null ? (
-					<PageLoading spec="section" label={t('common.loading')} />
-				) : (
-					<>
-						{current ? (
-							<Alert
-								type="success"
-								showIcon
-								title={`${t('releases.current')}: ${current.release.theme.themeId} @ ${current.release.theme.version}`}
-								style={{ marginBottom: 16 }}
-							/>
-						) : (
-							<Alert type="info" showIcon title={t('releases.noLive')} style={{ marginBottom: 16 }} />
-						)}
-						{workspace ? (
-							!workspace.deployable && (
-								<Alert
-									type="info"
-									showIcon
-									title={t('error.deploymentDisabled')}
-									style={{ marginBottom: 16 }}
-								/>
-							)
-						) : edge.kind === 'loading' ? (
-							<Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-								{t('common.loading')}
-							</Typography.Text>
-						) : edge.kind === 'error' ? (
-							<Alert
-								type="warning"
-								showIcon
-								title={t('edge.loadFailed')}
-								action={
-									<RetryButton size="small" onClick={() => void refreshEdge()} />
-								}
-								style={{ marginBottom: 16 }}
-							/>
-						) : edge.state.isolated ? (
-							<Alert
-								type="info"
-								showIcon
-								title={t('edge.isolatedNotice')}
-								style={{ marginBottom: 16 }}
-							/>
-						) : null}
-						{!headerActive && editable && succeeded.length > 0 ? (
-							<Space orientation="vertical" style={{ width: '100%', marginBottom: 16 }}>
-								<label htmlFor="release-candidate">{t('releases.candidate')}</label>
-								{headerContent}
-							</Space>
-						) : null}
-						<TablePanel className="fill-height release-history">
-							<DataTable<Release>
-								className="releases-table"
-								rowKey="id"
-								dataSource={releases}
-								pagination={false}
-								columns={[
-									{
-										title: t('releases.buildColumn'),
-										dataIndex: 'buildId',
-										render: (_, record) => (
-											<Typography.Text className="version-text">
-												{record.buildId.slice(0, 8)}
-											</Typography.Text>
-										)
-									},
-									{
-										title: t('releases.themeColumn'),
-										dataIndex: ['theme', 'themeId'],
-										render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
-									},
-									{
-										title: t('releases.statusColumn'),
-										dataIndex: 'status',
-										render: (status: string) => (
+			{errorKey !== null ? (
+				<Alert type="error" showIcon title={t(errorKey ?? 'error.generic')} />
+			) : null}
+			{releases === null ? (
+				errorKey === null && <PageLoading spec="page" label={t('common.loading')} />
+			) : (
+				<>
+					{current ? (
+						<Alert
+							type="success"
+							showIcon
+							title={`${t('releases.current')}: ${current.release.theme.themeId} @ ${current.release.theme.version}`}
+						/>
+					) : (
+						<Alert type="info" showIcon title={t('releases.noLive')} />
+					)}
+					{workspace ? (
+						!workspace.deployable && (
+							<Alert type="info" showIcon title={t('error.deploymentDisabled')} />
+						)
+					) : edge.kind === 'loading' ? (
+						<Typography.Text type="secondary">{t('common.loading')}</Typography.Text>
+					) : edge.kind === 'error' ? (
+						<Alert
+							type="warning"
+							showIcon
+							title={t('edge.loadFailed')}
+							action={<RetryButton size="small" onClick={() => void refreshEdge()} />}
+						/>
+					) : edge.state.isolated ? (
+						<Alert type="info" showIcon title={t('edge.isolatedNotice')} />
+					) : null}
+					{!headerActive && editable && succeeded.length > 0 ? (
+						<Space orientation="vertical">
+							<label htmlFor="release-candidate">{t('releases.candidate')}</label>
+							{headerContent}
+						</Space>
+					) : null}
+					<TablePanel
+						className="fill-height"
+						title={t('releases.title')}
+						tools={!headerActive ? tabs : undefined}
+					>
+						<DataTable<Release>
+							scrollLabel={t('nav.releases')}
+							className="releases-table"
+							rowKey="id"
+							dataSource={visible}
+							rowSelection={deletion.rowSelection}
+							pagination={false}
+							columns={[
+								{
+									title: t('releases.buildColumn'),
+									dataIndex: 'buildId',
+									render: (_, record) => (
+										<Typography.Text className="version-text" title={record.buildId}>
+											{record.buildId.slice(0, 8)}
+										</Typography.Text>
+									)
+								},
+								{
+									title: t('releases.themeColumn'),
+									dataIndex: ['theme', 'themeId'],
+									render: (_, record) => `${record.theme.themeId} @ ${record.theme.version}`
+								},
+								{
+									title: t('releases.statusColumn'),
+									dataIndex: 'status',
+									render: (status: string, record) =>
+										record.artifactState && record.artifactState !== 'available' ? (
+											<ArtifactStatus state={record.artifactState} />
+										) : (
 											<StatusTag
 												kind={
 													status === 'live' ? 'success' : status === 'failed' ? 'danger' : 'neutral'
@@ -419,39 +437,41 @@ export default function ReleasesPage() {
 												{t(`releases.status.${status}` as never)}
 											</StatusTag>
 										)
-									},
-									{
-										title: t('releases.reasons'),
-										dataIndex: 'reasons',
-										render: (_, record) => record.reasons.join(', ')
-									},
-									{
-										title: t('admin.actions'),
-										render: (_, record) => (
-											<Space>
-												{record.failure ? (
-													<Typography.Text type="danger">
-														{releaseStageLabel(record.failure.stage)}
-													</Typography.Text>
-												) : null}
-												{editable && record.status !== 'live' && record.status !== 'failed' ? (
-													<Button
-														size="small"
-														disabled={isolated}
-														onClick={() => setRollbackTarget(record)}
-													>
-														{t('releases.rollback')}
-													</Button>
-												) : null}
-											</Space>
-										)
-									}
-								]}
-							/>
-						</TablePanel>
-					</>
-				)}
-			</Panel>
+								},
+								{
+									title: t('releases.reasons'),
+									dataIndex: 'reasons',
+									render: (_, record) => record.reasons.join(', ')
+								},
+								{
+									title: t('admin.actions'),
+									render: (_, record) => (
+										<Space>
+											{deletion.rowAction(record)}
+											{record.failure ? (
+												<Typography.Text type="danger">
+													{releaseStageLabel(record.failure.stage)}
+												</Typography.Text>
+											) : null}
+											{editable &&
+											record.status === 'superseded' &&
+											(record.artifactState ?? 'available') === 'available' ? (
+												<Button
+													size="small"
+													disabled={isolated}
+													onClick={() => setRollbackTarget(record)}
+												>
+													{t('releases.rollback')}
+												</Button>
+											) : null}
+										</Space>
+									)
+								}
+							]}
+						/>
+					</TablePanel>
+				</>
+			)}
 			<Modal
 				open={rollbackTarget !== null}
 				title={t('releases.rollback')}

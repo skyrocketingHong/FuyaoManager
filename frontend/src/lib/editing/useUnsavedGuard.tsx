@@ -5,11 +5,14 @@
  * so it inherits the current theme and locale.
  */
 import { useEffect } from 'react';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker, type Location } from 'react-router-dom';
 import { App } from 'antd';
 import { t } from '../i18n';
 
-export function useUnsavedGuard(dirty: boolean): void {
+export function useUnsavedGuard(
+	dirty: boolean,
+	allowNavigation?: (current: Location, next: Location) => boolean
+): void {
 	const { modal } = App.useApp();
 
 	useEffect(() => {
@@ -21,7 +24,9 @@ export function useUnsavedGuard(dirty: boolean): void {
 		return () => window.removeEventListener('beforeunload', handler);
 	}, [dirty]);
 
-	const blocker = useBlocker(dirty);
+	const blocker = useBlocker(({ currentLocation, nextLocation }) =>
+		dirty && !allowNavigation?.(currentLocation, nextLocation)
+	);
 
 	useEffect(() => {
 		if (blocker.state !== 'blocked') return;
