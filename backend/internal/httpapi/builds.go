@@ -51,6 +51,7 @@ type buildFailureDTO struct {
 // (always false for a freshly created task — previews need succeeded
 // artifacts).
 type buildDTO struct {
+	ArtifactState          string           `json:"artifactState,omitempty"`
 	ID                     string           `json:"id"`
 	SiteID                 string           `json:"siteId"`
 	Status                 string           `json:"status"`
@@ -72,10 +73,11 @@ type buildDTO struct {
 
 func toBuildDTO(b model.Build) buildDTO {
 	dto := buildDTO{
-		ID:          b.ID.String(),
-		SiteID:      b.SiteID.String(),
-		Status:      b.Status,
-		RequestedBy: b.RequestedBy.String(),
+		ArtifactState: b.ArtifactState,
+		ID:            b.ID.String(),
+		SiteID:        b.SiteID.String(),
+		Status:        b.Status,
+		RequestedBy:   b.RequestedBy.String(),
 		Theme: selectedThemeDTO{
 			ThemeID:        b.ThemeID,
 			Version:        b.ThemeVersion,
@@ -236,7 +238,7 @@ func (a *API) handleCreatePreviewLink(w http.ResponseWriter, r *http.Request, au
 		writeProblem(w, http.StatusInternalServerError, "internal_error", "Failed to issue the preview link.")
 		return
 	}
-	if build.Status != model.BuildStatusSucceeded {
+	if build.Status != model.BuildStatusSucceeded || build.ArtifactState != "available" {
 		writeProblem(w, http.StatusConflict, "build_not_succeeded", "Preview links exist only for succeeded builds.")
 		return
 	}

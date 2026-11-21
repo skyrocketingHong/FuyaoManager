@@ -270,3 +270,34 @@ func (s *ThemeStore) SaveSelection(ctx context.Context, siteID, themeRowID, user
 	}
 	return updated, tx.Commit(ctx)
 }
+
+// RegisterImportedTheme commits prepared GitHub packages without repointing a
+// version that a site may already depend on. The operator can be revoked while
+// a download runs, so authorization is rechecked at catalog commit.
+func (s *Store) RegisterImportedTheme(ctx context.Context, actor uuid.UUID, theme model.Theme) error {
+	tx, err := s.beginAccountLifecycle(ctx, actor)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	tag, err := tx.Exec(ctx, `INSERT INTO themes
+		(id, theme_id, version, adapter, manifest, manifest_digest, config_schema, source_path)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (theme_id, version) DO NOTHING`,
+		newUUID(), theme.ThemeID, theme.Version, theme.Adapter, []byte(theme.Manifest), theme.ManifestDigest,
+		[]byte(theme.ConfigSchema), theme.SourcePath)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		var digest, schema []byte
+		var path string
+		if err := tx.QueryRow(ctx, `SELECT manifest_digest,config_schema,source_path FROM themes WHERE theme_id=$1 AND version=$2`,
+			theme.ThemeID, theme.Version).Scan(&digest, &schema, &path); err != nil {
+			return err
+		}
+		if path != theme.SourcePath || !bytes.Equal(digest, theme.ManifestDigest) || !jsonEqualValue(schema, theme.ConfigSchema) {
+			return ErrConflict
+		}
+	}
+	return tx.Commit(ctx)
+}

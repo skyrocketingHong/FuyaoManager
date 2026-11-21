@@ -824,6 +824,57 @@ export interface paths {
         patch: operations["updateSiteSettings"];
         trace?: never;
     };
+    "/api/v1/themes/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List administrator-configured GitHub theme sources and running or recent installs. */
+        get: operations["listThemeSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/themes/sources/{sourceId}/candidate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Check the configured GitHub branch for a compatible theme version. */
+        get: operations["checkThemeSource"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/themes/sources/{sourceId}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download a checked commit, prepare dependencies and register its theme version. */
+        post: operations["installThemeSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/themes": {
         parameters: {
             query?: never;
@@ -1353,6 +1404,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sites/{siteId}/builds/artifacts/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete generated static files for one or more builds.
+         * @description Requires an active platform administrator who owns the site. History is retained.
+         */
+        post: operations["deleteBuildArtifacts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sites/{siteId}/builds": {
         parameters: {
             query?: never;
@@ -1484,6 +1555,26 @@ export interface paths {
          */
         put: operations["putSiteVisibility"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sites/{siteId}/releases/artifacts/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete generated static files for one or more releases.
+         * @description Requires an active platform administrator who owns the site. History is retained.
+         */
+        post: operations["deleteReleaseArtifacts"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2026,6 +2117,7 @@ export interface components {
             url: string;
         };
         PlatformUpdateTask: {
+            version?: string;
             id: string;
             /** @enum {string} */
             status: "running" | "succeeded" | "failed" | "rolled_back" | "recovery_required";
@@ -2044,6 +2136,7 @@ export interface components {
             checking: boolean;
             updating: boolean;
             tokenSet: boolean;
+            managerVersion?: string;
             managerCommit: string;
             current: components["schemas"]["PlatformUpdateVersion"];
             previous: components["schemas"]["PlatformUpdateVersion"] | null;
@@ -2242,12 +2335,17 @@ export interface components {
             /** @description Process exit code when a command step failed. */
             exitCode?: number;
         };
+        StaticArtifactIDs: {
+            ids: string[];
+        };
         /**
          * @description A persistent build-preview task. The identity block (theme, themeConfig,
          *     siteSettings, both revisions) is frozen at creation and is the only
          *     input the executor consumes. Filesystem locations are never exposed.
          */
         BuildTask: {
+            /** @enum {string} */
+            artifactState?: "available" | "deleting" | "deleted";
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -2344,6 +2442,8 @@ export interface components {
          *     is what rollback restores. Filesystem locations are never exposed.
          */
         Release: {
+            /** @enum {string} */
+            artifactState?: "available" | "deleting" | "deleted";
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -2865,6 +2965,28 @@ export interface components {
             description?: string;
             /** @enum {string} */
             defaultLocale?: "zh-CN" | "en-US";
+        };
+        ThemeSource: {
+            id: string;
+            /** Format: uri */
+            url: string;
+            branch: string;
+            path: string;
+            task?: components["schemas"]["ThemeInstall"];
+        };
+        ThemeCandidate: {
+            version: string;
+            commit: string;
+            manifestDigest: string;
+            /** @enum {string} */
+            state: "available" | "installed" | "conflict";
+        };
+        ThemeInstall: {
+            version: string;
+            commit: string;
+            /** @enum {string} */
+            state: "installing" | "installed" | "failed";
+            error?: string;
         };
         /**
          * @description One registered (theme id, version) catalog entry. Registered by the
@@ -4657,6 +4779,118 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    listThemeSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Configured public repositories. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sources: components["schemas"]["ThemeSource"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    checkThemeSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checked candidate at an exact commit. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeCandidate"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description No compatible theme manifest is present. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The configured GitHub source could not be read. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    installThemeSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    commit: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Install accepted. Its progress is available from the source list. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThemeInstall"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description The candidate changed, its version is already registered, or another install is running. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No compatible theme manifest is present. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The configured GitHub source could not be read. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listThemes: {
         parameters: {
             query?: never;
@@ -6293,6 +6527,53 @@ export interface operations {
             default: components["responses"]["Problem"];
         };
     };
+    deleteBuildArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaticArtifactIDs"];
+            };
+        };
+        responses: {
+            /** @description All selected static outputs were removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or duplicate artifact identifiers. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description An artifact is live, in use or otherwise protected. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cleanup could not complete. This request can be retried. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listBuilds: {
         parameters: {
             query?: never;
@@ -6576,6 +6857,53 @@ export interface operations {
                 };
             };
             default: components["responses"]["Problem"];
+        };
+    };
+    deleteReleaseArtifacts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                siteId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StaticArtifactIDs"];
+            };
+        };
+        responses: {
+            /** @description All selected static outputs were removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid or duplicate artifact identifiers. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description An artifact is live, in use or otherwise protected. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cleanup could not complete. This request can be retried. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listReleases: {

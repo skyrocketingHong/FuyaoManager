@@ -42,6 +42,7 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/siteprovision"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themecontract"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeimport"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/wa"
 )
 
@@ -434,6 +435,7 @@ func runServe(ctx context.Context) error {
 			return caddymanage.Execute(ctx, controlCommand, request)
 		}
 	}
+	activation := managedpublish.New(managedpublish.Config{Store: st, Control: control, Enabled: cfg.CaddyManagementEnabled, ReleasesRoot: releasesRoot, BuildsRoot: buildsRoot})
 	if cfg.DeploymentEnabled || cfg.CaddyManagementEnabled {
 		if set, ok := themeContracts.(*themecontract.Set); ok {
 			manager := publish.NewManager(publish.Config{
@@ -445,7 +447,7 @@ func runServe(ctx context.Context) error {
 				Contracts:    set,
 				Requirements: buildrunner.SiteRequirements{Capabilities: cfg.RequireCaps, URLConventions: cfg.RequireURLs},
 				Edge:         edgeMgr,
-				Activation:   managedpublish.New(managedpublish.Config{Store: st, Control: control, Enabled: cfg.CaddyManagementEnabled, ReleasesRoot: releasesRoot, BuildsRoot: buildsRoot}),
+				Activation:   activation,
 				Logger:       logger,
 			})
 			publisher = manager
@@ -484,6 +486,21 @@ func runServe(ctx context.Context) error {
 			return fmt.Errorf("invalid traffic statistics site id")
 		}
 	}
+	var themeImporter *themeimport.Manager
+	if sources := os.Getenv("FUYAO_ADMIN_THEME_SOURCES"); sources != "" {
+		imports := filepath.Join(dataRoot, "themes", "github")
+		if err := ensureDistinctRoots(
+			[]string{"sites", "builds", "releases", "platform-content", "github-themes"},
+			[]string{sitesRoot, buildsRoot, releasesRoot, platformRoot, imports},
+		); err != nil {
+			return err
+		}
+		set, _ := themeContracts.(*themecontract.Set)
+		themeImporter, err = themeimport.New(ctx, st, set, contractsDir, imports, sources, logger)
+		if err != nil {
+			return err
+		}
+	}
 	handler := httpapi.New(st, webAuthn, httpapi.Config{
 		UpdaterSocket:          os.Getenv("FUYAO_ADMIN_UPDATER_SOCKET"),
 		CaddyReadCmd:           caddyCommand,
@@ -501,9 +518,11 @@ func runServe(ctx context.Context) error {
 		ChallengeTTL:           cfg.ChallengeTTL,
 		RegistrationTTL:        cfg.RegistrationTTL,
 		ThemeContracts:         themeContracts,
+		ThemeImporter:          themeImporter,
 		BuildEnqueuer:          runner,
 		Previews:               previews,
 		Publisher:              publisher,
+		ArtifactCleaner:        &publish.ArtifactCleaner{Store: st, BuildsRoot: buildsRoot, ReleasesRoot: releasesRoot, Activation: activation, PreviewInUse: previews.InUse},
 		PublishedOrigins:       publishedOrigins,
 		Provisioner:            provisioner,
 		Edge:                   edgeMgr,

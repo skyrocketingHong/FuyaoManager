@@ -67,6 +67,7 @@ type Action struct {
 }
 
 type Task struct {
+	Version    string `json:"version,omitempty"`
 	ID         string `json:"id"`
 	Status     string `json:"status"`
 	Phase      string `json:"phase"`
@@ -79,22 +80,23 @@ type Task struct {
 }
 
 type Status struct {
-	Enabled       bool      `json:"enabled"`
-	Repository    string    `json:"repository"`
-	Channel       string    `json:"channel"`
-	Auto          bool      `json:"auto"`
-	Pinned        bool      `json:"pinned"`
-	Checking      bool      `json:"checking"`
-	Updating      bool      `json:"updating"`
-	TokenSet      bool      `json:"tokenSet"`
-	ManagerCommit string    `json:"managerCommit"`
-	Current       Version   `json:"current"`
-	Previous      *Version  `json:"previous"`
-	Versions      []Version `json:"versions"`
-	Task          *Task     `json:"task"`
-	LastCheck     string    `json:"lastCheck"`
-	LastError     string    `json:"lastError"`
-	Logs          []string  `json:"logs"`
+	Enabled        bool      `json:"enabled"`
+	Repository     string    `json:"repository"`
+	Channel        string    `json:"channel"`
+	Auto           bool      `json:"auto"`
+	Pinned         bool      `json:"pinned"`
+	Checking       bool      `json:"checking"`
+	Updating       bool      `json:"updating"`
+	TokenSet       bool      `json:"tokenSet"`
+	ManagerVersion string    `json:"managerVersion,omitempty"`
+	ManagerCommit  string    `json:"managerCommit"`
+	Current        Version   `json:"current"`
+	Previous       *Version  `json:"previous"`
+	Versions       []Version `json:"versions"`
+	Task           *Task     `json:"task"`
+	LastCheck      string    `json:"lastCheck"`
+	LastError      string    `json:"lastError"`
+	Logs           []string  `json:"logs"`
 }
 
 type diskState struct {

@@ -30,6 +30,7 @@ type BuildFailure struct {
 // (ThemeRowID..ThemeConfig, SiteSettings, and both revisions) is frozen at
 // creation time and is the only input the executor may consult.
 type Build struct {
+	ArtifactState          string
 	ID                     uuid.UUID
 	SiteID                 uuid.UUID
 	RequestedBy            uuid.UUID

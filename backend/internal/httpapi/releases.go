@@ -39,26 +39,28 @@ type releaseFailureDTO struct {
 // locations are never exposed; the published origin URL is returned
 // separately on the current-release read.
 type releaseDTO struct {
-	ID           uuid.UUID           `json:"id"`
-	SiteID       uuid.UUID           `json:"siteId"`
-	BuildID      uuid.UUID           `json:"buildId"`
-	Theme        selectedThemeDTO    `json:"theme"`
-	InputDigests json.RawMessage     `json:"inputDigests"`
-	Routes       model.ReleaseRoutes `json:"routes"`
-	Reasons      []string            `json:"reasons"`
-	Status       string              `json:"status"`
-	Failure      *releaseFailureDTO  `json:"failure"`
-	CreatedBy    uuid.UUID           `json:"createdBy"`
-	CreatedAt    string              `json:"createdAt"`
-	ActivatedAt  *string             `json:"activatedAt"`
-	SupersededAt *string             `json:"supersededAt"`
+	ArtifactState string              `json:"artifactState,omitempty"`
+	ID            uuid.UUID           `json:"id"`
+	SiteID        uuid.UUID           `json:"siteId"`
+	BuildID       uuid.UUID           `json:"buildId"`
+	Theme         selectedThemeDTO    `json:"theme"`
+	InputDigests  json.RawMessage     `json:"inputDigests"`
+	Routes        model.ReleaseRoutes `json:"routes"`
+	Reasons       []string            `json:"reasons"`
+	Status        string              `json:"status"`
+	Failure       *releaseFailureDTO  `json:"failure"`
+	CreatedBy     uuid.UUID           `json:"createdBy"`
+	CreatedAt     string              `json:"createdAt"`
+	ActivatedAt   *string             `json:"activatedAt"`
+	SupersededAt  *string             `json:"supersededAt"`
 }
 
 func toReleaseDTO(r model.Release) releaseDTO {
 	dto := releaseDTO{
-		ID:      r.ID,
-		SiteID:  r.SiteID,
-		BuildID: r.BuildID,
+		ArtifactState: r.ArtifactState,
+		ID:            r.ID,
+		SiteID:        r.SiteID,
+		BuildID:       r.BuildID,
 		Theme: selectedThemeDTO{
 			ThemeID:        r.ThemeID,
 			Version:        r.ThemeVersion,

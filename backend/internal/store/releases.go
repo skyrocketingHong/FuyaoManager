@@ -27,14 +27,14 @@ var ErrReleaseNotRollbackable = errors.New("release cannot become live")
 
 const releaseColumns = `r.id, r.site_id, r.build_id, r.release_dir, r.theme_id, r.theme_version,
 	r.manifest_digest, r.input_digests, r.routes, r.reasons, r.status, r.failure, r.created_by,
-	r.created_at, r.activated_at, r.superseded_at`
+	r.created_at, r.activated_at, r.superseded_at, r.artifact_state`
 
 func scanReleaseRow(scan func(dest ...any) error) (model.Release, error) {
 	var r model.Release
 	var failure []byte
 	err := scan(&r.ID, &r.SiteID, &r.BuildID, &r.ReleaseDir, &r.ThemeID, &r.ThemeVersion,
 		&r.ManifestDigest, &r.InputDigests, &r.Routes, &r.Reasons, &r.Status, &failure, &r.CreatedBy,
-		&r.CreatedAt, &r.ActivatedAt, &r.SupersededAt)
+		&r.CreatedAt, &r.ActivatedAt, &r.SupersededAt, &r.ArtifactState)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Release{}, ErrNotFound
 	}
@@ -59,6 +59,10 @@ const releaseMembershipJoin = ` JOIN site_memberships m ON m.site_id = r.site_id
 // transaction. Holders serialize the whole read-base-state → materialize →
 // switch sequence; the lock releases with the transaction.
 func (s *ReleaseStore) AcquirePublishLock(ctx context.Context, tx pgx.Tx, siteID uuid.UUID) error {
+	return AcquireSitePublishLock(ctx, tx, siteID)
+}
+
+func AcquireSitePublishLock(ctx context.Context, tx pgx.Tx, siteID uuid.UUID) error {
 	_, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('fuyao-publish:' || $1::text, 0))`, siteID)
 	return err
 }
@@ -71,7 +75,7 @@ func (s *ReleaseStore) BuildHasActiveReleaseWithinTx(ctx context.Context, tx pgx
 	var exists bool
 	err := tx.QueryRow(ctx,
 		`SELECT EXISTS (
-			SELECT 1 FROM site_releases WHERE site_id = $1 AND build_id = $2 AND status <> 'failed'
+			SELECT 1 FROM site_releases WHERE site_id = $1 AND build_id = $2 AND status <> 'failed' AND artifact_state <> 'deleted'
 		)`, siteID, buildID).Scan(&exists)
 	return exists, err
 }
@@ -168,7 +172,7 @@ func (s *ReleaseStore) RollbackWithinTx(ctx context.Context, tx pgx.Tx, siteID, 
 
 	// The target must exist on this site and not be a failed attempt.
 	row := tx.QueryRow(ctx,
-		`SELECT `+releaseColumns+` FROM site_releases r WHERE r.id = $1 AND r.site_id = $2 AND r.status <> 'failed'`,
+		`SELECT `+releaseColumns+` FROM site_releases r WHERE r.id = $1 AND r.site_id = $2 AND r.status <> 'failed' AND r.artifact_state = 'available'`,
 		releaseID, siteID)
 	target, err := scanReleaseRow(row.Scan)
 	if err != nil {

@@ -181,7 +181,11 @@ func (s *NetworkEntryStore) insertEntry(ctx context.Context, siteID uuid.UUID, b
 	var e NetworkEntry
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO site_network_entries (id, site_id, kind, build_id, port)
-		 VALUES ($1, $2, $3, $4, $5)
+		 SELECT $1, $2, $3, $4, $5
+		 WHERE $3 = 'site' OR EXISTS (
+			SELECT 1 FROM site_builds WHERE id=$4 AND site_id=$2 AND status='succeeded'
+			AND artifact_state='available' FOR SHARE
+		 )
 		 RETURNING id, site_id, kind, build_id, port, created_at`,
 		id, siteID, kind, buildID, port,
 	).Scan(&e.ID, &e.SiteID, &e.Kind, &e.BuildID, &e.Port, &e.CreatedAt)

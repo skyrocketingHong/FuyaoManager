@@ -106,7 +106,7 @@ func verifyRelease(dir, repository string, expected Version) (Manifest, error) {
 	if err != nil {
 		return m, err
 	}
-	if m.Format != 1 || m.Repository != repository || m.Architecture != "linux/amd64" || m.Commit != expected.Commit || m.RunID != expected.RunID || m.Attempt != expected.Attempt || m.Branch != expected.Branch || m.DatabaseSchema <= 0 || len(m.Files) == 0 {
+	if m.Format != 1 || m.Repository != repository || m.Architecture != "linux/amd64" || m.Commit != expected.Commit || m.RunID != expected.RunID || m.Attempt != expected.Attempt || m.Branch != expected.Branch || (expected.Version != "" && m.Version.Version != expected.Version) || m.DatabaseSchema <= 0 || len(m.Files) == 0 {
 		return m, errors.New("release provenance mismatch")
 	}
 	seen := map[string]bool{}

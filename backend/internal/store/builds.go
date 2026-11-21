@@ -23,7 +23,7 @@ type BuildStore struct {
 const buildColumns = `b.id, b.site_id, b.requested_by, b.theme_row_id, b.theme_id, b.theme_version,
 	b.manifest_digest, b.theme_config, b.site_settings, b.site_settings_revision,
 	b.theme_selection_revision, b.status, b.failure, b.artifact_path, b.input_digests,
-	b.source_digest, b.source_file_count, b.created_at, b.started_at, b.finished_at,b.content_sources`
+	b.source_digest, b.source_file_count, b.created_at, b.started_at, b.finished_at,b.content_sources,b.artifact_state`
 
 func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	var b model.Build
@@ -34,7 +34,7 @@ func scanBuildRow(scan func(dest ...any) error) (model.Build, error) {
 	err := scan(&b.ID, &b.SiteID, &b.RequestedBy, &b.ThemeRowID, &b.ThemeID, &b.ThemeVersion,
 		&b.ManifestDigest, &b.ThemeConfig, &b.SiteSettings, &b.SiteSettingsRevision,
 		&b.ThemeSelectionRevision, &b.Status, &failure, &artifactPath, &b.InputDigests,
-		&sourceDigest, &sourceFileCount, &b.CreatedAt, &b.StartedAt, &b.FinishedAt, &b.ContentSources)
+		&sourceDigest, &sourceFileCount, &b.CreatedAt, &b.StartedAt, &b.FinishedAt, &b.ContentSources, &b.ArtifactState)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return model.Build{}, ErrNotFound
 	}
@@ -270,7 +270,7 @@ func (s *BuildStore) ListQueued(ctx context.Context) ([]uuid.UUID, error) {
 func (s *BuildStore) GetArtifactPath(ctx context.Context, buildID uuid.UUID) (string, error) {
 	var path string
 	err := s.pool.QueryRow(ctx,
-		`SELECT artifact_path FROM site_builds WHERE id = $1 AND status = 'succeeded'`, buildID).
+		`SELECT artifact_path FROM site_builds WHERE id = $1 AND status = 'succeeded' AND artifact_state = 'available'`, buildID).
 		Scan(&path)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", ErrNotFound
@@ -286,7 +286,7 @@ func (s *BuildStore) GetPreviewTarget(ctx context.Context, buildID uuid.UUID) (s
 	err := s.pool.QueryRow(ctx,
 		`SELECT b.artifact_path, t.manifest FROM site_builds b
 		 JOIN themes t ON t.id = b.theme_row_id
-		 WHERE b.id = $1 AND b.status = 'succeeded'`, buildID).
+		 WHERE b.id = $1 AND b.status = 'succeeded' AND b.artifact_state = 'available'`, buildID).
 		Scan(&artifactPath, &manifest)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", "", ErrNotFound

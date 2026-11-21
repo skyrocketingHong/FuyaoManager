@@ -257,6 +257,12 @@ func TestGitHubCatalogExcludesForkPRAndFailedRuns(t *testing.T) {
 	failed.Conclusion = "failure"
 	runs = append(runs, failed)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/repos/owner/repo/releases" {
+			_ = json.NewEncoder(w).Encode([]map[string]any{{
+				"tag_name": "build-1-1", "name": "27.2.10 · main · aaaaaaaa", "assets": []map[string]string{{"name": archiveName}},
+			}})
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"workflow_runs": runs})
 	}))
 	defer server.Close()
@@ -266,7 +272,7 @@ func TestGitHubCatalogExcludesForkPRAndFailedRuns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(versions) != 2 {
+	if len(versions) != 2 || versions[0].Version != "27.2.10" {
 		t.Fatalf("accepted untrusted runs: %d", len(versions))
 	}
 }
@@ -283,5 +289,15 @@ func TestUpdateHandlerRejectsExtraJSONAndUnknownCommands(t *testing.T) {
 		if w.Code < 400 {
 			t.Fatal("accepted invalid command", body)
 		}
+	}
+}
+
+func TestProductVersionUpdateOrder(t *testing.T) {
+	if !newerProductVersion("27.2.10", "27.2.9") ||
+		newerProductVersion("27.2.10", "27.2.10") ||
+		newerProductVersion("27.2.9", "27.2.10") ||
+		newerProductVersion("", "27.2.10") ||
+		newerProductVersion("27.2.10", "") {
+		t.Fatal("automatic updates must compare known numeric application versions")
 	}
 }

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
@@ -160,24 +161,15 @@ func (m *Manager) EntryURL(visibility string, port int) string {
 // when a newer publish or rollback already superseded `release`, the stale
 // callback must not move `current` backwards — it only re-applies the
 // snippet, which renders from the database (the newer state) anyway.
-func (m *Manager) OnLive(ctx context.Context, siteID uuid.UUID, release model.Release) error {
+func (m *Manager) OnLive(ctx context.Context, siteID uuid.UUID, _ model.Release) error {
 	if m.Isolated() {
 		return ErrDeploymentDisabled
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	current, err := m.currentReleaseID(ctx, siteID)
-	if err != nil {
-		return fmt.Errorf("read the live release before switching the edge: %w", err)
-	}
-	if current == release.ID {
-		if err := m.switchCurrentLocked(siteID, release.ReleaseDir); err != nil {
-			return err
-		}
-	} else {
-		m.cfg.Logger.Warn("edge callback superseded; keeping the newer live pointer",
-			"siteId", siteID, "callbackRelease", release.ID, "liveRelease", current)
+	if err := m.syncCurrentLocked(ctx, siteID); err != nil {
+		return err
 	}
 	if !m.Enabled() {
 		return nil
@@ -189,16 +181,27 @@ func (m *Manager) OnLive(ctx context.Context, siteID uuid.UUID, release model.Re
 	return m.applyAllLocked(ctx)
 }
 
-// currentReleaseID reads the site's live release id straight from the
-// database (the authority), independent of any caller's transaction.
-func (m *Manager) currentReleaseID(ctx context.Context, siteID uuid.UUID) (uuid.UUID, error) {
-	var current uuid.UUID
-	err := m.cfg.Pool.QueryRow(ctx,
-		`SELECT current_release_id FROM sites WHERE id = $1`, siteID).Scan(&current)
+// syncCurrentLocked refreshes the live target under the same lock used by
+// publication and artifact cleanup, even when an edge callback waited.
+func (m *Manager) syncCurrentLocked(ctx context.Context, siteID uuid.UUID) error {
+	tx, err := m.cfg.Pool.Begin(ctx)
 	if err != nil {
-		return uuid.Nil, err
+		return err
 	}
-	return current, nil
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	if err := store.AcquireSitePublishLock(ctx, tx, siteID); err != nil {
+		return err
+	}
+	var dir string
+	err = tx.QueryRow(ctx, `SELECT r.release_dir FROM sites s JOIN site_releases r
+        ON r.id=s.current_release_id WHERE s.id=$1 AND r.status='live'`, siteID).Scan(&dir)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return m.switchCurrentLocked(siteID, dir)
 }
 
 // switchCurrentLocked atomically points <ReleasesRoot>/<siteID>/current at
@@ -242,7 +245,7 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 		return err
 	}
 	for _, row := range rows {
-		if err := m.switchCurrentLocked(row.SiteID, row.ReleaseDir); err != nil {
+		if err := m.syncCurrentLocked(ctx, row.SiteID); err != nil {
 			m.cfg.Logger.Error("edge reconcile pointer", "siteId", row.SiteID, "error", err)
 		}
 	}

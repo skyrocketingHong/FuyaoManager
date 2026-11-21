@@ -21,7 +21,9 @@ import (
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/content"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/edge"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/model"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/publish"
 	"github.com/skyrocketingHong/FuyaoManager/backend/internal/store"
+	"github.com/skyrocketingHong/FuyaoManager/backend/internal/themeimport"
 )
 
 // Cookie and header names.
@@ -52,9 +54,11 @@ type Config struct {
 	ChallengeTTL           time.Duration
 	RegistrationTTL        time.Duration
 	ThemeContracts         ThemeConfigValidator
+	ThemeImporter          *themeimport.Manager
 	BuildEnqueuer          BuildEnqueuer
 	Previews               PreviewIssuer
 	Publisher              Publisher
+	ArtifactCleaner        *publish.ArtifactCleaner
 	PublishedOrigins       PublishedOrigins
 	Provisioner            SiteProvisioner
 	Edge                   EdgeManager
@@ -132,9 +136,11 @@ type API struct {
 	logger           *slog.Logger
 	origins          map[string]struct{}
 	themeContracts   ThemeConfigValidator
+	themeImporter    *themeimport.Manager
 	buildEnqueuer    BuildEnqueuer
 	previews         PreviewIssuer
 	publisher        Publisher
+	artifactCleaner  *publish.ArtifactCleaner
 	publishedOrigins PublishedOrigins
 	provisioner      SiteProvisioner
 	edge             EdgeManager
@@ -231,6 +237,9 @@ func (a *API) routes() []routeSpec {
 		// Theme catalog and per-site theme selection. Registration itself is
 		// operator-driven (fuyao-admin register-theme); the HTTP surface only
 		// reads the catalog and saves selections.
+		{http.MethodGet, "/api/v1/themes/sources", "listThemeSources", a.requireFullScope(a.adminRoute(a.handleListThemeSources))},
+		{http.MethodGet, "/api/v1/themes/sources/{sourceId}/candidate", "checkThemeSource", a.requireFullScope(a.adminRoute(a.handleCheckThemeSource))},
+		{http.MethodPost, "/api/v1/themes/sources/{sourceId}/install", "installThemeSource", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleInstallThemeSource)))},
 		{http.MethodGet, "/api/v1/themes", "listThemes", a.requireFullScope(a.handleListThemes)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/theme", "getSiteTheme", a.requireFullScope(a.handleGetSiteTheme)},
 		{http.MethodPut, "/api/v1/sites/{siteId}/theme", "putSiteTheme", a.requireFullScope(a.withCSRF(a.handlePutSiteTheme))},
@@ -276,6 +285,7 @@ func (a *API) routes() []routeSpec {
 
 		// Build-preview tasks: creation freezes the version view; the runner
 		// executes and persists state transitions that stay queryable here.
+		{http.MethodPost, "/api/v1/sites/{siteId}/builds/artifacts/delete", "deleteBuildArtifacts", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleDeleteBuildArtifacts)))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/builds", "createBuild", a.requireFullScope(a.withCSRF(a.handleCreateBuild))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds", "listBuilds", a.requireFullScope(a.handleListBuilds)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/builds/{buildId}", "getBuild", a.requireFullScope(a.handleGetBuild)},
@@ -285,6 +295,7 @@ func (a *API) routes() []routeSpec {
 		// Releases: publish freezes a succeeded build's artifacts into a
 		// release directory and atomically switches the site's live version;
 		// rollback re-points at an existing release without rebuilding.
+		{http.MethodPost, "/api/v1/sites/{siteId}/releases/artifacts/delete", "deleteReleaseArtifacts", a.requireFullScope(a.withCSRF(a.adminRoute(a.handleDeleteReleaseArtifacts)))},
 		{http.MethodPost, "/api/v1/sites/{siteId}/releases", "createRelease", a.requireFullScope(a.withCSRF(a.deploymentRoute(a.handleCreateRelease)))},
 		{http.MethodGet, "/api/v1/sites/{siteId}/releases", "listReleases", a.requireFullScope(a.handleListReleases)},
 		{http.MethodGet, "/api/v1/sites/{siteId}/releases/{releaseId}", "getRelease", a.requireFullScope(a.handleGetRelease)},
@@ -305,9 +316,11 @@ func New(st *store.Store, wa *webauthnlib.WebAuthn, cfg Config, logger *slog.Log
 		cfg:              cfg,
 		logger:           logger,
 		themeContracts:   cfg.ThemeContracts,
+		themeImporter:    cfg.ThemeImporter,
 		buildEnqueuer:    cfg.BuildEnqueuer,
 		previews:         cfg.Previews,
 		publisher:        cfg.Publisher,
+		artifactCleaner:  cfg.ArtifactCleaner,
 		publishedOrigins: cfg.PublishedOrigins,
 		provisioner:      cfg.Provisioner,
 		edge:             cfg.Edge,

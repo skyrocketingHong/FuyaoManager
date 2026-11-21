@@ -30,7 +30,7 @@ func setupPublish(t *testing.T) (*testEnv, string, string) {
 // setupPublishWithContract is setupPublish with an injectable release
 // contract (nil loads the real one); the retry regression uses a flaky
 // wrapper to inject exactly one publish failure.
-func setupPublishWithContract(t *testing.T, contract publish.ReleaseContract) (*testEnv, string, string) {
+func setupPublishWithContract(t *testing.T, contract publish.ReleaseContract, extra ...func(*Config, *testEnv)) (*testEnv, string, string) {
 	t.Helper()
 	buildsRoot := filepath.Join(t.TempDir(), "admin-builds")
 	releasesRoot := filepath.Join(t.TempDir(), "admin-releases")
@@ -58,6 +58,10 @@ func setupPublishWithContract(t *testing.T, contract publish.ReleaseContract) (*
 		server = publish.NewServer(st.Releases, releasesRoot)
 		cfg.Publisher = manager
 		cfg.PublishedOrigins = server
+		cfg.ArtifactCleaner = &publish.ArtifactCleaner{Store: st, BuildsRoot: buildsRoot, ReleasesRoot: releasesRoot, PreviewInUse: cfg.Previews.IsActive}
+		for _, configure := range extra {
+			configure(cfg, env)
+		}
 	})
 	t.Cleanup(func() {
 		if server != nil {

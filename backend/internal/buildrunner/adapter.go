@@ -81,3 +81,15 @@ func (r *Runner) commandFailure(stage, logPath string, err error) error {
 	_ = logPath
 	return &buildError{failure: f}
 }
+
+// InstallThemeDependencies prepares a lockfile-based theme in a private
+// import directory. Lifecycle scripts run only in the existing build adapter.
+func InstallThemeDependencies(ctx context.Context, dir, home string) error {
+	cmd := exec.CommandContext(ctx, "npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund",
+		"--include=dev", "--registry=https://registry.npmjs.org",
+		"--userconfig="+os.DevNull, "--globalconfig="+filepath.Join(home, "global-npmrc"), "--cache="+filepath.Join(home, "cache"))
+	cmd.Dir = dir
+	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + home, "TMPDIR=" + home, "NODE_OPTIONS=" + os.Getenv("NODE_OPTIONS")}
+	setupProcessGroup(cmd, 10*time.Second)
+	return cmd.Run()
+}

@@ -102,7 +102,7 @@ func (m *Manager) releasePath(p string) bool {
 func (m *Manager) Info() Status {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	s := Status{Enabled: true, Repository: m.cfg.Repository, Channel: m.state.Channel, Auto: m.state.Auto, Pinned: m.state.Pinned, Checking: m.checking, ManagerCommit: buildinfo.Commit, Versions: append([]Version{}, m.versions...), Logs: append([]string{}, m.state.Logs...), LastCheck: m.state.LastCheck, LastError: m.state.LastError}
+	s := Status{Enabled: true, Repository: m.cfg.Repository, Channel: m.state.Channel, Auto: m.state.Auto, Pinned: m.state.Pinned, Checking: m.checking, ManagerCommit: buildinfo.Commit, ManagerVersion: buildinfo.Version, Versions: append([]Version{}, m.versions...), Logs: append([]string{}, m.state.Logs...), LastCheck: m.state.LastCheck, LastError: m.state.LastError}
 	if m.state.Task != nil {
 		task := *m.state.Task
 		s.Task = &task
@@ -228,10 +228,13 @@ func (m *Manager) Action(ctx context.Context, action Action) error {
 		if action.Action == "rollback" && (err != nil || selectedSchema != current.DatabaseSchema) {
 			return errors.New("previous release uses an incompatible database schema")
 		}
+		if action.Action == "update" && (err != nil || !newerProductVersion(selected.Version, current.Version.Version)) {
+			return errors.New("no newer application version is available")
+		}
 		if err == nil && current.Commit == selected.Commit {
 			return errors.New("selected commit is already active")
 		}
-		task := &Task{ID: fmt.Sprintf("%d", time.Now().UnixNano()), Status: "running", Phase: "accepted", Commit: selected.Commit, Previous: previous, StartedAt: now()}
+		task := &Task{ID: fmt.Sprintf("%d", time.Now().UnixNano()), Status: "running", Phase: "accepted", Commit: selected.Commit, Version: selected.Version, Previous: previous, StartedAt: now()}
 		m.state.Task = task
 		m.state.LastError = ""
 		m.logLocked("Accepted " + action.Action + " " + selected.Commit)
@@ -312,7 +315,7 @@ func (m *Manager) Loop(ctx context.Context) {
 			cancel()
 			if err == nil {
 				info = m.Info()
-				if len(info.Versions) > 0 && info.Versions[0].Commit != info.Current.Commit {
+				if len(info.Versions) > 0 && newerProductVersion(info.Versions[0].Version, info.Current.Version) {
 					_ = m.Action(ctx, Action{Action: "update"})
 				}
 			}

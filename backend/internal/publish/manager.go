@@ -163,7 +163,7 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		}
 	}
 	build, err := m.builds.Get(ctx, buildID)
-	if err != nil || build.SiteID != siteID || build.Status != model.BuildStatusSucceeded {
+	if err != nil || build.SiteID != siteID || build.Status != model.BuildStatusSucceeded || build.ArtifactState != "available" {
 		return model.Release{}, ErrBuildNotPublishable
 	}
 	theme, err := m.themes.GetByRowID(ctx, build.ThemeRowID)
@@ -336,6 +336,12 @@ func (m *Manager) Publish(ctx context.Context, siteID, buildID, userID uuid.UUID
 		return recordFailure(fail(StagePersist, "Failed to acquire the publish lock."))
 	}
 
+	var available bool
+	if err := tx.QueryRow(ctx, `SELECT artifact_state = 'available' FROM site_builds WHERE id = $1`, build.ID).Scan(&available); err != nil || !available {
+		_ = cleanupDir(stagingDir)
+		return model.Release{}, ErrBuildNotPublishable
+	}
+
 	// Republishing a build that already backs an active release is a
 	// conflict, not a failure: the existing release keeps serving and no
 	// failed row is recorded.
@@ -442,7 +448,7 @@ func (m *Manager) Rollback(ctx context.Context, siteID, releaseID, userID uuid.U
 	if err != nil {
 		return model.Release{}, err
 	}
-	if target.Status == model.ReleaseStatusFailed {
+	if target.Status == model.ReleaseStatusFailed || target.ArtifactState != "available" {
 		return model.Release{}, store.ErrReleaseNotRollbackable
 	}
 	// The release directory with its metadata must still be on disk.

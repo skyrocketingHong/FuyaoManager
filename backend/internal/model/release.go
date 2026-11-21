@@ -40,6 +40,7 @@ type ReleaseRoutes struct {
 // digests identify the exact triple (content, site config, theme config) the
 // release was built from; rollback restores that triple without rebuilding.
 type Release struct {
+	ArtifactState  string
 	ID             uuid.UUID
 	SiteID         uuid.UUID
 	BuildID        uuid.UUID

@@ -57,7 +57,7 @@ runuser -u fuyao-admin -- "$candidate/fuyao-admin" version
 runuser -u fuyao-admin -- "$candidate/fuyao-manager-updater" version
 runuser -u fuyao-admin -- "$candidate/fuyao-admin" migrate
 while IFS= read -r theme; do
-  case "$theme" in /srv/fuyao-admin/themes/*) ;; *) exit 2 ;; esac
+  case "$theme" in /srv/fuyao-admin/themes/*|/srv/fuyao-admin/data/themes/github/*) ;; *) exit 2 ;; esac
   runuser -u fuyao-admin -- "$candidate/fuyao-admin" register-theme \
     --contracts "$candidate/contracts/theme" "$theme"
 done < "$backup/theme-sources"

@@ -1472,6 +1472,89 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/themes/sources:
+    get:
+      operationId: listThemeSources
+      summary: List administrator-configured GitHub theme sources and running or recent installs.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Configured public repositories.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sources]
+                properties:
+                  sources:
+                    type: array
+                    items: { $ref: '#/components/schemas/ThemeSource' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/themes/sources/{sourceId}/candidate:
+    get:
+      operationId: checkThemeSource
+      summary: Check the configured GitHub branch for a compatible theme version.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Checked candidate at an exact commit.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThemeCandidate' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: No compatible theme manifest is present.
+        '502':
+          description: The configured GitHub source could not be read.
+  /api/v1/themes/sources/{sourceId}/install:
+    post:
+      operationId: installThemeSource
+      summary: Download a checked commit, prepare dependencies and register its theme version.
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      parameters:
+        - name: sourceId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [commit]
+              properties:
+                commit: { type: string, pattern: '^[0-9a-f]{40}$' }
+      responses:
+        '202':
+          description: Install accepted. Its progress is available from the source list.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ThemeInstall' }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: The candidate changed, its version is already registered, or another install is running.
+        '422':
+          description: No compatible theme manifest is present.
+        '502':
+          description: The configured GitHub source could not be read.
   /api/v1/themes:
     get:
       operationId: listThemes
@@ -3065,6 +3148,38 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/builds/artifacts/delete:
+    post:
+      operationId: deleteBuildArtifacts
+      summary: Delete generated static files for one or more builds.
+      description: Requires an active platform administrator who owns the site. History is retained.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaticArtifactIDs'
+      responses:
+        '204':
+          description: All selected static outputs were removed.
+        '400':
+          description: Invalid or duplicate artifact identifiers.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: An artifact is live, in use or otherwise protected.
+        '503':
+          description: Cleanup could not complete. This request can be retried.
   /api/v1/sites/{siteId}/builds:
     post:
       operationId: createBuild
@@ -3388,6 +3503,38 @@ paths:
         default:
           $ref: '#/components/responses/Problem'
 
+  /api/v1/sites/{siteId}/releases/artifacts/delete:
+    post:
+      operationId: deleteReleaseArtifacts
+      summary: Delete generated static files for one or more releases.
+      description: Requires an active platform administrator who owns the site. History is retained.
+      parameters:
+        - name: siteId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      security:
+        - sessionCookie: []
+          csrfHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaticArtifactIDs'
+      responses:
+        '204':
+          description: All selected static outputs were removed.
+        '400':
+          description: Invalid or duplicate artifact identifiers.
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: An artifact is live, in use or otherwise protected.
+        '503':
+          description: Cleanup could not complete. This request can be retried.
   /api/v1/sites/{siteId}/releases:
     post:
       operationId: createRelease
@@ -5039,6 +5186,7 @@ components:
       type: object
       required: [id, status, phase, commit, startedAt]
       properties:
+        version: { type: string }
         id: { type: string }
         status:
           type: string
@@ -5078,6 +5226,7 @@ components:
         checking: { type: boolean }
         updating: { type: boolean }
         tokenSet: { type: boolean }
+        managerVersion: { type: string }
         managerCommit: { type: string }
         current: { $ref: '#/components/schemas/PlatformUpdateVersion' }
         previous:
@@ -5332,6 +5481,17 @@ components:
           type: integer
           description: Process exit code when a command step failed.
 
+    StaticArtifactIDs:
+      type: object
+      additionalProperties: false
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, format: uuid }
     BuildTask:
       type: object
       description: |
@@ -5353,6 +5513,9 @@ components:
           previewActive
         ]
       properties:
+        artifactState:
+          type: string
+          enum: [available, deleting, deleted]
         id: { type: string, format: uuid }
         siteId: { type: string, format: uuid }
         status:
@@ -5484,6 +5647,9 @@ components:
       required:
         [id, siteId, buildId, status, theme, inputDigests, routes, reasons, createdBy, createdAt]
       properties:
+        artifactState:
+          type: string
+          enum: [available, deleting, deleted]
         id: { type: string, format: uuid }
         siteId: { type: string, format: uuid }
         buildId:
@@ -6431,6 +6597,31 @@ components:
           enum: [zh-CN, en-US]
       additionalProperties: false
 
+    ThemeSource:
+      type: object
+      required: [id, url, branch, path]
+      properties:
+        id: { type: string }
+        url: { type: string, format: uri }
+        branch: { type: string }
+        path: { type: string }
+        task: { $ref: '#/components/schemas/ThemeInstall' }
+    ThemeCandidate:
+      type: object
+      required: [version, commit, manifestDigest, state]
+      properties:
+        version: { type: string }
+        commit: { type: string, pattern: '^[0-9a-f]{40}$' }
+        manifestDigest: { type: string, pattern: '^[0-9a-f]{64}$' }
+        state: { type: string, enum: [available, installed, conflict] }
+    ThemeInstall:
+      type: object
+      required: [version, commit, state]
+      properties:
+        version: { type: string }
+        commit: { type: string, pattern: '^[0-9a-f]{40}$' }
+        state: { type: string, enum: [installing, installed, failed] }
+        error: { type: string }
     Theme:
       type: object
       description: |

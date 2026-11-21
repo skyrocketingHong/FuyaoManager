@@ -379,6 +379,19 @@ func (p *PreviewServer) IsActive(siteID, buildID uuid.UUID) bool {
 	return o != nil && o.siteID == siteID && !o.expired()
 }
 
+// InUse also protects a preview request that is still resolving its target.
+func (p *PreviewServer) InUse(siteID, buildID uuid.UUID) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for attempt := range p.pending[buildID] {
+		if attempt.siteID == siteID && !attempt.canceled {
+			return true
+		}
+	}
+	o := p.origins[buildID]
+	return o != nil && o.siteID == siteID && !o.expired()
+}
+
 // Close stops the sweeper and tears every origin down. Listeners and
 // in-memory state die with the process; persistent port assignments of
 // still-live previews are released so a restart cannot leak them (fresh
