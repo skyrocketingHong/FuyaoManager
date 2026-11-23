@@ -140,6 +140,16 @@ export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearan
 		accentColor
 	);
 	const primary = readableColor(accentColor, '#ffffff');
+	const onSidebar = (ink: string) => [p.sidebar, p.muted, selected].reduce(
+		(color, background) => readableColor(color, background, 3),
+		ink
+	);
+	const sidebarDetail = onSidebar(readableColor(
+		mode === 'dark' ? accentColor : mixColor(accentColor, '#000000', 0.56),
+		'#ffffff',
+		mode === 'dark' ? 4 : 7.5
+	));
+	const sidebarBody = onSidebar(mixColor(sidebarDetail, '#ffffff', mode === 'dark' ? 0.6 : 0.4));
 
 	const variables: Record<string, string> = {
 		'--background': p.background,
@@ -151,6 +161,8 @@ export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearan
 		'--border': p.border,
 		'--control-border': p.controlBorder,
 		'--sidebar-bg': p.sidebar,
+		'--sidebar-icon-detail': sidebarDetail,
+		'--sidebar-icon-body': sidebarBody,
 		'--primary': primaryText,
 		'--primary-foreground': mode === 'dark' ? palettes.dark.background : '#ffffff',
 		'--accent': selected,

@@ -85,11 +85,17 @@ it('tracks system changes, preserves accent on quick toggles, and synchronizes o
 
 it('keeps preset and extreme custom colors readable on both palettes without changing status colors', () => {
 	for (const mode of ['light', 'dark'] as const)
-		for (const accent of [...accentPresets.map((p) => p.color), '#ffffff', '#000000', '#eeeeee']) {
+		for (const accent of [...accentPresets.map((p) => p.color), '#ffffff', '#000000', '#eeeeee', '#ff00ff']) {
 			const { variables: vars, config } = appearanceTheme(mode, accent);
 			for (const surface of ['--card', '--surface', '--muted', '--sidebar-bg', '--accent']) {
 				expect(contrastRatio(vars['--primary'], vars[surface])).toBeGreaterThanOrEqual(4.5);
 			}
+			for (const ink of ['--sidebar-icon-detail', '--sidebar-icon-body']) {
+				for (const surface of ['--sidebar-bg', '--muted', '--accent']) {
+					expect(contrastRatio(vars[ink], vars[surface])).toBeGreaterThanOrEqual(3);
+				}
+			}
+			expect(contrastRatio(vars['--sidebar-icon-detail'], vars['--sidebar-icon-body'])).toBeGreaterThanOrEqual(2);
 			expect(contrastRatio(String(config.token?.colorPrimary), '#ffffff')).toBeGreaterThanOrEqual(
 				4.5
 			);

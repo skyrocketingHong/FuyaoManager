@@ -604,6 +604,39 @@ describe('unsaved-changes navigation', () => {
 	}, 15000);
 });
 
+it('plays sidebar motion on icon hover and replays on a current-page menu click', async () => {
+	useNarrowViewport(false);
+	authenticated();
+	renderAt('/content/posts');
+	expect(await screen.findByText('page-posts')).toBeDefined();
+	const entry = screen.getByRole('menuitem', { name: zh['nav.posts'] });
+	const icon = entry.querySelector<SVGSVGElement>('svg[data-sidebar-motion-icon="posts"]')!;
+	const area = icon.parentElement!;
+	const label = entry.querySelector('.ant-menu-title-content')!;
+	const animate = vi.fn();
+	const cancel = vi.fn();
+	Object.assign(icon, { animate, getAnimations: () => [] });
+	for (const layer of icon.querySelectorAll('[data-motion-layer]')) {
+		let running = false;
+		Object.assign(layer, {
+			animate: () => { running = true; animate(); },
+			getAnimations: () => running ? [{ cancel }] : []
+		});
+	}
+
+	fireEvent.pointerOver(label, { pointerType: 'mouse' });
+	fireEvent.pointerOver(area, { pointerType: 'touch' });
+	expect(animate).not.toHaveBeenCalled();
+	fireEvent.pointerOver(area, { pointerType: 'mouse' });
+	expect(animate).toHaveBeenCalledTimes(3);
+	fireEvent.click(label);
+	expect(cancel).toHaveBeenCalledTimes(3);
+	expect(animate).toHaveBeenCalledTimes(6);
+	fireEvent.pointerOut(area, { pointerType: 'mouse', relatedTarget: label });
+	expect(animate).toHaveBeenCalledTimes(6);
+	expect(screen.getByText('page-posts').closest('#workspace')).not.toBeNull();
+});
+
 describe('scopes and permissions in the drawer', () => {
 	beforeEach(() => {
 		useNarrowViewport(true);

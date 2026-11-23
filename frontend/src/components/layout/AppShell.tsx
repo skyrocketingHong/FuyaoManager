@@ -15,13 +15,10 @@ import { Button, Drawer, Layout, type MenuProps } from 'antd';
 import {
 	ArrowLeft,
 	ChevronRight,
-	FileText,
 	Globe,
 	Hammer,
-	Images,
 	LayoutDashboard,
 	Link2,
-	MapPin,
 	Menu as MenuIcon,
 	Palette,
 	Rocket,
@@ -51,6 +48,7 @@ import type { SidebarAction } from './SidebarActions';
 import type { SidebarStat } from './SidebarInfo';
 import TopBar from './TopBar';
 import CaddyIcon from '../CaddyIcon';
+import SidebarMotionIcon, { replaySidebarMotionIcon, type SidebarMotionIconName } from './SidebarMotionIcon';
 import { allowSitePage } from '../../lib/navigation/workspace';
 
 /**
@@ -69,10 +67,6 @@ const navIcons: Record<string, LucideIcon> = {
 	users: UsersRound,
 	logs: ScrollText,
 	updates: Rocket,
-	'site.posts': FileText,
-	'site.friends': Link2,
-	'site.albums': Images,
-	'site.footprints': MapPin,
 	'site.settings': Settings,
 	'site.config': UserRound,
 	'site.theme': Palette,
@@ -82,13 +76,29 @@ const navIcons: Record<string, LucideIcon> = {
 	'site.releases': Rocket
 };
 
+const contentIcons: Partial<Record<string, SidebarMotionIconName>> = {
+	'site.posts': 'posts',
+	'site.albums': 'albums',
+	'site.footprints': 'footprints',
+	'site.friends': 'friends'
+};
+
 function menuEntry(itemId: string, siteId: string | null): MenuItem {
 	const item = navItems.find((entry) => entry.id === itemId);
 	if (!item) throw new Error(`unknown navigation item ${itemId}`);
-	const Icon = navIcons[item.id] ?? navIcons[item.id.replace('content.', 'site.')];
+	const iconId = item.id.replace(/^content\./, 'site.');
+	const motionIcon = contentIcons[iconId];
+	const entry = { key: itemPath(item, siteId), label: t(item.titleKey) };
+	if (motionIcon) {
+		return {
+			...entry,
+			icon: <SidebarMotionIcon name={motionIcon} />,
+			onClick: ({ domEvent }) => replaySidebarMotionIcon(domEvent.currentTarget, motionIcon)
+		};
+	}
+	const Icon = navIcons[iconId];
 	return {
-		key: itemPath(item, siteId),
-		label: t(item.titleKey),
+		...entry,
 		icon:
 			item.id === 'site.caddy' ? (
 				<CaddyIcon />
