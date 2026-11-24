@@ -162,12 +162,31 @@ describe('sidebar modes', () => {
 	it('collapses to the 52px icon rail, keeps names and tooltips, and shows the brand mark', async () => {
 		renderAt('/sites');
 		await screen.findByText('page-sites');
+		// The rail is the expanded tree cut down to its width: the same
+		// regions, in the same order, with the same entries. Only CSS decides
+		// what shows, so no entry moves when the sidebar narrows.
+		const regions = () =>
+			[...sider()!.querySelectorAll('.sidebar-brand, .sidebar-location, .sidebar-actions, nav, .sidebar-foot')].map(
+				(node) => node.className.split(' ')[0] || node.tagName.toLowerCase()
+			);
+		const entries = () =>
+			[
+				...sider()!.querySelectorAll<HTMLElement>('.sidebar-actions button, .ant-menu-item, .sidebar-foot a, .sidebar-foot code')
+			].map((node) => node.getAttribute('aria-label') ?? node.textContent);
+		const expandedRegions = regions();
+		const expandedEntries = entries();
+		expect(expandedRegions).toEqual(['sidebar-brand', 'sidebar-actions', 'nav', 'sidebar-foot']);
+
 		fireEvent.click(screen.getByRole('button', { name: zh['app.collapseSidebar'] }));
 
 		expect(shell()?.dataset.sidebar).toBe('icons');
 		expect(sider()?.dataset.mode).toBe('icons');
 		expect(sider()?.style.flexBasis).toBe('52px');
 		expect(localStorage.getItem(sidebarModeStorageKey)).toBe('icons');
+		expect(JSON.stringify(regions())).toBe(JSON.stringify(expandedRegions));
+		expect(JSON.stringify(entries())).toBe(JSON.stringify(expandedEntries));
+		// Group titles keep their text box in both modes.
+		expect(sider()?.querySelector('.ant-menu-item-group-title .sidebar-group-text')?.textContent).toBeTruthy();
 		// The control stays in the brand row and keeps keyboard focus.
 		const hide = screen.getByRole('button', { name: zh['app.hideSidebar'] });
 		expect(sider()?.querySelector('.sidebar-brand')?.contains(hide)).toBe(true);

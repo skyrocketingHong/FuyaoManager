@@ -29,6 +29,10 @@ export default defineConfig({
 		// per-file `@vitest-environment jsdom` pragma.
 		include: ['tests/**/*.test.tsx', 'tests/**/*.test.ts'],
 		setupFiles: ['tests/setup.ts'],
-		environment: 'node'
+		environment: 'node',
+		// Vitest replaces stylesheet imports with empty modules, `?raw`
+		// included. The sidebar and base stylesheets are read as text by the
+		// sidebar layout guard, so they alone go through the normal pipeline.
+		css: { include: [/styles\/(sidebar\/sidebar|base)\.css/] }
 	}
 });

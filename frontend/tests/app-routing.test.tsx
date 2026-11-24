@@ -417,10 +417,17 @@ describe('deep links and menu selection', () => {
 		expect(document.querySelector('.ant-menu-item-selected')).toBeNull();
 	});
 
-	it('shows the current site block in site scope', async () => {
+	it('heads the menu with the site name in site scope', async () => {
 		renderAt('/sites/abc/posts');
 		await waitFor(() => expect(screen.getByText('page-posts')).toBeDefined());
-		expect(screen.getByText('ABC Site')).toBeDefined();
+		const location = document.querySelector('.sidebar-location');
+		expect(location?.textContent).toBe('ABC Site');
+		expect(location?.getAttribute('title')).toBe('ABC Site');
+		// The name sits between the brand and the fixed actions.
+		const brand = document.querySelector('.sidebar-brand')!;
+		expect(
+			brand.compareDocumentPosition(location!) & Node.DOCUMENT_POSITION_FOLLOWING
+		).not.toBe(0);
 	});
 
 	it('renders a not-found state for an unknown site instead of bouncing', async () => {
@@ -468,6 +475,8 @@ describe('sidebar shell', () => {
 		renderAt('/sites');
 		await waitFor(() => expect(screen.getByText('page-sites')).toBeDefined());
 		expect(document.querySelector('.sidebar-brand img[src="/favicon.svg"]')).not.toBeNull();
+		// The platform scope shows no scope card and no site counts.
+		expect(document.querySelector('.sidebar-location')).toBeNull();
 		expect(screen.queryByText(zh['nav.sites'])).toBeNull();
 		expect(screen.getByText(zh['nav.themesCatalog'])).toBeDefined();
 		const home = screen.getByText(zh['nav.platformHome']).closest('button');

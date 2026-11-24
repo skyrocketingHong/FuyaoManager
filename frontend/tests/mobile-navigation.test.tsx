@@ -406,7 +406,9 @@ describe('native close paths and focus', () => {
 		const button = await openNavigationDrawer();
 		const drawer = document.querySelector('.ant-drawer')!;
 		expect(drawer.querySelector('.sidebar-brand a')).not.toBeNull();
-		expect(drawer.querySelector('.sidebar-info')).not.toBeNull();
+		// The platform scope heads its menu with nothing: no scope card, no
+		// location heading.
+		expect(drawer.querySelector('.sidebar-location')).toBeNull();
 		expect(drawer.querySelector('.sidebar-actions')).not.toBeNull();
 		expect(drawer.querySelector('nav')).not.toBeNull();
 		expect(drawer.querySelector('.sidebar-foot')).not.toBeNull();

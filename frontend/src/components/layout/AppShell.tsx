@@ -1,5 +1,5 @@
 import { observeScrollEdges } from '../../lib/ui/scrollFade';
-// SideMenu's brand → information → actions → scrolling menu → footer skeleton
+// SideMenu's brand → location → actions → scrolling menu → footer skeleton
 // from robot-platform; modules here consume the manager's own site metadata.
 import {
 	useCallback,
@@ -32,7 +32,7 @@ import {
 	Code2,
 	type LucideIcon
 } from 'lucide-react';
-import { i18nSnapshot, subscribeI18n, t, type MessageKey } from '../../lib/i18n';
+import { i18nSnapshot, subscribeI18n, t } from '../../lib/i18n';
 import { sessionSnapshot, subscribeSession } from '../../lib/session';
 import { currentAuthGeneration } from '../../lib/api/client';
 import { loadSiteList, siteListSnapshot, subscribeSiteList } from '../../lib/sites/site-list';
@@ -48,7 +48,6 @@ import { PageHeaderProvider } from '../PageHeader';
 import SidebarContent from './SidebarContent';
 import type { SidebarNavModule } from './SidebarNav';
 import type { SidebarAction } from './SidebarActions';
-import type { SidebarStat } from './SidebarInfo';
 import TopBar from './TopBar';
 import CaddyIcon from '../CaddyIcon';
 import DesktopSidebar from './DesktopSidebar';
@@ -225,7 +224,14 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			)
 			.map((item) => menuEntry(item.id, siteId, sidebarMode === 'icons'));
 		if (children.length)
-			menuItems.push({ key: group.id, type: 'group', label: t(group.titleKey), children });
+			menuItems.push({
+				key: group.id,
+				type: 'group',
+				// The text sits in its own box so the icon rail can clamp it to
+				// two lines without changing the title's height.
+				label: <span className="sidebar-group-text">{t(group.titleKey)}</span>,
+				children
+			});
 	}
 	const actions: SidebarAction[] = [
 		{
@@ -245,27 +251,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
 			active: match?.item.id === 'site.overview',
 			onClick: () => navigateWorkspace(`/sites/${siteId}`)
 		});
-	const stats: SidebarStat[] = siteId
-		? [
-				{ label: t('site.slug'), value: currentSite?.slug ?? siteId, machine: true },
-				{
-					label: t('sidebar.role'),
-					value: currentSite ? t(`role.${currentSite.role}` as MessageKey) : '—'
-				}
-			]
-		: [
-				{
-					label: t('sidebar.sites'),
-					value: siteList.status === 'ready' ? String(siteList.sites.length) : '—'
-				},
-				{
-					label: t('sidebar.editableSites'),
-					value:
-						siteList.status === 'ready'
-							? String(siteList.sites.filter((site) => site.role !== 'viewer').length)
-							: '—'
-				}
-			];
 	const selected = selectedPath(pathname);
 	const navModule: SidebarNavModule = {
 		items: menuItems,
@@ -273,7 +258,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		onSelect: (key) => navigateWorkspace(key),
 		ariaLabel: t('app.title')
 	};
-	const infoTitle = currentSite?.name ?? (siteId ? t('nav.overview') : t('nav.platformGroup'));
+	// The site's name heads the menu in a site scope; until the site list
+	// names it, the scope's overview entry stands in.
+	const location = currentSite?.name ?? (siteId ? t('nav.overview') : undefined);
 
 	// The brand anchor keeps its href; routing decisions live here. Only an
 	// unmodified primary click on the current page is intercepted (close the
@@ -346,8 +333,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					<DesktopSidebar
 						mode={sidebarMode}
 						modeButton={sidebarButton}
-						infoTitle={infoTitle}
-						stats={stats}
+						location={location}
 						actions={actions}
 						menu={navModule}
 					/>
@@ -370,8 +356,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					classNames={{ section: 'drawer-sidebar-surface', body: 'drawer-sidebar' }}
 				>
 					<SidebarContent
-						infoTitle={infoTitle}
-						stats={stats}
+						location={location}
 						actions={actions}
 						menu={navModule}
 						onBrandClick={handleBrandClick}

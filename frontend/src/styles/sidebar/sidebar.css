@@ -1,7 +1,9 @@
-/* Generic regions and metrics from robot-platform/frontend/styles/sidebar/
-   sidebar.css and SideMenu.tsx; manager-specific scope data is supplied as props.
-   Region rules live on .sidebar-content so the desktop Sider and the
-   narrow-screen navigation Drawer share one layout. */
+/* Regions and metrics from robot-platform/frontend/styles/sidebar/
+   sidebar.css and frontend/styles/shared/brand.css: the brand, the current
+   location, the fixed actions, the independently scrolling menu and the
+   footer. Manager-specific scope data is supplied as props. Region rules
+   live on .sidebar-content so the desktop Sider and the narrow-screen
+   navigation Drawer share one layout. */
 .app-sider {
 	background: var(--sidebar-bg) !important;
 	border-inline-end: 1px solid var(--border);
@@ -16,114 +18,67 @@
 	height: 100%;
 }
 .sidebar-content {
-	--sidebar-gutter: var(--space-4);
+	/* Two alignment lines shared by the mode control, the fixed actions, the
+	   menu and the footer: every icon centers on the icon axis, 26px from the
+	   left edge, which is the middle of the 52px icon rail; every label starts
+	   one icon slot and one gap later. A row is 36px high (44px for fingers). */
+	--sidebar-gutter: 10px;
+	--sidebar-content-inset: calc(var(--sidebar-gutter) + var(--space-1));
+	--sidebar-icon-size: 24px;
+	--sidebar-row-height: 36px;
+	--sidebar-mode-size: 36px;
+	/* One height for a group title in every state: a title that takes two
+	   lines in the icon rail does not move the entries below it. */
+	--sidebar-group-height: 36px;
 	display: flex;
 	flex-direction: column;
 	flex: 1 1 auto;
 	min-height: 0;
 	min-width: 0;
 }
+@media (pointer: coarse) {
+	.sidebar-content {
+		--sidebar-row-height: 44px;
+		--sidebar-mode-size: 44px;
+	}
+}
 .sidebar-brand {
 	display: flex;
 	align-items: center;
-	min-height: 56px;
+	gap: var(--space-2);
 	flex: 0 0 auto;
-	padding: var(--space-3) var(--sidebar-gutter);
+	height: 76px;
+	padding: var(--space-2) var(--sidebar-content-inset);
+}
+/* The mode control sits in a column as wide as the icon rail, so it keeps
+   its place when the sidebar narrows to that rail. */
+.sidebar-brand:has(> .sidebar-mode-button) {
+	padding-inline-start: calc((var(--sidebar-rail-width, 52px) - var(--sidebar-mode-size)) / 2);
 }
 .sidebar-brand a {
 	display: flex;
 	align-items: center;
 	gap: var(--space-2);
+	min-width: 0;
 	color: var(--foreground);
 	font-size: var(--text-title);
 	font-weight: 600;
+	white-space: nowrap;
 	text-decoration: none;
 }
 .sidebar-brand img {
 	flex: 0 0 auto;
+	display: block;
 }
-.sidebar-info {
-	position: relative;
+/* The name of the open scope (a site); the platform scope has none. */
+.sidebar-location {
 	flex: 0 0 auto;
 	min-width: 0;
-}
-.sidebar-info::before,
-.sidebar-info::after,
-.sidebar-actions::after {
-	content: '';
-	position: absolute;
-	inset-inline: 0;
-	height: 1px;
-	background: linear-gradient(
-		to right,
-		transparent,
-		var(--border) 20%,
-		var(--border) 80%,
-		transparent
-	);
-	pointer-events: none;
-}
-.sidebar-info::before {
-	top: 0;
-}
-.sidebar-info::after,
-.sidebar-actions::after {
-	bottom: 0;
-}
-.sidebar-info > * {
-	min-width: 0;
-	min-height: 0;
-	display: grid;
-	grid-template-rows: auto minmax(0, 1fr);
-	gap: var(--space-2);
-	padding: var(--space-4) var(--sidebar-gutter);
-	border: 0;
-	border-radius: 0;
-	background: transparent;
-}
-.info-head {
-	display: grid;
-	grid-template-columns: minmax(0, 1fr) auto;
-	align-items: center;
-	gap: var(--space-1) var(--space-2);
-	min-width: 0;
-}
-.info-head strong {
-	grid-column: 1 / -1;
-	min-width: 0;
+	margin: 0;
+	padding: var(--space-2) var(--sidebar-content-inset) var(--space-3);
 	font-size: var(--text-body);
 	font-weight: 600;
-	line-height: 1.4;
-	color: var(--foreground);
-	overflow-wrap: anywhere;
-}
-.info-foot {
-	display: grid;
-	gap: var(--space-2);
-}
-.info-stats {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: var(--space-2);
-	margin: 0;
-}
-.scope-stat {
-	display: grid;
-	gap: 1px;
-	min-width: 0;
-}
-.scope-stat dt {
-	font-size: var(--text-caption);
-	line-height: 14px;
-	color: var(--muted-foreground);
-}
-.scope-stat dd {
-	margin: 0;
-	font-size: var(--text-secondary);
-	font-weight: 600;
-	line-height: 17px;
-	color: var(--foreground);
-	font-variant-numeric: tabular-nums;
+	line-height: 1.35;
 	overflow-wrap: anywhere;
 }
 .sidebar-actions {
@@ -133,28 +88,41 @@
 	flex-direction: column;
 	align-items: stretch;
 	gap: var(--space-1);
-	min-height: 48px;
-	padding: var(--space-2) var(--space-1);
+	padding: 0 var(--space-1) var(--space-2);
+}
+.sidebar-actions::after {
+	content: '';
+	position: absolute;
+	inset-inline: var(--sidebar-content-inset);
+	inset-block-end: 0;
+	border-block-end: 1px solid var(--border);
+	pointer-events: none;
 }
 .sidebar-actions .ant-btn {
 	width: 100%;
 	min-width: 0;
-	height: 40px;
+	height: var(--sidebar-row-height);
 	padding-inline: var(--sidebar-gutter);
 	gap: var(--space-2);
 	justify-content: flex-start;
 	font-size: var(--text-body);
-}
-.sidebar-actions .ant-btn > span:not(.ant-btn-icon) {
-	flex: 1 1 auto;
-	min-width: 0;
-	text-align: left;
 }
 .sidebar-actions .ant-btn .ant-btn-content {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-2);
+	flex: 1 1 auto;
+	min-width: 0;
+}
+.sidebar-action-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: start;
+}
+.sidebar-action-trailing {
+	display: inline-flex;
+	flex: 0 0 auto;
 }
 .sidebar-actions .ant-btn.is-active {
 	background: var(--accent);
@@ -162,7 +130,8 @@
 }
 .sidebar-content nav {
 	flex: 1 1 0;
-	min-height: 0;
+	min-height: 48px;
+	min-width: 0;
 	padding-inline: var(--space-1);
 	overflow-x: hidden;
 	overflow-y: auto;
@@ -175,70 +144,98 @@
 	background: transparent;
 }
 .sidebar-content .ant-menu-item-group-title {
+	display: grid;
+	align-content: center;
+	block-size: var(--sidebar-group-height);
+	margin: 0;
+	padding-inline: var(--sidebar-gutter);
+	padding-block: 0;
+	color: var(--muted-foreground);
 	font-size: var(--text-caption);
 	font-weight: 600;
-	color: var(--muted-foreground);
-	padding: var(--space-3) var(--sidebar-gutter) var(--space-1);
 }
 .sidebar-content .ant-menu-item {
 	display: flex;
 	align-items: center;
+	gap: var(--space-2);
+	height: var(--sidebar-row-height);
+	margin-block: 0 var(--space-1);
 	margin-inline: 0;
 	width: 100%;
 	padding-inline: var(--sidebar-gutter) !important;
 }
-.sidebar-content .ant-menu-item .ant-menu-item-icon {
-	width: 16px;
-	min-width: 16px;
-	height: 16px;
+.sidebar-content .ant-menu-item .ant-menu-item-icon,
+.sidebar-actions .ant-btn > .ant-btn-icon {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 var(--sidebar-icon-size);
+	min-inline-size: var(--sidebar-icon-size);
+}
+.sidebar-content .ant-menu-item-icon > svg[viewBox],
+.sidebar-actions .ant-btn-icon > svg[viewBox] {
+	display: block;
+	width: 20px;
+	height: 20px;
 }
 .sidebar-content .ant-menu-item .ant-menu-title-content {
 	flex: 1 1 auto;
 	min-width: 0;
-	margin-inline-start: var(--space-2);
+	margin-inline-start: 0;
 }
+.sidebar-content .ant-menu-item:not(:has(.ant-menu-item-icon)) .ant-menu-title-content {
+	margin-inline-start: calc(var(--sidebar-icon-size) + var(--space-2));
+}
+/* Footer: a rule, then a row on the same two lines as the menu — the project
+   link on the icon axis, the version on the text axis. */
 .sidebar-foot {
-	display: flex;
-	flex-direction: column;
-	align-items: stretch;
-	gap: var(--space-2);
+	position: relative;
 	flex: 0 0 auto;
-	margin: var(--space-3) var(--sidebar-gutter) var(--space-4);
-	color: var(--muted-foreground);
-	font-size: var(--text-caption);
-}
-.version-line {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
 	gap: var(--space-2);
-	padding-top: var(--space-2);
-	border-top: 1px solid transparent;
-	border-image: linear-gradient(
-			to right,
-			transparent,
-			var(--border) 20%,
-			var(--border) 80%,
-			transparent
-		)
-		1;
+	box-sizing: border-box;
+	block-size: calc(var(--space-2) + var(--sidebar-row-height));
+	margin: var(--space-3) var(--space-1) var(--space-4);
+	padding: var(--space-2) var(--sidebar-gutter) 0;
+}
+.sidebar-foot::before {
+	content: '';
+	position: absolute;
+	inset-inline: var(--sidebar-content-inset);
+	inset-block-start: 0;
+	border-block-start: 1px solid var(--border);
+}
+.sidebar-foot-link {
+	display: inline-grid;
+	place-items: center;
+	flex: 0 0 var(--sidebar-icon-size);
+	inline-size: var(--sidebar-icon-size);
+	block-size: var(--sidebar-icon-size);
+	border-radius: var(--radius-sm);
+	color: var(--muted-foreground);
+}
+.sidebar-foot-link:is(:hover, :focus-visible) {
+	color: var(--primary);
+}
+.sidebar-foot-link svg {
+	display: block;
+	width: 20px;
+	height: 20px;
+}
+.sidebar-foot-version {
 	min-width: 0;
-	font-size: var(--text-caption);
-	line-height: 1.5;
-}
-.version-line code {
 	font-family: var(--font-mono);
+	font-size: var(--text-caption);
 	font-variant-numeric: tabular-nums;
+	line-height: 1.5;
 	color: var(--foreground);
+	overflow-wrap: anywhere;
 }
-.version-line a {
-	display: inline-flex;
-	color: inherit;
-}
+
 /* Narrow-screen navigation drawer: the same sidebar regions inside an antd
    Drawer. The drawer body is the scroll host — the menu region scrolls
-   internally while brand, info, actions, and foot keep their fixed order;
-   in very short windows the body itself scrolls so every entry stays
+   internally while brand, location, actions, and foot keep their fixed
+   order; in very short windows the body itself scrolls so every entry stays
    reachable and nothing at the bottom is clipped. */
 .drawer-sidebar-surface {
 	background: var(--sidebar-bg);
@@ -253,26 +250,24 @@
 	max-width: 86vw;
 }
 /* Very short drawer windows: the menu keeps an operable floor while the
-   brand, info, actions, and foot stay reachable through the drawer body's
-   own scroll. Normal heights are unaffected (the menu simply fills more);
-   the desktop Sider keeps its existing sizing. */
+   brand, location, actions, and foot stay reachable through the drawer
+   body's own scroll. Normal heights are unaffected (the menu simply fills
+   more); the desktop Sider keeps its existing sizing. */
 .drawer-sidebar > .sidebar-content > nav {
 	min-height: 8rem;
 }
 
 /* Desktop sidebar modes from robot-platform/frontend/components/platform/
    sidebar/SideMenu.tsx and styles/sidebar/sidebar.css (commit aa21ec10).
-   Expanded keeps the 208px column above. The icon rail narrows it to 52px:
-   the surface keeps the rail width while the menu keeps its full layout, so
-   hovering the rail or focusing one of its controls floats the complete menu
-   out over the workspace without moving the page. Labels return once the
-   floating surface is wide enough (container query), and Escape dismisses
-   it while the pointer or keyboard focus stays inside. The hidden mode has
-   no sidebar at all; its restore button lives in the top bar. */
+   Expanded is the 208px column. The icon rail is that column cut down to its
+   first 52px: the layout stays the same and only what lies right of the
+   icon axis is hidden, so no entry moves when the sidebar narrows, when the
+   full menu floats out over the workspace (hover or keyboard focus, Escape
+   dismisses it), or when the mode changes. The hidden mode has no sidebar at
+   all; its restore button lives in the top bar. */
 .app-sider {
 	--sidebar-rail-width: 52px;
 	--sidebar-full-width: 208px;
-	--sidebar-icon-slot: 16px;
 }
 .sidebar-panel {
 	display: flex;
@@ -285,8 +280,8 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 36px;
-	height: 36px;
+	width: var(--sidebar-mode-size, 36px);
+	height: var(--sidebar-mode-size, 36px);
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius);
@@ -302,12 +297,6 @@
 	background: var(--accent);
 	color: var(--foreground);
 }
-@media (pointer: coarse) {
-	.sidebar-mode-button {
-		width: 44px;
-		height: 44px;
-	}
-}
 /* Hidden sidebar: the restore control takes the top bar's control height. */
 .topbar .sidebar-mode-button {
 	width: var(--topbar-control-height);
@@ -320,12 +309,25 @@
 	height: 28px;
 	margin-inline-start: var(--space-1);
 }
+/* The location keeps the width it has when the sidebar is expanded, so a
+   name breaks into the same lines in the icon rail. */
+.app-sider .sidebar-location {
+	inline-size: calc(var(--sidebar-full-width) - 2 * var(--sidebar-content-inset));
+}
+/* Short or narrow desktop windows spend less on the brand and the footer. */
+@media (min-width: 992px) and (max-height: 640px), (min-width: 992px) and (max-width: 1137px) {
+	.app-sider .sidebar-brand {
+		height: 64px;
+	}
+	.app-sider .sidebar-foot {
+		margin-block: var(--space-2);
+	}
+}
 
 .app-sider[data-mode='icons'] {
 	position: relative;
 	z-index: 35;
 	--sidebar-peek-width: var(--sidebar-rail-width);
-	--sidebar-label-opacity: 0;
 	--sidebar-peek-shadow: 0 0 0 transparent;
 	--sidebar-flyout-shadow: 8px 12px 30px
 		color-mix(in srgb, color-mix(in srgb, var(--sidebar-bg), #000 45%) 35%, transparent);
@@ -352,128 +354,46 @@
 	container: sidebar / inline-size;
 	overflow: hidden;
 }
-.app-sider[data-mode='icons'] .sidebar-content nav {
-	scrollbar-width: none;
-	scrollbar-gutter: auto;
-}
-.app-sider[data-mode='icons'] .sidebar-brand {
-	justify-content: center;
-	padding-inline: 0;
-}
-.app-sider[data-mode='icons'] .sidebar-brand a {
-	display: none;
-}
-.app-sider[data-mode='icons'] .sidebar-info {
-	display: none;
-}
-/* Icons keep one center line: the rail width less the region and item insets. */
-.app-sider[data-mode='icons'] :is(.ant-menu-item, .sidebar-actions .ant-btn) {
-	padding-inline: calc(
-		(var(--sidebar-rail-width) - 2 * var(--space-1) - var(--sidebar-icon-slot)) / 2
-	) !important;
-}
-.app-sider[data-mode='icons'] .ant-menu-item-group-title {
-	display: -webkit-box;
-	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
-	min-block-size: 2.4em;
-	min-width: 0;
-	margin: var(--space-2) var(--space-1) var(--space-1);
-	padding: 0;
-	overflow: hidden;
-	overflow-wrap: anywhere;
-	text-wrap: balance;
-	white-space: normal;
-	text-align: center;
-	line-height: 1.2;
-}
-.app-sider[data-mode='icons'] :where(.ant-menu-title-content, .sidebar-action-label, .sidebar-action-trailing) {
-	display: none;
-}
-.app-sider[data-mode='icons'] .sidebar-foot {
-	margin-inline: var(--space-1);
-}
-.app-sider[data-mode='icons'] .version-line {
-	justify-content: center;
-	padding-top: 0;
-	border-top: 0;
-	border-image: none;
-}
-.app-sider[data-mode='icons'] .version-line code {
-	display: none;
-}
-.app-sider[data-mode='icons'] .version-line a {
-	display: grid;
-	place-items: center;
-	width: 36px;
-	height: 36px;
-	border-radius: var(--radius);
-	color: var(--foreground);
-	transition: background var(--motion-fast) ease-out;
-}
-.app-sider[data-mode='icons'] .version-line a:is(:hover, :focus-visible) {
-	background: var(--accent);
-}
 /* The floating surface clips its content, so focus rings turn inward. */
-.app-sider[data-mode='icons'] :is(.sidebar-actions .ant-btn, .ant-menu-item, .version-line a):focus-visible {
+.app-sider[data-mode='icons'] :is(.sidebar-actions .ant-btn, .ant-menu-item, .sidebar-foot-link):focus-visible {
 	outline: 2px solid var(--primary);
 	outline-offset: -2px;
 }
 
-/* Full menu once the floating surface is wide enough. */
-@container sidebar (width >= 156px) {
-	.app-sider[data-mode='icons'] .sidebar-brand {
-		justify-content: flex-start;
-		padding-inline: 0 var(--sidebar-gutter);
+/* Icon rail (the floating surface is narrower than the full menu): hide what
+   lies right of the icon axis and center the group titles. Nothing here
+   changes a height or a vertical position; tests/sidebar-layout.test.ts
+   checks this block for it. */
+@container sidebar (width < 156px) {
+	.app-sider[data-mode='icons'] .sidebar-brand > a,
+	.app-sider[data-mode='icons'] .sidebar-location {
+		visibility: hidden;
 	}
-	.app-sider[data-mode='icons'] .sidebar-brand a {
-		display: flex;
-		opacity: var(--sidebar-label-opacity);
-		transition: opacity var(--motion-fast) ease-in-out;
-	}
-	.app-sider[data-mode='icons'] .sidebar-info {
-		display: block;
-	}
-	.app-sider[data-mode='icons'] :is(.ant-menu-title-content, .sidebar-action-label, .sidebar-action-trailing) {
-		display: block;
+	.app-sider[data-mode='icons'] :is(.ant-menu-title-content, .sidebar-action-label, .sidebar-action-trailing, .sidebar-foot-version) {
+		display: none;
 	}
 	.app-sider[data-mode='icons'] .ant-menu-item-group-title {
-		display: grid;
-		align-content: center;
-		margin-inline: 0;
-		padding: var(--space-3) var(--sidebar-gutter) var(--space-1);
-		-webkit-line-clamp: unset;
-		text-wrap: wrap;
-		text-align: start;
+		padding-inline: var(--space-1);
+		text-align: center;
+	}
+	.app-sider[data-mode='icons'] .sidebar-group-text {
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
+		overflow: hidden;
+		overflow-wrap: anywhere;
+		hyphens: auto;
+		text-wrap: balance;
+		line-height: 1.2;
+	}
+	/* A Latin title cannot be read on two lines this narrow: the group keeps
+	   its spacing and shows icons only. */
+	.app-sider[data-mode='icons'] .sidebar-group-text:lang(en) {
+		visibility: hidden;
 	}
 	.app-sider[data-mode='icons'] .sidebar-content nav {
-		scrollbar-width: thin;
-		scrollbar-gutter: stable;
-	}
-	.app-sider[data-mode='icons'] .sidebar-foot {
-		margin-inline: var(--sidebar-gutter);
-	}
-	.app-sider[data-mode='icons'] .version-line {
-		justify-content: space-between;
-		padding-top: var(--space-2);
-		border-top: 1px solid transparent;
-		border-image: linear-gradient(
-				to right,
-				transparent,
-				var(--border) 20%,
-				var(--border) 80%,
-				transparent
-			)
-			1;
-	}
-	.app-sider[data-mode='icons'] .version-line code {
-		display: block;
-	}
-	.app-sider[data-mode='icons'] .version-line a {
-		display: inline-flex;
-		width: auto;
-		height: auto;
-		border-radius: 0;
+		scrollbar-width: none;
+		scrollbar-gutter: auto;
 	}
 }
 
@@ -481,13 +401,11 @@
    data-peek-dismissed until the pointer leaves or focus enters from outside. */
 .app-sider[data-mode='icons']:not([data-peek-dismissed]):has(:focus-visible) {
 	--sidebar-peek-width: var(--sidebar-full-width);
-	--sidebar-label-opacity: 1;
 	--sidebar-peek-shadow: var(--sidebar-flyout-shadow);
 }
 @media (any-hover: hover) {
 	.app-sider[data-mode='icons']:not([data-peek-dismissed]):hover {
 		--sidebar-peek-width: var(--sidebar-full-width);
-		--sidebar-label-opacity: 1;
 		--sidebar-peek-shadow: var(--sidebar-flyout-shadow);
 	}
 }
