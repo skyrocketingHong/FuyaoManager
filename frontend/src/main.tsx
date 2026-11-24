@@ -5,6 +5,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import App from './App';
 import AppearanceProvider from './components/AppearanceProvider';
 import RouteErrorPage from './components/RouteErrorPage';
+import { withPageTransitions } from './lib/navigation/pageTransition';
 import './styles/base.css';
 import './styles/shell.css';
 import './styles/sidebar/sidebar.css';
@@ -14,10 +15,11 @@ import './styles/post-editor.css';
 import './styles/appearance.css';
 import './styles/admin.css';
 
-// A data router is required for the unsaved-changes navigation blocker.
-const router = createBrowserRouter([
-	{ path: '*', element: <App />, errorElement: <RouteErrorPage /> }
-]);
+// A data router is required for the unsaved-changes navigation blocker, and
+// runs the cross-fade for page changes.
+const router = withPageTransitions(
+	createBrowserRouter([{ path: '*', element: <App />, errorElement: <RouteErrorPage /> }])
+);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
 	<React.StrictMode>

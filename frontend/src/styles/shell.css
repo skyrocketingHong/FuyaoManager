@@ -114,3 +114,30 @@
 		mask-image: none;
 	}
 }
+
+/* Page change view transition from robot-platform's libraries/ui/styles/
+   stage.css: the outgoing page fades out quickly and the incoming one eases
+   in. The router starts no transition under reduced motion; this rule also
+   stops one that is already running when the preference changes. */
+@keyframes vt-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes vt-fade-in {
+	from {
+		opacity: 0;
+	}
+}
+::view-transition-old(root) {
+	animation: vt-fade-out var(--motion-fast) ease both;
+}
+::view-transition-new(root) {
+	animation: vt-fade-in var(--motion-mid) ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-old(root),
+	::view-transition-new(root) {
+		animation: none !important;
+	}
+}
