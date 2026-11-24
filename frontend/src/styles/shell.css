@@ -58,7 +58,21 @@
 	}
 }
 
-/* Scroll edges follow the robot-platform workspace's remaining content. */
+/* Scroll edges follow the robot-platform workspace's remaining content
+   (libraries/ui-sdk/src/scroll-fade.css): the fade eases in and out, the
+   edge narrows with the viewport, and scrolled-into-view targets clear the
+   faded edge. */
+@property --scroll-top {
+	syntax: '<color>';
+	inherits: false;
+	initial-value: #000;
+}
+@property --scroll-bottom {
+	syntax: '<color>';
+	inherits: false;
+	initial-value: #000;
+}
+
 .shell-content[data-workspace='console'][data-scroll-fade-top] {
 	--scroll-top: transparent;
 }
@@ -74,11 +88,26 @@
 
 .shell-content[data-workspace='console']:is([data-scroll-fade-top], [data-scroll-fade-bottom]),
 .data-table .ant-table-content[data-scroll-fade-bottom] {
+	--scroll-fade-edge: min(16px, 12%);
+	transition:
+		--scroll-top var(--motion-fast) ease,
+		--scroll-bottom var(--motion-fast) ease;
+	scroll-padding-block: 16px;
 	mask-image: linear-gradient(
 		to bottom,
-		var(--scroll-top, #000),
-		#000 var(--space-2),
-		#000 calc(100% - var(--space-2)),
-		var(--scroll-bottom, #000)
+		var(--scroll-top),
+		#000 var(--scroll-fade-edge),
+		#000 calc(100% - var(--scroll-fade-edge)),
+		var(--scroll-bottom)
 	);
+}
+
+/* Forced-colors mode replaces colors: a mask would hide content without
+   communicating the fade, so the edge stays visible. */
+@media (forced-colors: active) {
+	.shell-content[data-workspace='console']:is([data-scroll-fade-top], [data-scroll-fade-bottom]),
+	.data-table .ant-table-content[data-scroll-fade-bottom] {
+		-webkit-mask-image: none;
+		mask-image: none;
+	}
 }

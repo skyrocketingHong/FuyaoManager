@@ -477,16 +477,29 @@
 	}
 }
 
-/* Button reset: drop the fake 3D shadow and keep icon glyphs at 16px. */
+/* Button reset: drop the fake 3D shadow and keep icon glyphs at 16px. The
+   primary button gives a small press feedback (robot-platform's
+   libraries/ui/styles/controls.css); its transform rides antd's own button
+   transition, which stays untouched here. */
 .ant-btn {
 	white-space: normal;
 	overflow-wrap: anywhere;
 	box-shadow: none;
 }
 
+.ant-btn-primary:active {
+	transform: scale(0.98);
+}
+
 .ant-btn svg {
 	width: 16px;
 	height: 16px;
+}
+
+/* Table cells keep status labels on one line so rows stay comparable. */
+.data-table .status-tag {
+	white-space: nowrap;
+	overflow-wrap: normal;
 }
 
 /* Form reading width: editors keep a comfortable line length while list

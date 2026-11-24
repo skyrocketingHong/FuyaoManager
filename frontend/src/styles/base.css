@@ -93,48 +93,90 @@ code,
 	user-select: text;
 }
 
-/* StatusTag: five semantics, independent of the accent color. */
-.status-tag {
+/* Interface headings: 20px/600 for h1 and 16px/600 for h2 (robot-platform's
+   libraries/ui/styles/base.css). Rendered article content keeps the
+   browser's own heading scale. */
+:where(h1:not(.markdown-preview *)) {
+	font-size: var(--text-page);
+	font-weight: 600;
+	letter-spacing: -0.4px;
+	line-height: 1.3;
+}
+:where(h2:not(.markdown-preview *)) {
+	font-size: var(--text-title);
+	font-weight: 600;
+	line-height: 1.5;
+}
+
+/* Visually hidden text for screen readers (ActionButton's disabled reason,
+   live regions). */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+/* Focusable wrapper around a disabled ActionButton: keyboard users reach the
+   reason through it, so it keeps a visible focus ring. */
+.action-button-hint {
 	display: inline-flex;
 	align-items: center;
-	height: 22px;
-	padding: 0 8px;
+	max-width: 100%;
+	border-radius: var(--radius);
+}
+
+/* StatusTag: five semantics, independent of the accent color. Metrics follow
+   robot-platform's libraries/ui-sdk/src/status.css: labels may wrap instead
+   of overflowing, and the tint and border mix into the surface color. */
+.status-tag {
+	--status-color: var(--status-success);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	min-height: 22px;
+	max-width: 100%;
+	margin: 0;
+	padding: 0 6px;
+	border: 1px solid color-mix(in srgb, var(--status-color) 30%, var(--card));
 	border-radius: var(--radius-sm);
+	background: color-mix(in srgb, var(--status-color) 6%, var(--card));
+	color: var(--status-color);
+	font-family: inherit;
 	font-size: var(--text-caption);
 	font-weight: 400;
-	line-height: 1;
-	border: 1px solid transparent;
-	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+	line-height: 20px;
+	text-align: center;
+	vertical-align: middle;
+	white-space: normal;
+	overflow-wrap: anywhere;
 }
 
 .status-tag--success {
-	color: var(--status-success);
-	background: color-mix(in srgb, var(--status-success) 6%, transparent);
-	border-color: color-mix(in srgb, var(--status-success) 30%, transparent);
+	--status-color: var(--status-success);
 }
 
 .status-tag--warning {
-	color: var(--status-warning);
-	background: color-mix(in srgb, var(--status-warning) 6%, transparent);
-	border-color: color-mix(in srgb, var(--status-warning) 30%, transparent);
+	--status-color: var(--status-warning);
 }
 
 .status-tag--danger {
-	color: var(--status-danger);
-	background: color-mix(in srgb, var(--status-danger) 6%, transparent);
-	border-color: color-mix(in srgb, var(--status-danger) 30%, transparent);
+	--status-color: var(--status-danger);
 }
 
 .status-tag--info {
-	color: var(--status-info);
-	background: color-mix(in srgb, var(--status-info) 6%, transparent);
-	border-color: color-mix(in srgb, var(--status-info) 30%, transparent);
+	--status-color: var(--status-info);
 }
 
 .status-tag--neutral {
-	color: var(--status-neutral);
-	background: color-mix(in srgb, var(--status-neutral) 8%, transparent);
-	border-color: color-mix(in srgb, var(--status-neutral) 30%, transparent);
+	--status-color: var(--status-neutral);
 }
 
 /* PageLoading specs: page / section / fill. */
@@ -143,8 +185,18 @@ code,
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: var(--space-4);
+	box-sizing: border-box;
+	width: 100%;
+	padding: var(--space-5);
+	gap: var(--space-5);
 	color: var(--muted-foreground);
+	text-align: center;
+}
+
+.page-loading-label {
+	font-size: var(--text-title);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
 .page-loading--page {
@@ -153,6 +205,11 @@ code,
 
 .page-loading--section {
 	min-height: 8rem;
+	gap: var(--space-4);
+}
+
+.page-loading--section .page-loading-label {
+	font-size: var(--text-body);
 }
 
 .page-loading--fill {

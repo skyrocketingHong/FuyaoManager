@@ -1,5 +1,7 @@
 /**
  * StatusTag: five semantic statuses with colors independent of the accent.
+ * The modifier class and the `data-tone` attribute carry the same semantic,
+ * matching robot-platform's libraries/ui-sdk/src/StatusTag.tsx.
  */
 import type { ReactNode } from 'react';
 
@@ -14,5 +16,12 @@ export default function StatusTag({
 	children: ReactNode;
 	className?: string;
 }) {
-	return <span className={`status-tag status-tag--${kind} ${className}`.trim()}>{children}</span>;
+	return (
+		<span
+			className={`status-tag status-tag--${kind} ${className}`.trim()}
+			data-tone={kind}
+		>
+			{children}
+		</span>
+	);
 }
