@@ -937,5 +937,7 @@
 	"app.expandSidebar": "Show sidebar",
 	"appearance.background": "Content background",
 	"appearance.backgroundPick": "Choose a tint",
-	"appearance.backgroundFollow": "Follow theme"
+	"appearance.backgroundFollow": "Follow theme",
+	"auth.pauseMotion": "Pause motion",
+	"auth.resumeMotion": "Resume motion"
 }

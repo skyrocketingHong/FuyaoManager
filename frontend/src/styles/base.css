@@ -229,6 +229,84 @@ code,
 	background: var(--background);
 }
 
+/* Sign-in and passkey pages (robot-platform's modules/login/ui/src/
+   login.css, commit b336dd75): a sky gradient under two aurora ribbons
+   drawn on a canvas, softened by a blur and fading out toward the lower
+   part of the page. The layer is decorative and takes no pointer. The
+   secondary text of the page is mixed toward the text color so it stays
+   readable over the sky. */
+.auth-layout {
+	--auth-aurora-gain: 3.1;
+	--auth-aurora-sky: #a7c8f0;
+	--auth-aurora-mist: #9bd5d8;
+	--auth-aurora-horizon: #dfcddd;
+	flex-direction: column;
+	gap: var(--space-4);
+	position: relative;
+	isolation: isolate;
+	overflow: clip;
+}
+.dark .auth-layout {
+	--auth-aurora-gain: 3.4;
+	--auth-aurora-sky: #12366b;
+	--auth-aurora-mist: #124a61;
+	--auth-aurora-horizon: #342842;
+}
+.auth-atmosphere,
+.auth-aurora {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	pointer-events: none;
+}
+.auth-atmosphere {
+	z-index: 0;
+}
+.auth-aurora {
+	background: linear-gradient(
+		166deg,
+		var(--auth-aurora-sky) 0%,
+		var(--auth-aurora-mist) 52%,
+		var(--auth-aurora-horizon) 100%
+	);
+	opacity: calc(13% * var(--auth-aurora-gain));
+}
+.auth-aurora > canvas {
+	position: absolute;
+	inset: 0;
+	inline-size: 100%;
+	block-size: 100%;
+	filter: blur(clamp(5px, 1.1vmin, 12px));
+	-webkit-mask-image: linear-gradient(black 25%, rgb(0 0 0 / 55%) 54%, transparent 82%);
+	mask-image: linear-gradient(black 25%, rgb(0 0 0 / 55%) 54%, transparent 82%);
+}
+/* The motion control sits under the content where a finger or a narrow
+   screen needs the room, and in the bottom corner on wide pointers. */
+.auth-motion-toggle {
+	position: relative;
+	z-index: 1;
+	flex-shrink: 0;
+	min-height: 44px;
+	padding: 0 var(--space-1);
+	border: 0;
+	background: transparent;
+	color: color-mix(in srgb, var(--muted-foreground), var(--foreground));
+	font: inherit;
+	font-size: var(--text-caption);
+	cursor: pointer;
+}
+.auth-motion-toggle:is(:hover, :focus-visible) {
+	text-decoration: underline;
+}
+@media (min-width: 768px) and (pointer: fine) {
+	.auth-motion-toggle {
+		position: absolute;
+		inset-inline-end: var(--space-4);
+		inset-block-end: var(--space-3);
+		min-height: 24px;
+	}
+}
+
 .auth-card {
 	width: 100%;
 	max-width: 480px;
@@ -282,6 +360,8 @@ code,
 }
 
 .auth-layout-inner {
+	position: relative;
+	z-index: 1;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) minmax(320px, 480px);
 	align-items: center;
@@ -305,7 +385,7 @@ code,
 .auth-identity p {
 	margin: var(--space-4) 0 0;
 	font-size: var(--text-title);
-	color: var(--muted-foreground);
+	color: color-mix(in srgb, var(--muted-foreground), var(--foreground));
 }
 
 .auth-layout .auth-card > .ant-card-body {

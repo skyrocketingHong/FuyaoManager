@@ -937,5 +937,7 @@
 	"app.expandSidebar": "展开侧栏",
 	"appearance.background": "内容区背景",
 	"appearance.backgroundPick": "选择色调",
-	"appearance.backgroundFollow": "跟随主题"
+	"appearance.backgroundFollow": "跟随主题",
+	"auth.pauseMotion": "暂停动效",
+	"auth.resumeMotion": "继续动效"
 }
