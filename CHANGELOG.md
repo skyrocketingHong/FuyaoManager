@@ -15,6 +15,8 @@ are maintained separately.
 - A page change cross-fades from the outgoing page to the incoming one; tab and filter changes, replace navigations and reduced motion switch instantly.
 - Inputs and selects are 34px high on desktop screens, and form grids keep at most two columns with a 20px gap.
 - The top bar's version bubble morphs open from its capsule and back on close; Escape closes it and returns focus to the capsule.
+- From a 720px container the operation bar is a single row: the page area scrolls sideways under a vertical wheel or trackpad scroll, with a fade at each edge that still hides content, while navigation and the session controls stay in place. Narrower containers keep two rows.
+- The sign-in and passkey pages carry a continuous aurora background that can be paused and stays still under reduced motion.
 - Frontend relative imports point only at the same or a lower layer, and a test keeps the page registry aligned with the navigation metadata.
 - A page that fails to render reports the error inside the workspace with a retry, while the sidebar, operation bar and session stay mounted.
 - Signing out with unsaved changes asks for confirmation before the session is cleared.

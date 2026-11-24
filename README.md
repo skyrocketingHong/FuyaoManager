@@ -79,9 +79,11 @@ platform development history preserved; see
 - **Account settings**: self-service username rename from the account
   dropdown (`PATCH /api/v1/account/profile`); passkeys and login codes keep
   working across the rename.
+- **Sign-in pages**: a continuous aurora background with a pause control; it
+  stays still under reduced motion.
 - **Console**: React 18 + official Ant Design 6, zh-CN/en-US, day/night
   themes, grouped desktop-app shell (expandable, icon-rail or hidden sidebar
-  with site scopes, top-bar page slots).
+  with site scopes, a single-row operation bar with top-bar page slots).
 
 ## Tech stack
 
