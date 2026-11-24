@@ -2,7 +2,7 @@
 
 # 管理台界面规范与复用来源
 
-FuyaoManager 采用机器人平台的桌面外壳：侧栏有 208px 展开、52px 图标栏和隐藏三档，顶部为操作栏，工作区独立滚动。侧栏依次呈现品牌、当前作用域、固定入口、分组菜单与页脚。折叠为图标栏时常驻图标和至多两行的分组标题，各入口保留可访问名称；鼠标悬停或键盘聚焦时完整菜单浮出并覆盖工作区，页面占位不变，按 Esc 收起，鼠标移出或焦点再次进入后恢复。隐藏档在操作栏左端提供恢复按钮，图标栏状态下该处显示品牌标。模式按浏览器保存。操作栏承载筛选、页签和主要操作，右侧显示应用版本，点击可查看运行服务版本和提交；气泡无箭头，表面在 420 毫秒内由胶囊尺寸形变至详情尺寸，收起时形变回胶囊。操作栏自 720px 容器起为单行：导航在左、会话控件在右各守其位，中间的页面区（前导、筛选、页签与操作）横向滚动，竖向滚轮转为横向滚动，仍有内容隐藏的一侧渐隐。720px 以下换为两行，导航与会话控件占首行，页面区占次行并换行。窄屏使用导航抽屉。切换页面时旧页 100 毫秒淡出、新页 200 毫秒淡入；只改页签或筛选、替换式导航、减少动态或不支持 View Transition 时直接切换。登录页与通行密钥绑定页的背景是连续极光：天色渐变之上两条光带在画布上 7.2 秒循环，向下渐隐；可暂停，系统要求减少动态时静止且不出暂停键。
+FuyaoManager 采用机器人平台的桌面外壳：侧栏有 208px 展开、52px 图标栏和隐藏三档，顶部为操作栏，工作区独立滚动。侧栏依次呈现品牌、站点作用域下的站点名、固定入口、分组菜单与页脚，行高 36px（粗指针 44px），图标槽 24px、图标 20px；模式按钮、固定入口、菜单项与页脚的图标同在一条图标轴线上，距左缘 26px，文字同在一条文字轴线上。平台作用域不显示站点数量，站点作用域不显示 slug 与角色。图标栏就是展开侧栏的前 52px：只隐藏图标轴右侧的内容，分组标题居中显示至多两行，各入口的位置不变；各入口保留可访问名称，鼠标悬停或键盘聚焦时完整菜单在同一布局上浮出并覆盖工作区，页面占位不变，按 Esc 收起，鼠标移出或焦点再次进入后恢复。隐藏档在操作栏左端提供恢复按钮，图标栏状态下该处显示品牌标。模式按浏览器保存。操作栏承载筛选、页签和主要操作，右侧显示应用版本，点击可查看运行服务版本和提交；气泡无箭头，表面在 420 毫秒内由胶囊尺寸形变至详情尺寸，收起时形变回胶囊。操作栏自 720px 容器起为单行：导航在左、会话控件在右各守其位，中间的页面区（前导、筛选、页签与操作）横向滚动，竖向滚轮转为横向滚动，仍有内容隐藏的一侧渐隐。720px 以下换为两行，导航与会话控件占首行，页面区占次行并换行。窄屏使用导航抽屉。切换页面时旧页 100 毫秒淡出、新页 200 毫秒淡入；只改页签或筛选、替换式导航、减少动态或不支持 View Transition 时直接切换。登录页与通行密钥绑定页的背景是连续极光：天色渐变之上两条光带在画布上 7.2 秒循环，向下渐隐；可暂停，系统要求减少动态时静止且不出暂停键。
 
 设计令牌由现有 Ant Design 主题和 CSS 变量共同驱动，运动时长分 100、200、300 毫秒三档（`--motion-fast`、`--motion-mid`、`--motion-slow`），顶栏版本气泡的 420 毫秒形变是机器人平台为胶囊浮层规定的例外。输入与选择控件在 992px 及以上高 34px，更窄时保持 44px。常规卡片用描边与底色分层，表单和档案可在宽容器内按 8:4 或 6:6 分列，窄屏回到自然文档流；表单栅格最多两列，列距 20px。独立列表使用 `TablePanel` 与 `DataTable`，长值保留完整内容，表头在内容滚动时保持可见。需要横向滚动的表格提供有名称的键盘可聚焦区域。工作区和表格内容区仅在边缘还有隐藏内容时渐隐，强制高对比模式下取消渐隐。状态标签有成功、警告、危险、信息和中性五种语义，颜色独立于强调色，底色与描边混入所在表面；标签可换行，表格单元格内保持单行。加载状态默认播报“加载中”。编号和版本使用等宽文本，字段名和危险后果保持可见。显示设置可为内容区选择个人底色：主题底色占 90%，个人颜色混入 10%。
 
@@ -13,7 +13,7 @@ FuyaoManager 采用机器人平台的桌面外壳：侧栏有 208px 展开、52p
 | 来自 robot-platform 的实现 | FuyaoManager 中的落点 |
 | --- | --- |
 | `docs/架构规范/前端页面布局规范.md`（`b1db1edd`）与 `libraries/ui/styles/panel.css` | `styles/pages.css` 的响应式 12 列网格、常规面板与独立列表 |
-| `frontend/components/platform/sidebar/SideMenu.tsx`、`sidebarMode.ts` 与 `frontend/styles/sidebar/sidebar.css`（`aa21ec10`） | `DesktopSidebar`、`sidebarMode.ts` 与 `styles/sidebar/sidebar.css` 的侧栏三档和浮出菜单 |
+| `frontend/components/platform/sidebar/SideMenu.tsx`、`sidebarMode.ts`、`frontend/styles/sidebar/sidebar.css` 与 `frontend/styles/shared/brand.css`（`aa21ec10`） | `DesktopSidebar`、`sidebarMode.ts` 与 `styles/sidebar/sidebar.css` 的侧栏度量、三档和浮出菜单；`tests/sidebar-layout.test.ts` 守卫图标轴线与折叠态不涉纵向度量 |
 | `frontend/lib/workspaceNavigation.ts`（`4d5a679e`） | `lib/navigation/query.ts`，由页面校验并更新查询参数 |
 | `modules/frontend-updates/ui/src/PlatformComponentsPage.tsx`（`c838b03f`） | 平台更新和 GitHub 主题来源复用维护表格，用应用版本作为主显示 |
 | `frontend/components/platform/operationbar/TopBar.tsx`、`useToolbarScroll.ts` 与 `libraries/ui/operationbar/operationbar.css` | `TopBar`、`useToolbarScroll` 与 `styles/statusbar/statusbar.css` 的单行操作栏；`PlatformVersion` 展开查看运行服务版本和提交 |
