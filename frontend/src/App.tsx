@@ -40,6 +40,7 @@ import FootprintsPage from './pages/content/FootprintsPage';
 import BuildsPage from './pages/sites/BuildsPage';
 import ReleasesPage from './pages/sites/ReleasesPage';
 import { RetryButton } from './components/ActionButton';
+import PageBoundary from './components/PageBoundary';
 
 function ThemeWorkspace() {
 	const [params] = useSearchParams();
@@ -196,36 +197,40 @@ export default function App() {
 								{navItems.map((item) => {
 									const Page = pageByNavId[item.id];
 									return (
-										<Route
-											key={item.id}
-											path={item.path}
-											element={
-												item.adminOnly && session.user?.platformRole !== 'admin' ? (
-													<Result
-														status="403"
-														title={t('error.forbidden')}
-														extra={<Button href="/sites">{t('nav.platformHome')}</Button>}
-													/>
-												) : item.scope === 'site' ? (
-													<SiteBoundary key={item.id}>
-														<SiteRoute page={item.parentId ?? item.id}>
+											<Route
+												key={item.id}
+												path={item.path}
+												element={
+													// One boundary per route slot: a page that fails to render is
+													// reported in place while the shell stays mounted.
+													<PageBoundary>
+														{item.adminOnly && session.user?.platformRole !== 'admin' ? (
+															<Result
+																status="403"
+																title={t('error.forbidden')}
+																extra={<Button href="/sites">{t('nav.platformHome')}</Button>}
+															/>
+														) : item.scope === 'site' ? (
+															<SiteBoundary key={item.id}>
+																<SiteRoute page={item.parentId ?? item.id}>
+																	<Page />
+																</SiteRoute>
+															</SiteBoundary>
+														) : item.id.startsWith('content.') ? (
+															<ContentScopeProvider
+																resource={
+																	(item.parentId ?? item.id).slice('content.'.length) as ContentResource
+																}
+																fill
+															>
+																<Page />
+															</ContentScopeProvider>
+														) : (
 															<Page />
-														</SiteRoute>
-													</SiteBoundary>
-												) : item.id.startsWith('content.') ? (
-													<ContentScopeProvider
-														resource={
-															(item.parentId ?? item.id).slice('content.'.length) as ContentResource
-														}
-														fill
-													>
-														<Page />
-													</ContentScopeProvider>
-												) : (
-													<Page />
-												)
-											}
-										/>
+														)}
+													</PageBoundary>
+												}
+											/>
 									);
 								})}
 								<Route path="*" element={<Navigate to="/sites" replace />} />
