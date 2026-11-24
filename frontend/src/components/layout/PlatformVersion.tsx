@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { version } from '../../../package.json';
-import VersionBadge from '../VersionBadge';
+import VersionPopover from './VersionPopover';
 import VersionText from '../VersionText';
 import { api } from '../../lib/api/client';
 import { t } from '../../lib/i18n';
@@ -26,12 +26,11 @@ export default function PlatformVersion() {
 	}, [open, runtime]);
 
 	return (
-		<VersionBadge
-			size="middle"
-			label={t('updates.versionTag')}
-			version={version}
+		<VersionPopover
+			open={open}
 			onOpenChange={setOpen}
-			details={
+			label={t('common.versionDetails', { version })}
+			content={
 				<div className="version-facts">
 					<span>
 						{t('updates.appLabel')} <VersionText>{version}</VersionText>
@@ -48,6 +47,9 @@ export default function PlatformVersion() {
 					)}
 				</div>
 			}
-		/>
+		>
+			<span className="version-badge-label">{t('updates.versionTag')}</span>
+			<VersionText>{version}</VersionText>
+		</VersionPopover>
 	);
 }
