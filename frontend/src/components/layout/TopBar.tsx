@@ -9,6 +9,7 @@ import { usePageHeaderContent } from '../PageHeader';
 import { i18nSnapshot, setLocale, subscribeI18n, t, type Locale } from '../../lib/i18n';
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
 import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
+import { confirmLeave, revokeLeave } from '../../lib/editing/leaveGuard';
 
 export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode }) {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
@@ -91,8 +92,15 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 									{
 										key: 'signout',
 										label: t('app.signOut'),
+										// A dirty page confirms first: the session must not be cleared
+										// while its editor is still mounted and the answer may be "stay".
 										onClick: () => {
-											void signOut().then(() => navigate('/login', { replace: true }));
+											void confirmLeave().then((ok) => {
+												if (!ok) return;
+												signOut()
+													.then(() => navigate('/login', { replace: true }))
+													.catch(() => revokeLeave());
+											});
 										}
 									}
 								]
