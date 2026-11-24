@@ -40,7 +40,7 @@ platform development history preserved; see
 - **User management and audit**: administrator-only account lifecycle, site
   memberships, passkey/session revocation, one-time enrollment/recovery codes,
   and searchable operation history. See [Administration](./docs/ADMINISTRATION.md).
-- **Console preferences**: light/dark/system modes, colors, display time zone and date formats, persisted in the browser.
+- **Console preferences**: light/dark/system modes, colors, a personal content background, display time zone and date formats, persisted in the browser.
 
 - **Passkey authentication**: everyday sign-in is a discoverable passkey
   (WebAuthn, user verification required); sessions are cookie-based with
@@ -80,7 +80,8 @@ platform development history preserved; see
   dropdown (`PATCH /api/v1/account/profile`); passkeys and login codes keep
   working across the rename.
 - **Console**: React 18 + official Ant Design 6, zh-CN/en-US, day/night
-  themes, grouped desktop-app shell (sidebar scopes, top-bar page slots).
+  themes, grouped desktop-app shell (expandable, icon-rail or hidden sidebar
+  with site scopes, top-bar page slots).
 
 ## Tech stack
 

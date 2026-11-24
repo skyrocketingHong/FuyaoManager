@@ -7,6 +7,15 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## Unreleased
+
+- Desktop sidebar modes: expanded (208px), icon rail (52px) and hidden, saved per browser. The rail keeps icons and group titles of up to two lines; hovering or focusing it floats the complete menu, and Escape dismisses it. The hidden mode restores from the left end of the operation bar.
+- Display settings offer a personal content background: 90% of the theme background mixed with 10% of the chosen color.
+- Shared controls follow the robot platform at commit `7ddbaf0e`: status tags wrap and mix into the surface behind them, loading states carry a label by default, the primary button has a press scale, interface headings use a 20px and 16px scale, and workspace and table scroll fades ease in and stop under forced colors.
+- Frontend relative imports point only at the same or a lower layer, and a test keeps the page registry aligned with the navigation metadata.
+- A page that fails to render reports the error inside the workspace with a retry, while the sidebar, operation bar and session stay mounted.
+- Signing out with unsaved changes asks for confirmation before the session is cleared.
+
 ## 0.9.4 - 2026-11-22
 
 - Browse albums in a photo grid, sortable list, or horizontal gallery. Switch years, search photos, preview thumbnails and upload several originals at once.
