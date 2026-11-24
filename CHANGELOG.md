@@ -7,6 +7,11 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.10.1 - 2026-11-24
+
+- The sidebar follows the robot platform: the card with site counts, and with a site's slug and role, is gone, and a site scope heads its menu with the site name. Row height, icon slot, glyph and brand row match the platform.
+- The icon rail is the expanded sidebar's first 52px, so entries no longer move between the collapsed sidebar, the expanded sidebar and the floating menu.
+
 ## 0.10.0 - 2026-11-24
 
 - Desktop sidebar modes: expanded (208px), icon rail (52px) and hidden, saved per browser. The rail keeps icons and group titles of up to two lines; hovering or focusing it floats the complete menu, and Escape dismisses it. The hidden mode restores from the left end of the operation bar.
