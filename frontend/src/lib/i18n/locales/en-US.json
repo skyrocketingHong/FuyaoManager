@@ -931,5 +931,8 @@
 	"config.linksTab": "Social links",
 	"auth.workspace": "Site management and publishing",
 	"updates.backendLabel": "Backend service",
-	"caddy.configTab": "Configuration"
+	"caddy.configTab": "Configuration",
+	"app.collapseSidebar": "Collapse sidebar",
+	"app.hideSidebar": "Hide sidebar",
+	"app.expandSidebar": "Show sidebar"
 }

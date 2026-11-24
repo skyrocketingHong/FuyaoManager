@@ -931,5 +931,8 @@
 	"config.linksTab": "社交链接",
 	"auth.workspace": "站点管理与发布",
 	"updates.backendLabel": "后端服务",
-	"caddy.configTab": "配置"
+	"caddy.configTab": "配置",
+	"app.collapseSidebar": "折叠侧栏",
+	"app.hideSidebar": "隐藏侧栏",
+	"app.expandSidebar": "展开侧栏"
 }

@@ -21,10 +21,13 @@ export interface SidebarAction {
 
 export default function SidebarActions({
 	items,
-	ariaLabel
+	ariaLabel,
+	compact = false
 }: {
 	items: SidebarAction[];
 	ariaLabel: string;
+	/** Icon rail: the label span is hidden, so the name and tooltip move to the button. */
+	compact?: boolean;
 }) {
 	return (
 		<div className="sidebar-actions" aria-label={ariaLabel}>
@@ -35,10 +38,14 @@ export default function SidebarActions({
 					icon={item.icon}
 					className={item.active ? 'is-active' : undefined}
 					aria-current={item.active ? 'page' : undefined}
+					aria-label={item.label}
+					title={compact ? item.label : undefined}
 					onClick={item.onClick}
 				>
-					<Trans text={item.label} />
-					{item.trailing}
+					<span className="sidebar-action-label">
+						<Trans text={item.label} />
+					</span>
+					{item.trailing && <span className="sidebar-action-trailing">{item.trailing}</span>}
 				</Button>
 			))}
 		</div>

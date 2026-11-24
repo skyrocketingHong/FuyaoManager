@@ -21,6 +21,9 @@ import {
 	Link2,
 	Menu as MenuIcon,
 	Palette,
+	PanelLeftClose,
+	PanelLeftDashed,
+	PanelLeftOpen,
 	Rocket,
 	Settings,
 	UserRound,
@@ -48,6 +51,8 @@ import type { SidebarAction } from './SidebarActions';
 import type { SidebarStat } from './SidebarInfo';
 import TopBar from './TopBar';
 import CaddyIcon from '../CaddyIcon';
+import DesktopSidebar from './DesktopSidebar';
+import { changeSidebarMode, readSidebarMode } from './sidebarMode';
 import SidebarMotionIcon, { replaySidebarMotionIcon, type SidebarMotionIconName } from './SidebarMotionIcon';
 import { allowSitePage } from '../../lib/navigation/workspace';
 
@@ -83,12 +88,20 @@ const contentIcons: Partial<Record<string, SidebarMotionIconName>> = {
 	'site.friends': 'friends'
 };
 
-function menuEntry(itemId: string, siteId: string | null): MenuItem {
+function menuEntry(itemId: string, siteId: string | null, compact: boolean): MenuItem {
 	const item = navItems.find((entry) => entry.id === itemId);
 	if (!item) throw new Error(`unknown navigation item ${itemId}`);
 	const iconId = item.id.replace(/^content\./, 'site.');
 	const motionIcon = contentIcons[iconId];
-	const entry = { key: itemPath(item, siteId), label: t(item.titleKey) };
+	// The icon rail hides the label node, so the item keeps its name through
+	// aria-label and gains a native tooltip only while the rail is shown.
+	const label = t(item.titleKey);
+	const entry = {
+		key: itemPath(item, siteId),
+		label,
+		'aria-label': label,
+		title: compact ? label : undefined
+	};
 	if (motionIcon) {
 		return {
 			...entry,
@@ -124,6 +137,42 @@ export default function AppShell({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (session.status === 'authenticated') void loadSiteList();
 	}, [session.status, session.user?.id, authGeneration]);
+
+	// Desktop sidebar mode (expanded → icons → hidden), persisted per browser.
+	// The control moves between the sidebar brand row (expanded and icons)
+	// and the top bar's navigation slot (hidden); focus follows it so the
+	// three-state toggle stays operable from the keyboard in every mode.
+	const [sidebarMode, setSidebarMode] = useState(readSidebarMode);
+	const sidebarButtonRef = useRef<HTMLButtonElement>(null);
+	const restoreSidebarFocus = useRef(false);
+	useEffect(() => {
+		if (!restoreSidebarFocus.current) return;
+		restoreSidebarFocus.current = false;
+		sidebarButtonRef.current?.focus({ preventScroll: true });
+	}, [sidebarMode]);
+	const sidebarAction =
+		sidebarMode === 'hidden'
+			? t('app.expandSidebar')
+			: sidebarMode === 'icons'
+				? t('app.hideSidebar')
+				: t('app.collapseSidebar');
+	const SidebarGlyph =
+		sidebarMode === 'hidden' ? PanelLeftOpen : sidebarMode === 'icons' ? PanelLeftDashed : PanelLeftClose;
+	const sidebarButton = (
+		<button
+			ref={sidebarButtonRef}
+			type="button"
+			className="sidebar-mode-button"
+			aria-label={sidebarAction}
+			title={sidebarAction}
+			onClick={() => {
+				restoreSidebarFocus.current = true;
+				setSidebarMode(changeSidebarMode(sidebarMode));
+			}}
+		>
+			<SidebarGlyph size={18} strokeWidth={1.8} />
+		</button>
+	);
 
 	// Narrow-viewport state: mirror the CSS breakpoint and follow live
 	// viewport changes so the Sider and the Drawer never mount together.
@@ -174,7 +223,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 					(item.scope !== 'site' || allowSitePage(currentSite, item.id)) &&
 					(!item.adminOnly || session.user?.platformRole === 'admin')
 			)
-			.map((item) => menuEntry(item.id, siteId));
+			.map((item) => menuEntry(item.id, siteId, sidebarMode === 'icons'));
 		if (children.length)
 			menuItems.push({ key: group.id, type: 'group', label: t(group.titleKey), children });
 	}
@@ -267,19 +316,44 @@ export default function AppShell({ children }: { children: ReactNode }) {
 		/>
 	);
 
+	// Top-bar navigation slot: the drawer trigger on narrow screens. On the
+	// desktop it stays empty while the sidebar is expanded, carries the
+	// restore control once the sidebar is hidden, and shows the brand mark
+	// beside the icon rail (the rail itself displays icons only).
+	const navigationSlot = narrow
+		? menuButton
+		: sidebarMode === 'hidden'
+			? sidebarButton
+			: sidebarMode === 'icons'
+				? (
+						<img
+							className="topbar-brand-mark"
+							src="/favicon.svg"
+							alt={t('app.title')}
+							width={28}
+							height={28}
+						/>
+					)
+				: undefined;
+
 	return (
 		<PageHeaderProvider scope={`${session.user?.id ?? 'anon'}:${pathname}`}>
 			<a className="skip-workspace" href="#workspace">
 				{t('app.skipWorkspace')}
 			</a>
-			<Layout className="app-shell">
-				{!narrow && (
-					<Layout.Sider width={208} theme="light" className="app-sider" trigger={null}>
-						<SidebarContent infoTitle={infoTitle} stats={stats} actions={actions} menu={navModule} />
-					</Layout.Sider>
+			<Layout className="app-shell" data-sidebar={sidebarMode}>
+				{!narrow && sidebarMode !== 'hidden' && (
+					<DesktopSidebar
+						mode={sidebarMode}
+						modeButton={sidebarButton}
+						infoTitle={infoTitle}
+						stats={stats}
+						actions={actions}
+						menu={navModule}
+					/>
 				)}
 				<Layout className="shell-main">
-					<TopBar navigationSlot={narrow ? menuButton : undefined} />
+					<TopBar navigationSlot={navigationSlot} />
 					<Layout.Content id="workspace" ref={workspaceRef} tabIndex={-1} className="shell-content" data-workspace={article ? 'article' : 'console'}>
 						{children}
 					</Layout.Content>

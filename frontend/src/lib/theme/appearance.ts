@@ -186,7 +186,9 @@ export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearan
 		'--text-body': '14px',
 		'--text-title': '16px',
 		'--text-page': '20px',
+		'--motion-fast': '100ms',
 		'--motion-mid': '200ms',
+		'--motion-slow': '300ms',
 		'--topbar-height': '44px',
 		'--topbar-control-height': '32px'
 	};
