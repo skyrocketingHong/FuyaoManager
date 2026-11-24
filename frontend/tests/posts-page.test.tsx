@@ -4,7 +4,7 @@
  * bound to the typed API, the draft gate is visible, and viewers get no
  * create action.
  */
-import PostWorkspace from '../src/features/posts/PostWorkspace';
+import PostWorkspace from '../src/pages/content/PostWorkspace';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	MemoryRouter,

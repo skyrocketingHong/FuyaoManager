@@ -1,8 +1,8 @@
 import { useSearchParams } from 'react-router-dom';
 import { queryChoice } from '../../lib/navigation/query';
-import PostsPage from '../../pages/content/posts/PostsPage';
-import PostVocabularyPage from '../../pages/content/posts/PostVocabularyPage';
-import PostMediaPage from '../../pages/content/posts/PostMediaPage';
+import PostsPage from './posts/PostsPage';
+import PostVocabularyPage from './posts/PostVocabularyPage';
+import PostMediaPage from './posts/PostMediaPage';
 
 export default function PostWorkspace() {
 	const [params] = useSearchParams();

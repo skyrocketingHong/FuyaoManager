@@ -31,7 +31,7 @@ import type { ContentResource } from './lib/api/content';
 import SettingsPage from './pages/sites/SettingsPage';
 import ThemePage from './pages/sites/ThemePage';
 import PostEditorPage from './pages/content/posts/PostEditorPage';
-import PostWorkspace from './features/posts/PostWorkspace';
+import PostWorkspace from './pages/content/PostWorkspace';
 import { LegacyPostSectionRedirect, LegacyPostVocabularyRedirect } from './features/posts/PostWorkspaceTabs';
 import FriendsPage from './pages/content/FriendsPage';
 import SiteConfigPage from './pages/sites/SiteConfigPage';
