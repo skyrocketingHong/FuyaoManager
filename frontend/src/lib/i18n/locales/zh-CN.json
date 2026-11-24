@@ -934,5 +934,8 @@
 	"caddy.configTab": "配置",
 	"app.collapseSidebar": "折叠侧栏",
 	"app.hideSidebar": "隐藏侧栏",
-	"app.expandSidebar": "展开侧栏"
+	"app.expandSidebar": "展开侧栏",
+	"appearance.background": "内容区背景",
+	"appearance.backgroundPick": "选择色调",
+	"appearance.backgroundFollow": "跟随主题"
 }

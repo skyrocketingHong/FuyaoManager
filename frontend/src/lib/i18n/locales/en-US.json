@@ -934,5 +934,8 @@
 	"caddy.configTab": "Configuration",
 	"app.collapseSidebar": "Collapse sidebar",
 	"app.hideSidebar": "Hide sidebar",
-	"app.expandSidebar": "Show sidebar"
+	"app.expandSidebar": "Show sidebar",
+	"appearance.background": "Content background",
+	"appearance.backgroundPick": "Choose a tint",
+	"appearance.backgroundFollow": "Follow theme"
 }

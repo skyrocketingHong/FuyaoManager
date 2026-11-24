@@ -131,8 +131,18 @@ export interface Appearance {
 	config: ThemeConfig;
 }
 
-export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearance {
+// `contentBackground` tints the content surface only: the theme background
+// stays dominant and the personal color is mixed in at 10% (robot-platform's
+// ContentSurface usage). Null keeps the plain theme background.
+export function appearanceTheme(
+	mode: AppearanceMode,
+	accent = ACCENT,
+	contentBackground: string | null = null
+): Appearance {
 	const accentColor = /^#[\da-f]{6}$/i.test(accent) ? accent : ACCENT;
+	const contentTint = typeof contentBackground === 'string' && /^#[\da-f]{6}$/i.test(contentBackground)
+		? contentBackground.toLowerCase()
+		: null;
 	const p = palettes[mode];
 	const selected = mixColor(p.card, accentColor, mode === 'dark' ? 0.16 : 0.1);
 	const primaryText = [selected, p.card, p.surface, p.muted, p.sidebar].reduce(
@@ -153,6 +163,9 @@ export function appearanceTheme(mode: AppearanceMode, accent = ACCENT): Appearan
 
 	const variables: Record<string, string> = {
 		'--background': p.background,
+		'--content-surface': contentTint
+			? `color-mix(in srgb, var(--background) 90%, ${contentTint})`
+			: 'var(--background)',
 		'--foreground': p.foreground,
 		'--card': p.card,
 		'--surface': p.surface,

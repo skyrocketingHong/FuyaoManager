@@ -24,6 +24,9 @@
 	overflow-y: auto;
 	scrollbar-gutter: stable;
 	padding: var(--space-4);
+	/* Content surface: the theme background, or the personal tint mixed into
+	   it (robot-platform's ContentSurface). */
+	background-color: var(--content-surface, var(--background));
 }
 .shell-content:focus {
 	outline: none;

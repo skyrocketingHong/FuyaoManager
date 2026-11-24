@@ -115,6 +115,36 @@ export default function AppearancePage() {
 							</ColorPicker>
 						</div>
 					</section>
+					<section className="appearance-section" aria-labelledby="appearance-background-title">
+						<h2 id="appearance-background-title">{t('appearance.background')}</h2>
+						<div className="appearance-custom">
+							<ColorPicker
+								value={preferences.contentBackground ?? preferences.accent}
+								format="hex"
+								disabledAlpha
+								onChange={(color) =>
+									setAppearance({ contentBackground: color.toHexString() })
+								}
+							>
+								<Button>
+									{preferences.contentBackground && (
+										<span
+											className="appearance-swatch"
+											style={{ backgroundColor: preferences.contentBackground }}
+											aria-hidden="true"
+										/>
+									)}
+									{t('appearance.backgroundPick')}
+								</Button>
+							</ColorPicker>
+							<Button
+								disabled={preferences.contentBackground === null}
+								onClick={() => setAppearance({ contentBackground: null })}
+							>
+								{t('appearance.backgroundFollow')}
+							</Button>
+						</div>
+					</section>
 					<DateTimeSettings />
 				</div>
 			</Panel>

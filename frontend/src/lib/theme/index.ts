@@ -3,12 +3,18 @@ export type ThemeMode = 'light' | 'dark' | 'system';
 export interface AppearancePreferences {
 	mode: ThemeMode;
 	accent: string;
+	/** Personal tint mixed into the content surface; null follows the theme. */
+	contentBackground: string | null;
 }
 export interface ThemeState extends AppearancePreferences {
 	dark: boolean;
 }
 export const appearanceStorageKey = 'fuyao-manager-appearance:v1';
-export const defaultAppearance: AppearancePreferences = { mode: 'system', accent: '#1677ff' };
+export const defaultAppearance: AppearancePreferences = {
+	mode: 'system',
+	accent: '#1677ff',
+	contentBackground: null
+};
 export const accentPresets = [
 	{ name: 'blue', color: '#1677ff' },
 	{ name: 'indigo', color: '#2f54eb' },
@@ -34,7 +40,11 @@ export function normalizeAppearance(value: unknown): AppearancePreferences {
 		accent:
 			typeof input.accent === 'string' && /^#[\da-f]{6}$/i.test(input.accent)
 				? input.accent.toLowerCase()
-				: defaultAppearance.accent
+				: defaultAppearance.accent,
+		contentBackground:
+			typeof input.contentBackground === 'string' && /^#[\da-f]{6}$/i.test(input.contentBackground)
+				? input.contentBackground.toLowerCase()
+				: null
 	};
 }
 function readPreferences(): AppearancePreferences {
@@ -105,7 +115,11 @@ export function setAppearance(patch: Partial<AppearancePreferences>): void {
 	try {
 		localStorage.setItem(
 			appearanceStorageKey,
-			JSON.stringify({ mode: state.mode, accent: state.accent })
+			JSON.stringify({
+				mode: state.mode,
+				accent: state.accent,
+				contentBackground: state.contentBackground
+			})
 		);
 	} catch {
 		/* Keep the in-memory preference. */
