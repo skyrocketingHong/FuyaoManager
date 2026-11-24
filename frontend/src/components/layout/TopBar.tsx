@@ -10,6 +10,7 @@ import { i18nSnapshot, setLocale, subscribeI18n, t, type Locale } from '../../li
 import { sessionSnapshot, signOut, subscribeSession } from '../../lib/session';
 import { themeSnapshot, subscribeTheme, toggleTheme } from '../../lib/theme';
 import { confirmLeave, revokeLeave } from '../../lib/editing/leaveGuard';
+import { useToolbarScroll } from './useToolbarScroll';
 
 export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode }) {
 	const { locale } = useSyncExternalStore(subscribeI18n, i18nSnapshot);
@@ -17,6 +18,7 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 	const session = useSyncExternalStore(subscribeSession, sessionSnapshot);
 	const navigate = useNavigate();
 	const header = usePageHeaderContent();
+	const toolbar = useToolbarScroll();
 	const other: Locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN';
 	const themeLabel = dark ? t('app.theme.light') : t('app.theme.dark');
 	const user = session.status === 'authenticated' ? session.user : null;
@@ -32,10 +34,20 @@ export default function TopBar({ navigationSlot }: { navigationSlot?: ReactNode 
 					<i />
 				</span>
 				<div className="topbar-navigation">{navigationSlot}</div>
-				<div className="topbar-main">
-					{header?.leading && <div className="topbar-page-leading">{header.leading}</div>}
-					{header?.actions && <div className="topbar-page-actions">{header.actions}</div>}
-					{header?.content && <div className="topbar-page-content">{header.content}</div>}
+				{/* The page area in one row that scrolls sideways; the fades
+				    follow the edges that still hide content. */}
+				<div
+					className="topbar-scroll"
+					data-fade-left={toolbar.left ? '' : undefined}
+					data-fade-right={toolbar.right ? '' : undefined}
+				>
+					<div className="topbar-main" ref={toolbar.scroll}>
+						<div className="topbar-items" ref={toolbar.content}>
+							{header?.leading && <div className="topbar-page-leading">{header.leading}</div>}
+							{header?.actions && <div className="topbar-page-actions">{header.actions}</div>}
+							{header?.content && <div className="topbar-page-content">{header.content}</div>}
+						</div>
+					</div>
 				</div>
 				<div className="topbar-session">
 					<PlatformVersion />

@@ -1,10 +1,15 @@
 /* API 接口目录：筛选行 + 统计行 + 折叠列表（行内展开鉴权与契约详情）。 */
 .topbar-api-content {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
+}
+@container (max-width: 719px) {
+	.topbar-api-content {
+		flex-wrap: wrap;
+	}
 }
 .topbar-api-content > .ant-select {
 	width: 132px;

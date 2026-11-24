@@ -1,35 +1,44 @@
 /* Ported from robot-platform/libraries/ui/operationbar/operationbar.css:
-   shared single-row slots, layered background, 32px controls, user menu. */
-/* Responsive top bar: three stable grid slots (navigation | page area |
-   session) inside the .shell-main container, so the available width already
-   accounts for the desktop sidebar. While the container offers enough room
-   the bar keeps its compact single-line arrangement; below 720px the grid
-   switches — navigation and session hold the first row and the page area
-   spans the full second row, where its filters and actions wrap normally.
-   Nothing scrolls horizontally at the bar level, nothing is hidden, and the
-   bar grows in height while the workspace absorbs the remainder. */
+   a single-row page area that scrolls sideways, layered background and 32px
+   controls; the account menu is this console's own. */
+/* The bar reads its width from the .shell-main container, so the available
+   room already accounts for the desktop sidebar. From 720px it is one
+   fixed-height row: navigation on the left and the session controls on the
+   right stay in place, and the page area (leading, filters, tabs and
+   actions) scrolls sideways inside .topbar-scroll. A vertical wheel or
+   trackpad scroll moves it while content remains hidden at that edge, and a
+   fade marks each hidden edge.
+   Below 720px the session controls alone need about 225px and would leave
+   too little room for a scrolling page area, so the bar switches to two
+   rows: navigation and session hold the first, the page area spans the
+   second and wraps. Nothing is hidden there, and the bar grows in height
+   while the workspace absorbs the remainder. */
 .topbar {
 	--topbar-control-height: 32px;
 	position: sticky;
 	top: 0;
 	z-index: 30;
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	grid-template-areas: 'nav main session';
-	align-items: start;
-	min-height: var(--topbar-height);
+	display: flex;
+	align-items: center;
+	gap: var(--space-2);
+	height: var(--topbar-height);
 	flex: 0 0 auto;
-	padding-block: 6px;
-	padding-inline: var(--space-4);
+	min-width: 0;
+	padding: 0 var(--space-4);
 	border-bottom: 1px solid var(--border);
 	background: var(--card);
 }
 @container (max-width: 719px) {
 	.topbar {
+		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
 		grid-template-areas:
 			'nav session'
-			'main main';
+			'scroll scroll';
+		align-items: start;
+		height: auto;
+		min-height: var(--topbar-height);
+		padding-block: 6px;
 	}
 }
 @supports ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
@@ -83,64 +92,145 @@
 	);
 }
 .topbar-navigation,
-.topbar-main,
+.topbar-scroll,
 .topbar-session {
 	position: relative;
 	z-index: 1;
 }
-/* Narrow-screen navigation toggle slot; empty on desktop widths. */
+/* Navigation slot: the drawer trigger on narrow screens, the sidebar's
+   restore control or brand mark on desktop, and empty while the sidebar is
+   expanded. It starts half a gutter left so its icon meets the content edge. */
 .topbar-navigation {
-	grid-area: nav;
+	flex: none;
 	display: flex;
 	align-items: center;
 	min-width: 0;
+	margin-inline-start: calc(-1 * var(--space-2));
 }
 .topbar-navigation:empty {
 	display: none;
 }
+.topbar-scroll {
+	flex: 1 1 auto;
+	min-width: 0;
+}
 .topbar-main {
-	grid-area: main;
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	align-items: center;
 	gap: var(--space-2);
 	font-size: var(--text-body);
 	color: var(--muted-foreground);
 	min-width: 0;
+	flex: 1 1 auto;
+	max-height: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: thin;
+	scroll-padding-inline: 18px;
+	overscroll-behavior-inline: contain;
 }
-.topbar-page-leading {
-	min-width: 0;
-	max-width: 100%;
-}
-.topbar-page-content {
+.topbar-items {
 	display: flex;
-	flex-wrap: wrap;
+	flex: none;
 	align-items: center;
 	gap: var(--space-2);
-	min-width: 0;
-	max-width: 100%;
-	flex: 0 1 auto;
+	width: max-content;
 }
+.topbar-items > * {
+	flex-shrink: 0;
+}
+/* A fade over each edge of the page area while content is hidden behind it. */
+.topbar-scroll::before,
+.topbar-scroll::after {
+	content: '';
+	position: absolute;
+	z-index: 2;
+	inset-block: 3px;
+	width: 18px;
+	opacity: 0;
+	pointer-events: none;
+	-webkit-backdrop-filter: blur(6px);
+	backdrop-filter: blur(6px);
+	background: color-mix(in srgb, var(--card) 82%, transparent);
+	transition: opacity var(--motion-fast) ease-out;
+}
+.topbar-scroll::before {
+	left: 0;
+	-webkit-mask-image: linear-gradient(to right, #000, transparent);
+	mask-image: linear-gradient(to right, #000, transparent);
+}
+.topbar-scroll::after {
+	right: 0;
+	-webkit-mask-image: linear-gradient(to left, #000, transparent);
+	mask-image: linear-gradient(to left, #000, transparent);
+}
+.topbar-scroll[data-fade-left]::before,
+.topbar-scroll[data-fade-right]::after {
+	opacity: 1;
+}
+@media (forced-colors: active) {
+	.topbar-scroll::before,
+	.topbar-scroll::after {
+		display: none;
+	}
+}
+.topbar-page-leading,
+.topbar-page-content,
 .topbar-page-actions {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	align-items: center;
 	gap: var(--space-2);
-	flex: 0 1 auto;
-	min-width: 0;
-	max-width: 100%;
+	flex: 0 0 auto;
 }
-.topbar-page-leading .ant-space,
-.topbar-page-content .ant-space,
-.topbar-page-actions .ant-space {
-	flex-wrap: wrap;
-	max-width: 100%;
+.topbar-page-leading,
+.topbar-page-content {
+	min-width: max-content;
 }
-.topbar-page-actions .ant-space-compact {
-	max-width: 100%;
-}
-.topbar-page-actions .ant-space-compact input {
-	min-width: 0;
+/* Narrow containers: the page area spans its own row and wraps. */
+@container (max-width: 719px) {
+	.topbar-navigation {
+		grid-area: nav;
+	}
+	.topbar-scroll {
+		grid-area: scroll;
+	}
+	.topbar-scroll::before,
+	.topbar-scroll::after {
+		display: none;
+	}
+	.topbar-main {
+		overflow: visible;
+		scroll-padding-inline: 0;
+	}
+	.topbar-items {
+		width: auto;
+		flex-wrap: wrap;
+	}
+	.topbar-items > * {
+		flex-shrink: 1;
+	}
+	.topbar-page-leading,
+	.topbar-page-content,
+	.topbar-page-actions {
+		flex-wrap: wrap;
+		flex: 0 1 auto;
+		min-width: 0;
+		max-width: 100%;
+	}
+	.topbar-page-leading .ant-space,
+	.topbar-page-content .ant-space,
+	.topbar-page-actions .ant-space {
+		flex-wrap: wrap;
+		max-width: 100%;
+	}
+	.topbar-page-actions .ant-space-compact {
+		max-width: 100%;
+	}
+	.topbar-page-actions .ant-space-compact input {
+		min-width: 0;
+	}
 }
 .topbar .ant-btn:not(.ant-btn-link) {
 	height: var(--topbar-control-height);
@@ -175,11 +265,6 @@
 	min-width: 0;
 	width: max-content;
 	flex: 0 0 auto;
-	/* Rigid tab strips are the only horizontally scrolling widgets: they cap
-	   at their own bounds instead of dragging the whole filter row along. */
-	max-width: 100%;
-	overflow-x: auto;
-	scrollbar-width: thin;
 }
 .topbar-tabs .ant-segmented-group {
 	margin: 0;
@@ -193,14 +278,30 @@
 	min-height: 30px;
 	line-height: 28px;
 }
+@container (max-width: 719px) {
+	/* Rigid tab strips are the only horizontally scrolling widgets: they cap
+	   at their own bounds instead of widening the wrapping row. */
+	.topbar-tabs.ant-segmented {
+		max-width: 100%;
+		overflow-x: auto;
+		scrollbar-width: thin;
+	}
+}
 .topbar-session {
-	grid-area: session;
+	flex: none;
 	display: flex;
 	flex-wrap: nowrap;
 	align-items: center;
 	justify-content: flex-end;
 	gap: var(--space-2);
 	min-width: 0;
+	max-inline-size: 55%;
+}
+@container (max-width: 719px) {
+	.topbar-session {
+		grid-area: session;
+		max-inline-size: none;
+	}
 }
 .topbar .ant-btn.user-button {
 	gap: var(--space-2);

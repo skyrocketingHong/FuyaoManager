@@ -48,11 +48,16 @@
 }
 .topbar-log-content {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
 	align-items: center;
 	gap: var(--space-2);
 	min-width: 0;
 	max-width: 100%;
+}
+@container (max-width: 719px) {
+	.topbar-log-content {
+		flex-wrap: wrap;
+	}
 }
 .topbar-log-content > .ant-select {
 	min-width: 118px;
@@ -62,8 +67,8 @@
 	flex: 1 1 150px;
 	max-width: 220px;
 }
-/* The date range is the widest control: it may take a full line but is
-   never clipped or stripped of its time pickers. */
+/* The date range is the widest control: it keeps its full width in the row
+   and is never clipped or stripped of its time pickers. */
 .topbar-log-content > .ant-picker-range {
 	flex: 0 1 auto;
 	max-width: 100%;
