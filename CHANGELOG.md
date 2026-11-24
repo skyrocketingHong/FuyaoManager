@@ -7,7 +7,7 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
-## Unreleased
+## 0.10.0 - 2026-11-24
 
 - Desktop sidebar modes: expanded (208px), icon rail (52px) and hidden, saved per browser. The rail keeps icons and group titles of up to two lines; hovering or focusing it floats the complete menu, and Escape dismisses it. The hidden mode restores from the left end of the operation bar.
 - Display settings offer a personal content background: 90% of the theme background mixed with 10% of the chosen color.
