@@ -1,4 +1,4 @@
-/* Ported from robot-platform/frontend/styles/statusbar/statusbar.css:
+/* Ported from robot-platform/libraries/ui/operationbar/operationbar.css:
    shared single-row slots, layered background, 32px controls, user menu. */
 /* Responsive top bar: three stable grid slots (navigation | page area |
    session) inside the .shell-main container, so the available width already

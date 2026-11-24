@@ -43,7 +43,7 @@ export function tableScrollContent(table: TableRef | null) {
 	return table?.nativeElement.querySelector<HTMLDivElement>('.ant-table-content');
 }
 
-// robot-platform's Widgets.DataTable uses small tables and a shared surface.
+// robot-platform's libraries/ui/DataTable.tsx uses small tables and a shared surface.
 // Keep the manager's typed rows, stable keys, sorting, and server pagination.
 export default function DataTable<Row extends object>(props: SortableTableProps<Row>) {
 	const { className, manualSorting = false, columns, tableRef, loadMore, scrollLabel: label, ...tableProps } = props;

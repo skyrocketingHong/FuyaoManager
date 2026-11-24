@@ -4,7 +4,7 @@
 
 GitHub Actions 使用 PostgreSQL 验证后端，验证并构建一次前端，再交叉编译 Linux amd64 应用和更新管理器。main、dev 通道的成功构建发布为不可变预发布版本，名称为 `build-<run-id>-<attempt>`。构建标识与产品版本分别维护。PR 不发布可部署版本；真实主题联调保留为独立的手动输入选项。
 
-更新架构与维护流程移植自机器人平台的 `deploy/server/manager`、`backend/internal/httpapi/platform_update.go`、`frontend/lib/platformMaintenance.ts` 和 `PlatformComponentsPage`。GitHub 替代 GitLab，systemd 不可变程序目录替代 Docker 槽位。FuyaoManager 保留一个生产应用及 main、dev 两个更新通道，PostgreSQL、主题、站点数据、已发布网站和 Caddy 沿用现有持久位置。
+更新架构与维护流程移植自机器人平台的 `deploy/server/manager`、`backend/internal/httpapi/platform_update.go`、`libraries/platform-ui/lib/platformMaintenance.ts` 和 `modules/frontend-updates/ui/src/PlatformComponentsPage.tsx`。GitHub 替代 GitLab，systemd 不可变程序目录替代 Docker 槽位。FuyaoManager 保留一个生产应用及 main、dev 两个更新通道，PostgreSQL、主题、站点数据、已发布网站和 Caddy 沿用现有持久位置。
 
 ## 组件分工
 

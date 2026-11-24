@@ -1,5 +1,5 @@
 import { queryValue, usePageQuery } from '../lib/navigation/query';
-// Layout and component calls from robot-platform/features/api/ApiPage.tsx.
+// Layout and component calls from robot-platform/modules/frontend-api-catalog/ui/src/ApiPage.tsx.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Input, Select } from 'antd';
 import DataTable from '../components/DataTable';

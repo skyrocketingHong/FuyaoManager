@@ -6,8 +6,9 @@ export function timeText(value: string | null): string {
 	return formatTime(value);
 }
 
-// Same action-label lookup pattern as robot-platform/settings/LogsPage.tsx;
-// only manager operations belong in this catalogue.
+// Same action-label lookup pattern as robot-platform's
+// modules/frontend-logs/ui/src/LogsPage.tsx; only manager operations
+// belong in this catalogue.
 export const auditLabels: Record<string, MessageKey> = {
 	createUser: 'audit.action.createUser',
 	updateUserProfile: 'audit.action.updateUserProfile',

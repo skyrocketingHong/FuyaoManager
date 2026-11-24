@@ -1,4 +1,5 @@
-// Preference validation and mode resolution adapted from robot-platform/lib/appearance.ts.
+// Preference validation and mode resolution adapted from
+// robot-platform/libraries/platform-ui/lib/appearance.ts.
 export type ThemeMode = 'light' | 'dark' | 'system';
 export interface AppearancePreferences {
 	mode: ThemeMode;

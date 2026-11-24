@@ -1,4 +1,5 @@
-// Version/footer layout adapted from robot-platform's sidebar/SidebarFoot.tsx.
+// Version/footer layout adapted from robot-platform's
+// frontend/components/platform/sidebar/SidebarFoot.tsx.
 import { siGithub } from 'simple-icons';
 import { version } from '../../../package.json';
 

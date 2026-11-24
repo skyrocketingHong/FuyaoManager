@@ -1,4 +1,5 @@
-// InfoCard's title/stats template from robot-platform's sidebar/InfoCard.tsx.
+// InfoCard's title/stats template from robot-platform's
+// frontend/components/platform/sidebar/InfoCard.tsx.
 export interface SidebarStat {
 	label: string;
 	value: string;

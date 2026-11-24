@@ -2,7 +2,7 @@
    section rhythm, form reading width, and inline feedback.
    General visual rules (panel anatomy, table header/cell density, control
    density, button reset) are ported from the robot platform's
-   styles/shared/{panel,forms,controls}.css (read-only reference), adapted
+   libraries/ui/styles/{panel,forms,controls}.css (read-only reference), adapted
    to this console's tokens; surface colors come from the antd theme tokens
    (Table.headerBg, Table.rowHoverBg) instead of duplicated CSS. */
 

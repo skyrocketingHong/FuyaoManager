@@ -1,4 +1,5 @@
-// Catalogue model and filtering follow robot-platform/frontend/lib/apiCatalog.ts.
+// Catalogue model and filtering follow
+// robot-platform/modules/frontend-api-catalog/ui/src/apiCatalog.ts.
 // The manager consumes its authenticated OpenAPI JSON instead of a second catalogue API.
 import { t } from './i18n';
 

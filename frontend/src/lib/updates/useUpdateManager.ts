@@ -1,5 +1,7 @@
 // Read generations and unknown-result handling adapted from robot-platform's
-// platformMaintenance.ts and PlatformComponentsPage. Poll only original tasks.
+// libraries/platform-ui/lib/platformMaintenance.ts and
+// modules/frontend-updates/ui/src/PlatformComponentsPage.tsx. Poll only
+// original tasks.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ApiError, currentAuthGeneration } from '../api/client';
 import { loadSession, sessionSnapshot, subscribeSession } from '../session';

@@ -1,4 +1,4 @@
-// Adapted from robot-platform/frontend/components/platform/statusbar/TopBar.tsx.
+// Adapted from robot-platform/frontend/components/platform/operationbar/TopBar.tsx.
 import type { ReactNode } from 'react';
 import { useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';

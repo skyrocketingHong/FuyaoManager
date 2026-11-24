@@ -3,7 +3,7 @@ import { useId } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { t } from '../lib/i18n';
 
-// robot-platform/components/platform/shared/ActionButton.tsx.
+// robot-platform/libraries/ui/ActionButton.tsx.
 export default function ActionButton({
 	disabledReason,
 	disabled,

@@ -11,7 +11,8 @@ integration remains a separate manual input.
 
 The architecture and maintenance flow are adapted from robot-platform's
 `deploy/server/manager`, `backend/internal/httpapi/platform_update.go`,
-`frontend/lib/platformMaintenance.ts` and `PlatformComponentsPage`.
+`libraries/platform-ui/lib/platformMaintenance.ts` and
+`modules/frontend-updates/ui/src/PlatformComponentsPage.tsx`.
 GitHub replaces GitLab; immutable systemd release directories replace Docker
 slots. FuyaoManager keeps one production application and main/dev update channels.
 Its PostgreSQL database, themes, site data, published websites and Caddy remain

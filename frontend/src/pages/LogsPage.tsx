@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import { queryChoice, queryValue, usePageQuery } from '../lib/navigation/query';
-// Generic table, filters and inline detail anatomy from robot-platform's LogsPage.
+// Generic table, filters and inline detail anatomy from robot-platform's
+// modules/frontend-logs/ui/src/LogsPage.tsx.
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, DatePicker, Input, Select, Space } from 'antd';
 import { RefreshButton, RetryButton } from '../components/ActionButton';

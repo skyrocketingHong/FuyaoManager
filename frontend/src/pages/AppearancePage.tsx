@@ -1,4 +1,4 @@
-// Adapted from robot-platform's settings/AppearancePage.tsx.
+// Adapted from robot-platform's modules/frontend-appearance/ui/src/AppearancePage.tsx.
 import { useSyncExternalStore } from 'react';
 import { Button, ColorPicker, Radio } from 'antd';
 import { Check, Monitor, Moon, Sun } from 'lucide-react';

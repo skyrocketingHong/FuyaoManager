@@ -1,4 +1,5 @@
-// Maintenance table and exact-build confirmation adapted from robot-platform's PlatformComponentsPage.
+// Maintenance table and exact-build confirmation adapted from
+// robot-platform/modules/frontend-updates/ui/src/PlatformComponentsPage.tsx.
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Descriptions, Empty, Input, Select, Space, Switch } from 'antd';
 import { RefreshButton, RetryButton } from '../components/ActionButton';

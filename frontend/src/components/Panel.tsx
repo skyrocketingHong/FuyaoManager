@@ -3,7 +3,7 @@
  * the standard card (title + optional tags + body); TablePanel is for
  * standalone lists — the table itself is the only content surface, no extra
  * card wrapper. The table section carries an aria-labelledby binding for
- * its header (ported from the robot platform's shared/cards/Panel.tsx,
+ * its header (ported from the robot platform's libraries/ui/Panel.tsx,
  * read-only reference) — no workspace grid rounding, which belongs to that
  * platform's 16:9 stage.
  */

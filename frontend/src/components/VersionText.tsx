@@ -1,6 +1,6 @@
 import type { HTMLAttributes } from 'react';
 
-// robot-platform/components/platform/shared/VersionText.tsx.
+// robot-platform/libraries/ui/VersionText.tsx.
 export default function VersionText({
 	className = '',
 	children,
