@@ -7,6 +7,12 @@ based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the
 product uses the `Y.M.P` version scheme. API and theme-contract versions
 are maintained separately.
 
+## 0.10.2 - 2026-11-28
+
+- The operation bar's version popover follows the capsule's position as it opens and closes. It can reverse mid-animation and respects reduced motion.
+- Standalone lists share one frame around their tables and pagination. Cards, list frames and overlays use continuous corners where supported.
+- The category, tag, media and account detail tables expose their scroll regions to the keyboard. Scroll fades respect reduced motion.
+
 ## 0.10.1 - 2026-11-24
 
 - The sidebar follows the robot platform: the card with site counts, and with a site's slug and role, is gone, and a site scope heads its menu with the site name. Row height, icon slot, glyph and brand row match the platform.
