@@ -135,6 +135,10 @@ FUYAO_TEST_THEME_ROOT=/path/to/FuyaoHomepage/site \
 
 权威契约位于 `contracts/`：`openapi/openapi.yaml`（HTTP 面，配套生成的 TypeScript 类型与路由覆盖测试）与 `theme/`（manifest、build-input、release 三份 JSON Schema 及公开 fixtures，Go 校验器与主题 Node 工具消费同一份契约）。
 
+管理台外壳负责基于会话的导航、操作栏和路由错误边界。页面管理工作区和编辑状态，共享控件实现[管理台界面规范](./docs/UI_REFERENCE_ZH.md)中的交互。后端 HTTP 路由按同样的职责原则组织。平台、账号、站点、站点内容和发布分别在 [`backend/internal/httpapi/`](./backend/internal/httpapi/routes.go) 声明路由组，由中心路由器组装并应用公共 HTTP 中间件。各路由显式声明所需的会话、CSRF 和操作条件。
+
+内容与发布各有权威来源。文章、分类、标签及文章媒体以 PostgreSQL 为准，其他内容沿用各自的文件契约。构建执行器按任务冻结选定的内容来源和主题输入，预览与发布消费冻结产物。部署控制器管理应用更新，站点发布指针决定对外提供哪份静态产物。
+
 ## 项目结构
 
 ```text

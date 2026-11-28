@@ -186,6 +186,22 @@ test) and `theme/` (manifest, build-input, and release JSON Schemas plus
 public fixtures, consumed identically by the Go validator and the theme's
 Node tooling).
 
+The console shell owns session-aware navigation, the operation bar and route
+error boundaries. Pages own their workspace and edit state, while shared
+controls render the interaction patterns described in the [console UI guide](./docs/UI_REFERENCE.md).
+Backend HTTP registration follows the same ownership rule: platform, accounts,
+sites, site content and publishing declare their own route groups in
+[`backend/internal/httpapi/`](./backend/internal/httpapi/routes.go). The central
+router assembles them and applies the common HTTP middleware. Routes continue
+to declare their session, CSRF and operation requirements explicitly.
+
+Content and publishing have separate ownership. PostgreSQL is authoritative
+for blog posts, taxonomy and media. Other content groups keep their existing
+file-backed contracts. The build runner freezes the selected content sources
+and theme input per task. Preview and publishing consume that frozen output.
+The deployment controller owns application updates, while a site's release
+pointer determines which static output it serves.
+
 ## Project structure
 
 ```text
