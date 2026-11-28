@@ -434,6 +434,8 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 				{kind === 'categories' ? (
 					<DataTable<CategoryGroup>
 						className="taxonomy-table"
+						scrollLabel={t('taxonomy.categories')}
+						scrollFade={false}
 						rowKey="name"
 						dataSource={groups}
 						loading={loading}
@@ -496,6 +498,8 @@ export default function PostVocabularyPage({ kind }: { kind: 'categories' | 'tag
 				) : (
 					<DataTable<(typeof terms)[number]>
 						className="taxonomy-table"
+						scrollLabel={t('taxonomy.tags')}
+						scrollFade={false}
 						rowKey="name"
 						dataSource={terms}
 						loading={loading}

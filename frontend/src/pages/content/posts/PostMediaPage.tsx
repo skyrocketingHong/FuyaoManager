@@ -202,6 +202,8 @@ export default function PostMediaPage() {
 			<TablePanel className="fill-height">
 				<DataTable<PostMedia>
 					className="post-media-table"
+					scrollLabel={t('posts.media')}
+					scrollFade={false}
 					rowKey="path"
 					dataSource={items}
 					loading={loading}

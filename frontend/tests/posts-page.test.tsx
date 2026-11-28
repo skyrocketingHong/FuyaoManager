@@ -603,11 +603,16 @@ describe('PostsPage', () => {
 		fireEvent.click(screen.getByRole('radio', { name: 'Categories' }));
 		await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(`/sites/${ownerSite.siteId}/posts?tab=categories`));
 		expect(await screen.findByText('技术')).toBeDefined();
+		const categoriesRegion = screen.getByRole('region', { name: 'Categories' });
+		expect(categoriesRegion.tabIndex).toBe(0);
+		categoriesRegion.focus();
+		expect(document.activeElement).toBe(categoriesRegion);
 		expect(screen.queryByRole('button', { name: 'Import existing terms' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add to vocabulary' })).toBeNull();
 		fireEvent.click(screen.getByRole('radio', { name: 'Tags' }));
 		await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(`/sites/${ownerSite.siteId}/posts?tab=tags`));
 		expect(await screen.findByText('Go')).toBeDefined();
+		expect(screen.getByRole('region', { name: 'Tags' }).tabIndex).toBe(0);
 		fireEvent.change(screen.getByLabelText('Enter a tag'), { target: { value: 'Go' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 		expect(await screen.findByText('This term already exists.')).toBeDefined();
@@ -815,6 +820,7 @@ describe('PostsPage', () => {
 		await screen.findByText('Hello');
 		fireEvent.click(screen.getByRole('radio', { name: 'Media' }));
 		const folderButton = await screen.findByRole('button', { name: 'Upload folder' });
+		expect(screen.getByRole('region', { name: 'Media' }).tabIndex).toBe(0);
 		await waitFor(() => expect((folderButton as HTMLButtonElement).disabled).toBe(false));
 		const image = new File(['image'], 'image-1.png', { type: 'image/png' });
 		Object.defineProperty(image, 'webkitRelativePath', {

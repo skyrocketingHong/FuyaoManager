@@ -245,6 +245,8 @@ export default function UserDrawer({
 						</Panel>
 						<TablePanel title={t('admin.sites')}>
 							<DataTable
+								scrollLabel={t('admin.sites')}
+								scrollFade={false}
 								scroll={{ x: 'max-content' }}
 								rowKey="siteId"
 								dataSource={data.access.sites}
@@ -277,6 +279,8 @@ export default function UserDrawer({
 						</TablePanel>
 						<TablePanel title={t('admin.passkeys')}>
 							<DataTable
+								scrollLabel={t('admin.passkeys')}
+								scrollFade={false}
 								scroll={{ x: 'max-content' }}
 								rowKey="id"
 								dataSource={data.access.passkeys}
@@ -356,6 +360,8 @@ export default function UserDrawer({
 							}
 						>
 							<DataTable
+								scrollLabel={t('admin.sessions')}
+								scrollFade={false}
 								scroll={{ x: 'max-content' }}
 								rowKey="id"
 								dataSource={data.access.sessions}

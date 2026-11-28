@@ -85,16 +85,11 @@
 	--scroll-bottom: transparent;
 }
 
-.data-table .ant-table-content[data-scroll-fade-bottom] {
+.shell-content[data-scroll-fade],
+.data-table [data-scroll-fade] {
 	--scroll-top: #000;
-}
-
-.shell-content[data-workspace='console']:is([data-scroll-fade-top], [data-scroll-fade-bottom]),
-.data-table .ant-table-content[data-scroll-fade-bottom] {
+	--scroll-bottom: #000;
 	--scroll-fade-edge: min(16px, 12%);
-	transition:
-		--scroll-top var(--motion-fast) ease,
-		--scroll-bottom var(--motion-fast) ease;
 	scroll-padding-block: 16px;
 	mask-image: linear-gradient(
 		to bottom,
@@ -105,11 +100,20 @@
 	);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+	.shell-content[data-scroll-fade],
+	.data-table [data-scroll-fade] {
+		transition:
+			--scroll-top var(--motion-fast) ease,
+			--scroll-bottom var(--motion-fast) ease;
+	}
+}
+
 /* Forced-colors mode replaces colors: a mask would hide content without
    communicating the fade, so the edge stays visible. */
 @media (forced-colors: active) {
-	.shell-content[data-workspace='console']:is([data-scroll-fade-top], [data-scroll-fade-bottom]),
-	.data-table .ant-table-content[data-scroll-fade-bottom] {
+	.shell-content[data-scroll-fade],
+	.data-table [data-scroll-fade] {
 		-webkit-mask-image: none;
 		mask-image: none;
 	}

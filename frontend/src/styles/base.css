@@ -1,7 +1,7 @@
 /* Base layer: pre-JS fallback tokens (light palette, replaced at runtime by
    AppearanceProvider), document scaffolding, focus, motion, and the small
    shared primitives (status tags, version text, loading, auth screens).
-   Spacing steps 4/8/10/12/16, radii 4/8/12, weights 400/600.
+   Spacing steps 4/8/10/12/16, radii 6/12/20, weights 400/600.
    Only tokens consumed in CSS are declared here; the antd layer takes its
    colors from the palette object directly. */
 
@@ -25,9 +25,9 @@
 	--status-neutral: #526176;
 	--font-sans: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 	--font-mono: Menlo, 'SFMono-Regular', Consolas, monospace;
-	--radius: 8px;
-	--radius-sm: 4px;
-	--radius-lg: 12px;
+	--radius-sm: 6px;
+	--radius: 12px;
+	--radius-lg: 20px;
 	--space-1: 4px;
 	--space-2: 8px;
 	--space-3: 10px;
@@ -43,6 +43,12 @@
 	--motion-slow: 300ms;
 	--topbar-height: 44px;
 	--topbar-control-height: 32px;
+}
+
+/* The browser keeps the radius where continuous corners are unavailable. */
+:where(.ant-card, .ant-modal-container, .ant-popover-container, .ant-dropdown-menu,
+	.ant-select-dropdown, .table-panel-content, .status-tag) {
+	corner-shape: superellipse(2);
 }
 
 html,

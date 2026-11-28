@@ -14,6 +14,7 @@ export function scrollFadeEdges(scrollTop: number, clientHeight: number, scrollH
 export function observeScrollEdges(node: HTMLElement) {
 	const update = () => {
 		const { top, bottom } = scrollFadeEdges(node.scrollTop, node.clientHeight, node.scrollHeight);
+		node.toggleAttribute('data-scroll-fade', top || bottom);
 		node.toggleAttribute('data-scroll-fade-top', top);
 		node.toggleAttribute('data-scroll-fade-bottom', bottom);
 	};
@@ -33,6 +34,7 @@ export function observeScrollEdges(node: HTMLElement) {
 		node.removeEventListener('scroll', update);
 		resize?.disconnect();
 		content.disconnect();
+		node.removeAttribute('data-scroll-fade');
 		node.removeAttribute('data-scroll-fade-top');
 		node.removeAttribute('data-scroll-fade-bottom');
 	};

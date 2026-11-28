@@ -1,8 +1,8 @@
 /**
  * Panel and TablePanel: the two content surfaces of the console. Panel is
  * the standard card (title + optional tags + body); TablePanel is for
- * standalone lists — the table itself is the only content surface, no extra
- * card wrapper. The table section carries an aria-labelledby binding for
+ * standalone lists — its content area supplies the list's outer frame
+ * around the table and its pagination or load-more control. The table section carries an aria-labelledby binding for
  * its header (ported from the robot platform's libraries/ui/Panel.tsx,
  * read-only reference) — no workspace grid rounding, which belongs to that
  * platform's 16:9 stage.

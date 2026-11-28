@@ -2,8 +2,8 @@
  * VersionPopover: the top bar's version capsule and the details panel it opens
  * (robot-platform's libraries/ui/operationbar/StatusPopover.tsx without its
  * device capsule effects). The panel has no arrow and no antd motion; its
- * surface morphs from the capsule's size to the details' size, and back to the
- * capsule when it closes, so the two read as one object. The morph can be
+ * surface morphs from the capsule's position and size to its final placement,
+ * and back to the capsule when it closes. The morph can be
  * interrupted from either state, and reduced motion or a browser without the
  * Web Animations API shows the final size directly.
  *
@@ -22,10 +22,14 @@ import {
 	type KeyboardEvent,
 	type ReactNode
 } from 'react';
-import { animatePillSize, type PillSize } from '../../lib/ui/pillMotion';
+import { animatePillBounds, rebasePillBounds, samePillBounds, type PillBounds } from '../../lib/ui/pillMotion';
 
 function reducedMotion() {
 	return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+function hasPopupLayout(rect: DOMRect) {
+	return rect.width > 0 && rect.height > 0 && rect.right > 0 && rect.bottom > 0;
 }
 
 export default function VersionPopover({
@@ -45,15 +49,16 @@ export default function VersionPopover({
 	const trigger = useRef<HTMLButtonElement>(null);
 	const [panel, setPanel] = useState<HTMLElement | null>(null);
 	const surface = panel?.closest<HTMLElement>('.version-popover-surface');
-	const initial = useRef<PillSize>(undefined);
-	const resize = useRef<Animation>(undefined);
+	const popup = surface?.closest<HTMLElement>('.version-popover');
+	const initial = useRef<PillBounds>(undefined);
+	const morph = useRef<Animation>(undefined);
 	const fade = useRef<Animation>(undefined);
 	const [closing, setClosing] = useState(false);
 
 	const cancel = useCallback(() => {
-		resize.current?.cancel();
+		morph.current?.cancel();
 		fade.current?.cancel();
-		resize.current = fade.current = undefined;
+		morph.current = fade.current = undefined;
 	}, []);
 
 	// Reduced motion switched on mid-morph ends the morph where it is.
@@ -73,39 +78,38 @@ export default function VersionPopover({
 		};
 	}, [cancel]);
 
+	// React 18 writes `inert="false"` as a present attribute, so the property
+	// is set here before the measurement effect can move focus into the panel.
 	useLayoutEffect(() => {
-		if (!open || !panel || !surface) return;
-		let measured: PillSize | undefined;
+		if (panel) panel.inert = !open;
+	}, [open, panel]);
+
+	useLayoutEffect(() => {
+		if (!open || !panel || !surface || !popup) return;
+		let previousLayout: PillBounds | undefined;
 		// The portal can still be hidden when its ref attaches, and the details
-		// change size once they load. Each measurable size morphs from the size
-		// shown at that moment: the capsule for the entrance, the current
-		// surface for a resize in flight.
+		// can change size once they load. With no arrow, the outer placement
+		// box matches the surface's layout and is unaffected by its transform.
 		const measure = () => {
-			const size = panel.getBoundingClientRect();
-			const starting = !measured;
-			if (
-				!size.width ||
-				!size.height ||
-				(!starting &&
-					(!resize.current ||
-						(measured?.width === size.width && measured.height === size.height)))
-			)
-				return;
-			measured = size;
-			const from = starting
-				? (initial.current ?? trigger.current?.getBoundingClientRect())
-				: surface.getBoundingClientRect();
+			const layout = popup.getBoundingClientRect();
+			if (!hasPopupLayout(layout)) return;
+			const previous = previousLayout;
+			if (previous && (!morph.current || samePillBounds(previous, layout))) return;
+			previousLayout = layout;
+			const from = previous
+				? rebasePillBounds(surface.getBoundingClientRect(), previous, layout)
+				: (initial.current ?? trigger.current?.getBoundingClientRect());
 			initial.current = undefined;
-			resize.current?.cancel();
-			const animation = animatePillSize(surface, from, surface.getBoundingClientRect(), reducedMotion());
-			resize.current = animation;
+			morph.current?.cancel();
+			const animation = animatePillBounds(surface, from, layout, layout, reducedMotion());
+			morph.current = animation;
 			if (animation) {
 				const finish = () => {
-					if (resize.current === animation) resize.current = undefined;
+					if (morph.current === animation) morph.current = undefined;
 				};
 				void animation.finished.then(finish, finish);
 			}
-			if (starting) {
+			if (!previous) {
 				panel.focus({ preventScroll: true });
 				if (animation) {
 					try {
@@ -121,21 +125,19 @@ export default function VersionPopover({
 			}
 		};
 		measure();
-		if (typeof ResizeObserver !== 'function') return;
-		const observer = new ResizeObserver(measure);
-		observer.observe(panel);
-		return () => observer.disconnect();
-	}, [open, panel, surface]);
+		const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : undefined;
+		resizeObserver?.observe(popup);
+		const placementObserver = new MutationObserver(measure);
+		placementObserver.observe(popup, { attributes: true, attributeFilter: ['style'] });
+		return () => {
+			resizeObserver?.disconnect();
+			placementObserver.disconnect();
+		};
+	}, [open, panel, popup, surface]);
 
 	useLayoutEffect(() => {
 		if (!open && !closing) cancel();
 	}, [open, closing, cancel]);
-
-	// React 18 writes `inert="false"` as a present attribute, so the property
-	// is set here instead of passing it as a prop.
-	useEffect(() => {
-		if (panel) panel.inert = !open;
-	}, [open, panel]);
 
 	function changeOpen(next: boolean) {
 		if (next === open) return;
@@ -143,21 +145,18 @@ export default function VersionPopover({
 			initial.current = (closing ? (surface ?? trigger.current) : trigger.current)?.getBoundingClientRect();
 			cancel();
 			setClosing(false);
-		} else if (surface) {
+		} else if (surface && popup) {
+			const layout = popup.getBoundingClientRect();
 			const from = surface.getBoundingClientRect();
 			cancel();
-			const animation = animatePillSize(
-				surface,
-				from,
-				trigger.current?.getBoundingClientRect(),
-				reducedMotion(),
-				true
-			);
+			const animation = hasPopupLayout(layout)
+				? animatePillBounds(surface, from, trigger.current?.getBoundingClientRect(), layout, reducedMotion(), true)
+				: undefined;
 			if (animation) {
-				resize.current = animation;
+				morph.current = animation;
 				setClosing(true);
 				const finish = () => {
-					if (resize.current !== animation) return;
+					if (morph.current !== animation) return;
 					setClosing(false);
 				};
 				void animation.finished.then(finish, finish);

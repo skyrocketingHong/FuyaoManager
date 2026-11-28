@@ -320,9 +320,7 @@
 	z-index: 2;
 }
 
-/* TablePanel: the table is the only content surface — no extra card. The
-   border lives on the .ant-table-wrapper alone; the inner .ant-table stays
-   transparent, so the surface is drawn exactly once. */
+/* The list content owns the outer frame; Ant Design owns the inner scroll view. */
 .panel.table-panel {
 	background: transparent;
 	border: 0;
@@ -362,15 +360,30 @@
 	overflow-x: auto;
 }
 
-.table-panel-content .ant-table-wrapper {
+.table-panel-content:has(> .data-table) {
 	background: var(--card);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-lg);
-	overflow: hidden;
 }
 
-.table-panel-content .ant-table-wrapper .ant-table {
+.table-panel-content > .data-table .ant-table {
 	background: transparent;
+}
+
+.table-panel-content > .data-table :is(.ant-table, .ant-table-container, .ant-table-header, .ant-table-content),
+.table-panel-content > .data-table :is(.ant-table-content, .ant-table-header) > table > thead > tr:first-child > th {
+	border-start-start-radius: 0;
+	border-start-end-radius: 0;
+}
+
+.table-panel-content > .data-table .ant-table-container > :is(.ant-table-content, .ant-table-body)
+	> table > tbody > :is(.ant-table-row, .ant-table-expanded-row) > td {
+	border-block-end: 0;
+}
+
+.table-panel-content > .data-table .ant-table-container > :is(.ant-table-content, .ant-table-body)
+	> table > tbody > :is(.ant-table-row, .ant-table-expanded-row) ~ :is(.ant-table-row, .ant-table-expanded-row) > td {
+	border-block-start: 1px solid var(--border);
 }
 
 /* Table density: compact header and cell metrics shared by every list page

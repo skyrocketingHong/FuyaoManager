@@ -264,6 +264,10 @@ it('revokes a specific session only after confirmation', async () => {
 	vi.mocked(service.revokeSessions).mockResolvedValue(undefined);
 	mount();
 	const drawer = await openMember();
+	for (const name of ['Site access', 'Passkeys', 'Active sessions']) {
+		const section = within(drawer).getByRole('heading', { name }).closest('section')!;
+		expect(within(section).getByRole('region', { name }).tabIndex).toBe(0);
+	}
 	const sessions = within(drawer)
 		.getByRole('heading', { name: 'Active sessions' })
 		.closest('section')!;

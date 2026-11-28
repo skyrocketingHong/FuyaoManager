@@ -4,7 +4,7 @@
  * so sizes come from a getBoundingClientRect stand-in and Element.animate is
  * replaced by a recorder whose `finished` the test settles by hand. Covered:
  * the surface morphs from the capsule's size to the details' size with the
- * platform's 420ms motion, the details fade in and take focus, Escape closes
+ * platform's 420ms motion and returns over 300ms, the details fade in and take focus, Escape closes
  * and returns focus to the capsule while the surface morphs back, the details
  * stay mounted but inert during that morph, an outside click closes too,
  * reduced motion and a browser without Web Animations show the final size
@@ -43,6 +43,10 @@ const [
 
 const capsuleSize = { width: 96, height: 32 };
 const detailsSize = { width: 240, height: 96 };
+const capsuleBounds = { ...capsuleSize, left: 544, top: 4 };
+const detailsBounds = { ...detailsSize, left: 400, top: 44 };
+let popupLayout = detailsBounds;
+let visibleSurface = detailsBounds;
 const label = zh['common.versionDetails'].replace('{version}', version);
 
 function Harness() {
@@ -72,20 +76,24 @@ function Harness() {
 // surface around it. Anything else measures as jsdom's default zero box.
 function rectFor(element: Element) {
 	const classes = (element.getAttribute('class') ?? '').split(/\s+/);
-	const { width, height } = classes.includes('topbar-version')
-		? capsuleSize
-		: classes.includes('version-popover-content') || classes.includes('version-popover-surface')
-			? detailsSize
-			: { width: 0, height: 0 };
+	const { left, top, width, height } = classes.includes('topbar-version')
+		? capsuleBounds
+		: classes.includes('version-popover-surface')
+			? visibleSurface
+			: classes.includes('version-popover')
+				? popupLayout
+				: classes.includes('version-popover-content')
+					? visibleSurface
+				: { left: 0, top: 0, width: 0, height: 0 };
 	return {
 		width,
 		height,
-		top: 0,
-		left: 0,
-		right: width,
-		bottom: height,
-		x: 0,
-		y: 0,
+		top,
+		left,
+		right: left + width,
+		bottom: top + height,
+		x: left,
+		y: top,
 		toJSON: () => ({})
 	} as DOMRect;
 }
@@ -114,7 +122,9 @@ function installAnimate() {
 			const finished = new Promise<void>((resolve) => {
 				finish = resolve;
 			});
-			const cancel = vi.fn();
+			const cancel = vi.fn(() => {
+				if (this.classList.contains('version-popover-surface')) visibleSurface = popupLayout;
+			});
 			animations.push({ target: this, keyframes, options, cancel, finish });
 			return { cancel, finished } as unknown as Animation;
 		}
@@ -139,14 +149,21 @@ function reduceMotion(matches: boolean) {
 
 const capsule = () => screen.getByRole('button', { name: label });
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]');
-const sizeKeyframes = (from: { width: number; height: number }, to: { width: number; height: number }) => [
-	{ width: `${from.width}px`, height: `${from.height}px`, overflow: 'clip' },
-	{ width: `${to.width}px`, height: `${to.height}px`, overflow: 'clip' }
-];
+const capsuleFrame = {
+	transform: 'translate(144px, -40px) scale(0.4, 0.3333333333333333)',
+	transformOrigin: 'top left',
+	overflow: 'clip'
+};
+const detailsFrame = {
+	...capsuleFrame,
+	transform: 'translate(0px, 0px) scale(1, 1)'
+};
 
 beforeEach(() => {
 	vi.clearAllMocks();
 	animations.length = 0;
+	popupLayout = detailsBounds;
+	visibleSurface = detailsBounds;
 	localStorage.clear();
 	setLocale('zh-CN');
 	installLayout();
@@ -182,7 +199,7 @@ describe('VersionPopover', () => {
 		expect(surface).not.toBeNull();
 		expect(animations).toHaveLength(2);
 		expect(animations[0].target).toBe(surface);
-		expect(animations[0].keyframes).toEqual(sizeKeyframes(capsuleSize, detailsSize));
+		expect(animations[0].keyframes).toEqual([capsuleFrame, detailsFrame]);
 		expect(animations[0].options).toMatchObject({
 			duration: 420,
 			easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
@@ -199,8 +216,8 @@ describe('VersionPopover', () => {
 		// details stay mounted and take no focus.
 		expect(animations).toHaveLength(3);
 		expect(animations[2].target).toBe(surface);
-		expect(animations[2].keyframes).toEqual(sizeKeyframes(detailsSize, capsuleSize));
-		expect(animations[2].options).toMatchObject({ duration: 420, fill: 'both' });
+		expect(animations[2].keyframes).toEqual([detailsFrame, capsuleFrame]);
+		expect(animations[2].options).toMatchObject({ duration: 300, easing: 'ease-in-out', fill: 'both' });
 		expect(animations[0].cancel).toHaveBeenCalled();
 		expect(dialog()).not.toBeNull();
 		expect(dialog()!.inert).toBe(true);
@@ -211,6 +228,58 @@ describe('VersionPopover', () => {
 		// The capsule opens the details again after the morph back.
 		fireEvent.click(capsule());
 		await waitFor(() => expect(capsule().getAttribute('aria-expanded')).toBe('true'));
+	});
+
+	it('reopens from the surface currently on screen during a close', async () => {
+		installAnimate();
+		const nativeFocus = HTMLElement.prototype.focus;
+		vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (this: HTMLElement, options) {
+			// jsdom does not enforce inert when focus() is called.
+			if (!this.inert) nativeFocus.call(this, options);
+		});
+		render(<Harness />);
+		fireEvent.click(capsule());
+		await waitFor(() => expect(document.activeElement).toBe(dialog()));
+		fireEvent.keyDown(dialog()!, { key: 'Escape' });
+		visibleSurface = { left: 448, top: 24, width: 180, height: 72 };
+		fireEvent.click(capsule());
+		await waitFor(() => expect(capsule().getAttribute('aria-expanded')).toBe('true'));
+
+		expect(animations[2].cancel).toHaveBeenCalled();
+		expect(animations[3].keyframes[0]).toMatchObject({
+			transform: 'translate(48px, -20px) scale(0.75, 0.75)'
+		});
+		expect(dialog()!.inert).toBe(false);
+		expect(document.activeElement).toBe(dialog());
+		await act(async () => {
+			animations[2].finish();
+		});
+		expect(capsule().getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('rebases the displayed surface only when Ant Design changes its layout', async () => {
+		installAnimate();
+		render(<Harness />);
+		fireEvent.click(capsule());
+		await waitFor(() => expect(document.activeElement).toBe(dialog()));
+		const popup = dialog()!.closest<HTMLElement>('.version-popover')!;
+
+		// The transform changes the drawn bounds, but not Ant Design's layout.
+		visibleSurface = { left: 448, top: 24, width: 180, height: 72 };
+		await act(async () => popup.style.setProperty('--test-alignment', '1'));
+		expect(animations).toHaveLength(2);
+
+		// Ant Design moves the layout 50px left and up. Until the animation is
+		// retargeted, the same in-flight transform draws 50px left and up too.
+		popupLayout = { ...detailsBounds, left: 350, top: -6 };
+		visibleSurface = { ...visibleSurface, left: 398, top: -26 };
+		await act(async () => popup.style.setProperty('--test-alignment', '2'));
+
+		expect(animations).toHaveLength(3);
+		expect(animations[2].keyframes).toEqual([
+			{ ...detailsFrame, transform: 'translate(98px, 30px) scale(0.75, 0.75)' },
+			detailsFrame
+		]);
 	});
 
 	it('closes on an outside click', async () => {

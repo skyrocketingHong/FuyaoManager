@@ -344,18 +344,16 @@
 	}
 }
 
-/* Version capsule (robot-platform's libraries/ui/operationbar/
-   statusPopover.css and operationbar.css): the details surface has no arrow
-   and no antd motion — it morphs from the capsule instead, so its box is
-   sized to the border and the content keeps its natural width. */
+/* Version capsule: its end radius is set by the control height. */
 .topbar .ant-btn.topbar-version {
 	position: relative;
-	border-radius: var(--radius);
+	border-radius: 999px;
 	font-size: var(--text-caption);
 	white-space: nowrap;
 }
 .version-popover-surface {
 	box-sizing: border-box;
+	border-radius: var(--radius-lg);
 }
 .version-popover-content {
 	box-sizing: border-box;

@@ -6,6 +6,7 @@ import LoadMore, { type LoadMoreControls } from './LoadMore';
 type SortableTableProps<Row extends object> = TableProps<Row> & {
 	manualSorting?: boolean;
 	scrollLabel?: string;
+	scrollFade?: boolean;
 	tableRef?: RefObject<TableRef>;
 	loadMore?: LoadMoreControls & { scrollLabel: string };
 };
@@ -46,10 +47,20 @@ export function tableScrollContent(table: TableRef | null) {
 // robot-platform's libraries/ui/DataTable.tsx uses small tables and a shared surface.
 // Keep the manager's typed rows, stable keys, sorting, and server pagination.
 export default function DataTable<Row extends object>(props: SortableTableProps<Row>) {
-	const { className, manualSorting = false, columns, tableRef, loadMore, scrollLabel: label, ...tableProps } = props;
+	const {
+		className,
+		manualSorting = false,
+		columns,
+		tableRef,
+		loadMore,
+		scrollLabel: label,
+		scrollFade = true,
+		...tableProps
+	} = props;
 	const internalRef = useRef<TableRef>(null);
 	const ref = tableRef ?? internalRef;
 	const scrollLabel = label ?? loadMore?.scrollLabel;
+	const showScrollFade = scrollFade && Boolean(label);
 	useEffect(() => {
 		if (!scrollLabel) return;
 		const content = tableScrollContent(ref.current);
@@ -58,14 +69,14 @@ export default function DataTable<Row extends object>(props: SortableTableProps<
 		content.tabIndex = 0;
 		content.setAttribute('role', 'region');
 		content.setAttribute('aria-label', scrollLabel);
-		const stop = label ? observeScrollEdges(content) : undefined;
+		const stop = showScrollFade ? observeScrollEdges(content) : undefined;
 		return () => {
 			stop?.();
 			content.removeAttribute('tabindex');
 			content.removeAttribute('role');
 			content.removeAttribute('aria-label');
 		};
-	}, [label, ref, scrollLabel]);
+	}, [ref, scrollLabel, showScrollFade]);
 
 	return (
 		<>
